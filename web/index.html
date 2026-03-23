@@ -1,0 +1,1084 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PC Client Health Reports</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            min-height: 100vh;
+            color: #fff;
+        }
+        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+        
+        /* Header */
+        .header {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 30px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .header h1 {
+            font-size: 2.5rem;
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            margin-bottom: 10px;
+        }
+        .header p { color: rgba(255,255,255,0.7); font-size: 1.1rem; }
+        
+        /* Tab Navigation */
+        .tab-nav {
+            display: flex;
+            gap: 5px;
+            margin-bottom: 30px;
+        }
+        .tab-btn {
+            padding: 14px 30px;
+            border: none;
+            border-radius: 12px 12px 0 0;
+            background: rgba(255,255,255,0.05);
+            color: rgba(255,255,255,0.6);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 1rem;
+            font-weight: 600;
+            border: 1px solid rgba(255,255,255,0.08);
+            border-bottom: none;
+        }
+        .tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .tab-btn.active {
+            background: rgba(0,212,255,0.15);
+            color: #00d4ff;
+            border-color: rgba(0,212,255,0.3);
+        }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+
+        /* Search and Filters */
+        .controls {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+        }
+        .search-box {
+            flex: 1;
+            min-width: 300px;
+            position: relative;
+        }
+        .search-box input {
+            width: 100%;
+            padding: 15px 20px 15px 50px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+        }
+        .search-box input:focus {
+            outline: none;
+            background: rgba(255,255,255,0.15);
+            border-color: #00d4ff;
+        }
+        .search-box::before {
+            content: '🔍';
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+        }
+        .filter-btn {
+            padding: 15px 25px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .filter-btn:hover, .filter-btn.active {
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+        }
+        .week-select {
+            padding: 15px 20px;
+            border: none;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.1);
+            color: #fff;
+            font-size: 1rem;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255,255,255,0.1);
+            cursor: pointer;
+            min-width: 140px;
+            transition: all 0.3s ease;
+            appearance: none;
+            -webkit-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+            padding-right: 40px;
+        }
+        .week-select:focus {
+            outline: none;
+            border-color: #00d4ff;
+            background-color: rgba(255,255,255,0.15);
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 15px center;
+        }
+        .week-select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        
+        /* Stats */
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .stat-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .stat-card .number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .stat-card .label { color: rgba(255,255,255,0.7); margin-top: 5px; }
+        
+        /* Reports Grid */
+        .reports-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .report-card {
+            background: rgba(255,255,255,0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .report-card:hover {
+            transform: translateY(-5px);
+            border-color: #00d4ff;
+            box-shadow: 0 20px 40px rgba(0,212,255,0.2);
+        }
+        .report-card h3 {
+            font-size: 1.1rem;
+            margin-bottom: 15px;
+            color: #fff;
+            word-break: break-word;
+        }
+        .report-meta {
+            display: flex;
+            justify-content: space-between;
+            color: rgba(255,255,255,0.6);
+            font-size: 0.9rem;
+        }
+        .report-date { color: #00d4ff; }
+        
+        /* Loading */
+        .loading {
+            text-align: center;
+            padding: 50px;
+            color: rgba(255,255,255,0.7);
+        }
+        .loading::after {
+            content: '';
+            display: inline-block;
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: #00d4ff;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 15px;
+            vertical-align: middle;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 50px;
+            color: rgba(255,255,255,0.5);
+        }
+        .empty-state h3 { margin-bottom: 10px; }
+        
+        /* Error */
+        .error {
+            background: rgba(255,0,0,0.2);
+            border: 1px solid rgba(255,0,0,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            color: #ff6b6b;
+        }
+
+        /* Trends styles */
+        .chart-container {
+            background: rgba(255,255,255,0.08);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 25px;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .chart-container h3 {
+            color: #00d4ff;
+            margin-bottom: 20px;
+            font-size: 1.2rem;
+        }
+        .chart-wrapper {
+            position: relative;
+            width: 100%;
+        }
+        .chart-wrapper.tall { height: 450px; }
+        .chart-wrapper.medium { height: 350px; }
+        .charts-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 25px;
+            margin-bottom: 25px;
+        }
+        @media (max-width: 900px) {
+            .charts-row { grid-template-columns: 1fr; }
+        }
+        .trend-stats {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+            margin-bottom: 25px;
+        }
+        .trend-stat-card {
+            background: rgba(255,255,255,0.1);
+            border-radius: 12px;
+            padding: 18px;
+            text-align: center;
+            border: 1px solid rgba(255,255,255,0.1);
+        }
+        .trend-stat-card .number {
+            font-size: 2rem;
+            font-weight: bold;
+            background: linear-gradient(90deg, #00d4ff, #0099ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .trend-stat-card .label {
+            color: rgba(255,255,255,0.7);
+            margin-top: 4px;
+            font-size: 0.85rem;
+        }
+        .trend-stat-card .change {
+            font-size: 0.8rem;
+            margin-top: 4px;
+            font-weight: 600;
+        }
+        .change.up { color: #ff6b6b; }
+        .change.down { color: #28a745; }
+        .change.flat { color: rgba(255,255,255,0.4); }
+        .trends-controls {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 25px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .trends-controls label {
+            color: rgba(255,255,255,0.7);
+            font-size: 0.9rem;
+        }
+        .trends-controls .week-select {
+            min-width: 130px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📊 PC Client Health Reports</h1>
+            <p>AI-powered incident analysis and categorization reports</p>
+        </div>
+
+        <!-- Tab Navigation -->
+        <div class="tab-nav">
+            <button class="tab-btn active" data-tab="reports">📄 Reports</button>
+            <button class="tab-btn" data-tab="trends">📈 Trends</button>
+        </div>
+
+        <!-- REPORTS TAB -->
+        <div id="tab-reports" class="tab-content active">
+            <div class="controls">
+                <div class="search-box">
+                    <input type="text" id="searchInput" placeholder="Search reports...">
+                </div>
+                <button class="filter-btn active" data-filter="all">All</button>
+                <button class="filter-btn" data-filter="today">Today</button>
+                <button class="filter-btn" data-filter="week">This Week</button>
+                <button class="filter-btn" data-filter="month">This Month</button>
+                <select class="week-select" id="weekFilter">
+                    <option value="all">All Weeks</option>
+                </select>
+            </div>
+            
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="number" id="totalReports">-</div>
+                    <div class="label">Total Reports</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="todayReports">-</div>
+                    <div class="label">Today</div>
+                </div>
+                <div class="stat-card">
+                    <div class="number" id="weekReports">-</div>
+                    <div class="label">This Week</div>
+                </div>
+            </div>
+            
+            <div id="reportsContainer" class="reports-grid">
+                <div class="loading">Loading reports...</div>
+            </div>
+        </div>
+
+        <!-- TRENDS TAB -->
+        <div id="tab-trends" class="tab-content">
+            <div id="trendsLoading" class="loading">Loading trend data from Azure Table...</div>
+            <div id="trendsError" class="error" style="display:none;"></div>
+            <div id="trendsContent" style="display:none;">
+                
+                <!-- Week range filter -->
+                <div class="trends-controls">
+                    <label>From:</label>
+                    <select class="week-select" id="trendWeekFrom"></select>
+                    <label>To:</label>
+                    <select class="week-select" id="trendWeekTo"></select>
+                    <button class="filter-btn" id="trendResetBtn" style="padding:10px 20px;">Reset</button>
+                </div>
+
+                <!-- Summary stats -->
+                <div class="trend-stats" id="trendStatsContainer"></div>
+                
+                <!-- Total incidents per week - stacked bar -->
+                <div class="chart-container">
+                    <h3>📊 Weekly Incident Volume by Category</h3>
+                    <div class="chart-wrapper tall">
+                        <canvas id="stackedBarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Two side-by-side charts -->
+                <div class="charts-row">
+                    <!-- Top categories trend line -->
+                    <div class="chart-container">
+                        <h3>📈 Top Category Trends</h3>
+                        <div class="chart-wrapper medium">
+                            <canvas id="trendLineChart"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Latest week donut -->
+                    <div class="chart-container">
+                        <h3>🍩 Latest Week Breakdown</h3>
+                        <div class="chart-wrapper medium">
+                            <canvas id="donutChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Excluded vs In-scope trend -->
+                <div class="chart-container">
+                    <h3>🔍 In-Scope vs Excluded Incidents</h3>
+                    <div class="chart-wrapper medium">
+                        <canvas id="excludedChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // Configuration
+        // ============================================================
+        const CONFIG = {
+            storageAccount: 'incidentsanalyzersa',
+            container: 'results',
+            sasToken: 'se=2028-01-29T23%3A22%3A45Z&sp=rl&sv=2022-11-02&sr=c&sig=pV73hq6HNnJv8bwoi8MqVHLnlrRyTyIc7foYv0AaoZM%3D',
+            tableSasToken: 'se=2027-02-28T23%3A18%3A58Z&sp=rl&spr=https&sv=2022-11-02&ss=t&srt=sco&sig=E2AhCoVJJmjisEiTjGJFzbmjegKPOPKMWLwygcdnVNc%3D',
+            tableName: 'IncidentsCategoryStats'
+        };
+        
+        const blobBaseUrl = `https://${CONFIG.storageAccount}.blob.core.windows.net/${CONFIG.container}`;
+        const tableBaseUrl = `https://${CONFIG.storageAccount}.table.core.windows.net`;
+        
+        // Category color palette (consistent across all charts)
+        const CATEGORY_COLORS = {
+            'Hardware Issues':              '#e74c3c',
+            'Drivers and BIOS Issues':      '#e67e22',
+            'How Do I / User Education':    '#f39c12',
+            'Compliance/Policy Issues':     '#2ecc71',
+            'Windows OS Issues':            '#3498db',
+            'Network / Connectivity Issues':'#1abc9c',
+            'Slowness / Performance Issues':'#9b59b6',
+            'Browser Issues':              '#e91e63',
+            'Application Issues':          '#00bcd4',
+            'Deployment/PC Setup Issues':   '#ff9800',
+            'Boot Failures':               '#795548',
+            'Other / Miscellaneous':       '#607d8b',
+            'Authentication/Account Issues':'#8bc34a',
+            'AVD (Azure Virtual Desktop) Issues': '#673ab7',
+            'System Crashes / Blue Screens':'#f44336',
+            'Audio Problems':              '#009688',
+            'Security/Malware Issues':     '#ff5722',
+            'Mac OS or Mac Hardware Issues':'#78909c',
+            'Linux Issues':                '#ffc107',
+            'Excluded':                    '#90a4ae'
+        };
+
+        function getCategoryColor(category) {
+            return CATEGORY_COLORS[category] || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0');
+        }
+
+        let allReports = [];
+        let trendsLoaded = false;
+        let activeTimeFilter = 'all';
+        let activeWeekFilter = 'all';
+
+        // Chart instances (for destroy/recreate on filter)
+        let chartInstances = {};
+        let allTableEntities = null;
+        let allAggregatedData = null;
+
+        // ============================================================
+        // Tab Navigation
+        // ============================================================
+        document.querySelectorAll('.tab-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                btn.classList.add('active');
+                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+                
+                // Lazy-load trends data on first click
+                if (btn.dataset.tab === 'trends' && !trendsLoaded) {
+                    loadTrends();
+                }
+            });
+        });
+
+        // ============================================================
+        // REPORTS TAB
+        // ============================================================
+        function encodeBlobName(name) {
+            return name.split('/').map(part => encodeURIComponent(part)).join('/');
+        }
+        
+        async function fetchReports() {
+            try {
+                const listUrl = `${blobBaseUrl}?restype=container&comp=list&${CONFIG.sasToken}`;
+                const response = await fetch(listUrl);
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                
+                const xmlText = await response.text();
+                const parser = new DOMParser();
+                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
+                const blobs = xmlDoc.getElementsByTagName('Blob');
+                const reports = [];
+                
+                for (const blob of blobs) {
+                    const name = blob.getElementsByTagName('Name')[0]?.textContent;
+                    const lastModified = blob.getElementsByTagName('Last-Modified')[0]?.textContent;
+                    const size = blob.getElementsByTagName('Content-Length')[0]?.textContent;
+                    
+                    if (name && name.endsWith('.html')) {
+                        reports.push({
+                            name,
+                            lastModified: new Date(lastModified),
+                            size: parseInt(size) || 0,
+                            url: `${blobBaseUrl}/${encodeBlobName(name)}?${CONFIG.sasToken}`
+                        });
+                    }
+                }
+                reports.sort((a, b) => b.lastModified - a.lastModified);
+                return reports;
+            } catch (error) {
+                console.error('Error fetching reports:', error);
+                throw error;
+            }
+        }
+        
+        function renderReports(reports) {
+            const container = document.getElementById('reportsContainer');
+            if (reports.length === 0) {
+                container.innerHTML = '<div class="empty-state"><h3>No reports found</h3><p>Reports will appear here once generated</p></div>';
+                return;
+            }
+            container.innerHTML = reports.map(report => {
+                const date = report.lastModified.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
+                const sizeKB = (report.size / 1024).toFixed(1);
+                const displayName = report.name.replace('.html', '').replace(/-/g, ' ');
+                return `<div class="report-card" onclick="openReport('${encodeURIComponent(report.url)}')">
+                    <h3>📄 ${displayName}</h3>
+                    <div class="report-meta"><span class="report-date">${date}</span><span>${sizeKB} KB</span></div>
+                </div>`;
+            }).join('');
+        }
+        
+        async function openReport(url) {
+            try {
+                const response = await fetch(decodeURIComponent(url));
+                const htmlContent = await response.text();
+                const newWindow = window.open('', '_blank');
+                newWindow.document.write(htmlContent);
+                newWindow.document.close();
+            } catch (error) {
+                alert('Failed to open report: ' + error.message);
+            }
+        }
+        
+        function updateStats(reports) {
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today.getTime() - 7*24*60*60*1000);
+            document.getElementById('totalReports').textContent = reports.length;
+            document.getElementById('todayReports').textContent = reports.filter(r => r.lastModified >= today).length;
+            document.getElementById('weekReports').textContent = reports.filter(r => r.lastModified >= weekAgo).length;
+        }
+        
+        function extractWeekLabel(name) {
+            // Match patterns like 2026-W10, 2026_W10, W10 etc.
+            const m = name.match(/(\d{4})[_-]?(W\d{1,2})/i);
+            return m ? `${m[1]}-${m[2].toUpperCase()}` : null;
+        }
+
+        function populateWeekFilter(reports) {
+            const weeks = new Set();
+            for (const r of reports) {
+                const w = extractWeekLabel(r.name);
+                if (w) weeks.add(w);
+            }
+            const select = document.getElementById('weekFilter');
+            const sorted = [...weeks].sort().reverse();
+            select.innerHTML = '<option value="all">All Weeks</option>' +
+                sorted.map(w => `<option value="${w}">${w}</option>`).join('');
+        }
+
+        function getFilteredReports() {
+            let filtered = allReports;
+
+            // Time filter
+            const now = new Date();
+            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+            const weekAgo = new Date(today.getTime() - 7*24*60*60*1000);
+            const monthAgo = new Date(today.getTime() - 30*24*60*60*1000);
+            switch (activeTimeFilter) {
+                case 'today': filtered = filtered.filter(r => r.lastModified >= today); break;
+                case 'week':  filtered = filtered.filter(r => r.lastModified >= weekAgo); break;
+                case 'month': filtered = filtered.filter(r => r.lastModified >= monthAgo); break;
+            }
+
+            // Week filter
+            if (activeWeekFilter !== 'all') {
+                filtered = filtered.filter(r => extractWeekLabel(r.name) === activeWeekFilter);
+            }
+
+            // Search filter
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            if (query) {
+                filtered = filtered.filter(r => r.name.toLowerCase().includes(query));
+            }
+
+            return filtered;
+        }
+
+        function applyFilters() {
+            renderReports(getFilteredReports());
+        }
+
+        // ============================================================
+        // TRENDS TAB
+        // ============================================================
+        async function fetchTableData() {
+            const allEntities = [];
+            let url = `${tableBaseUrl}/${CONFIG.tableName}()?${CONFIG.tableSasToken}`;
+            let page = 0;
+            
+            while (url) {
+                page++;
+                const response = await fetch(url, {
+                    headers: { 'Accept': 'application/json;odata=nometadata' },
+                    mode: 'cors'
+                });
+                
+                if (!response.ok) {
+                    const errText = await response.text();
+                    throw new Error(`Table query failed (${response.status}): ${errText}`);
+                }
+                
+                const data = await response.json();
+                allEntities.push(...data.value);
+                console.log(`[Pagination] Page ${page}: fetched ${data.value.length} rows, total so far: ${allEntities.length}`);
+                
+                // Handle continuation token pagination
+                const nextPK = response.headers.get('x-ms-continuation-NextPartitionKey');
+                const nextRK = response.headers.get('x-ms-continuation-NextRowKey');
+                console.log(`[Pagination] NextPartitionKey: ${nextPK}, NextRowKey: ${nextRK}`);
+                if (nextPK) {
+                    url = `${tableBaseUrl}/${CONFIG.tableName}()?${CONFIG.tableSasToken}&NextPartitionKey=${encodeURIComponent(nextPK)}${nextRK ? '&NextRowKey=' + encodeURIComponent(nextRK) : ''}`;
+                } else {
+                    url = null;
+                }
+            }
+            console.log(`[Pagination] Complete: ${allEntities.length} total entities in ${page} pages`);
+            return allEntities;
+        }
+
+        function aggregateData(entities) {
+            // Build: { "2026-W10": { "Hardware Issues": 5, ... }, ... }
+            const byWeek = {};
+            const allCategories = new Set();
+            
+            for (const e of entities) {
+                const week = e.PartitionKey || e.YearWeek;
+                const cat = e.Category || 'Unknown';
+                if (!week) continue;
+                
+                if (!byWeek[week]) byWeek[week] = {};
+                byWeek[week][cat] = (byWeek[week][cat] || 0) + 1;
+                allCategories.add(cat);
+            }
+            
+            // Sort weeks chronologically
+            const weeks = Object.keys(byWeek).sort();
+            
+            return { byWeek, weeks, categories: [...allCategories].sort() };
+        }
+
+        function renderTrendStats(entities, data) {
+            const container = document.getElementById('trendStatsContainer');
+            const { weeks } = data;
+            
+            const totalIncidents = entities.length;
+            const totalWeeks = weeks.length;
+            const latestWeek = weeks[weeks.length - 1];
+            const latestCount = Object.values(data.byWeek[latestWeek] || {}).reduce((a, b) => a + b, 0);
+            
+            // Week-over-week change
+            let wowChange = '';
+            if (weeks.length >= 2) {
+                const prevWeek = weeks[weeks.length - 2];
+                const prevCount = Object.values(data.byWeek[prevWeek] || {}).reduce((a, b) => a + b, 0);
+                const diff = latestCount - prevCount;
+                const pct = prevCount > 0 ? Math.round((diff / prevCount) * 100) : 0;
+                const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
+                const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
+                wowChange = `<div class="change ${cls}">${arrow} ${Math.abs(pct)}% vs prev week</div>`;
+            }
+
+            // Top category this week
+            const latestWeekData = data.byWeek[latestWeek] || {};
+            const topCategory = Object.entries(latestWeekData).sort((a,b) => b[1] - a[1])[0];
+            
+            // Excluded count this week
+            const excludedCount = latestWeekData['Excluded'] || 0;
+            const inScopeCount = latestCount - excludedCount;
+
+            container.innerHTML = `
+                <div class="trend-stat-card">
+                    <div class="number">${totalIncidents}</div>
+                    <div class="label">Total Incidents Tracked</div>
+                </div>
+                <div class="trend-stat-card">
+                    <div class="number">${totalWeeks}</div>
+                    <div class="label">Weeks of Data</div>
+                </div>
+                <div class="trend-stat-card">
+                    <div class="number">${latestCount}</div>
+                    <div class="label">Latest Week (${latestWeek})</div>
+                    ${wowChange}
+                </div>
+                <div class="trend-stat-card">
+                    <div class="number">${inScopeCount}</div>
+                    <div class="label">In-Scope (${latestWeek})</div>
+                </div>
+                <div class="trend-stat-card">
+                    <div class="number">${topCategory ? topCategory[1] : '-'}</div>
+                    <div class="label">${topCategory ? topCategory[0] : 'No data'}</div>
+                    <div class="change flat">Top category this week</div>
+                </div>
+            `;
+        }
+
+        function destroyCharts() {
+            for (const key of Object.keys(chartInstances)) {
+                if (chartInstances[key]) { chartInstances[key].destroy(); chartInstances[key] = null; }
+            }
+        }
+
+        function filterDataByWeekRange(data) {
+            const fromVal = document.getElementById('trendWeekFrom')?.value;
+            const toVal = document.getElementById('trendWeekTo')?.value;
+            if (!fromVal || !toVal) return data;
+
+            const filteredWeeks = data.weeks.filter(w => w >= fromVal && w <= toVal);
+            const filteredByWeek = {};
+            const filteredCategories = new Set();
+            for (const w of filteredWeeks) {
+                filteredByWeek[w] = data.byWeek[w];
+                for (const cat of Object.keys(data.byWeek[w])) filteredCategories.add(cat);
+            }
+            return { byWeek: filteredByWeek, weeks: filteredWeeks, categories: [...filteredCategories].sort() };
+        }
+
+        function populateTrendWeekSelectors(weeks) {
+            const fromSel = document.getElementById('trendWeekFrom');
+            const toSel = document.getElementById('trendWeekTo');
+            const opts = weeks.map(w => `<option value="${w}">${w}</option>`).join('');
+            fromSel.innerHTML = opts;
+            toSel.innerHTML = opts;
+            fromSel.value = weeks[0];
+            toSel.value = weeks[weeks.length - 1];
+        }
+
+        function refreshTrendCharts() {
+            const filtered = filterDataByWeekRange(allAggregatedData);
+            if (filtered.weeks.length === 0) return;
+            destroyCharts();
+
+            // Filter entities to match selected weeks for stats
+            const fromVal = document.getElementById('trendWeekFrom').value;
+            const toVal = document.getElementById('trendWeekTo').value;
+            const filteredEntities = allTableEntities.filter(e => {
+                const w = e.PartitionKey || e.YearWeek;
+                return w >= fromVal && w <= toVal;
+            });
+
+            renderTrendStats(filteredEntities, filtered);
+            renderStackedBarChart(filtered);
+            renderTrendLineChart(filtered);
+            renderDonutChart(filtered);
+            renderExcludedChart(filtered);
+        }
+
+        function renderStackedBarChart(data) {
+            const ctx = document.getElementById('stackedBarChart').getContext('2d');
+            const { weeks, byWeek, categories } = data;
+            
+            // Sort categories by total count descending for better visual stacking
+            const catTotals = {};
+            for (const cat of categories) {
+                catTotals[cat] = weeks.reduce((sum, w) => sum + (byWeek[w][cat] || 0), 0);
+            }
+            const sortedCats = [...categories].sort((a, b) => catTotals[b] - catTotals[a]);
+            
+            const datasets = sortedCats.map(cat => ({
+                label: cat,
+                data: weeks.map(w => byWeek[w][cat] || 0),
+                backgroundColor: getCategoryColor(cat),
+                borderRadius: 2
+            }));
+
+            chartInstances.stackedBar = new Chart(ctx, {
+                type: 'bar',
+                data: { labels: weeks, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: 'rgba(255,255,255,0.8)', padding: 12, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterTitle: (items) => {
+                                    const weekIdx = items[0]?.dataIndex;
+                                    const weekTotal = datasets.reduce((s, ds) => s + (ds.data[weekIdx] || 0), 0);
+                                    return `Total: ${weekTotal} incidents`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: 'Incidents', color: 'rgba(255,255,255,0.6)' } }
+                    }
+                }
+            });
+        }
+
+        function renderTrendLineChart(data) {
+            const ctx = document.getElementById('trendLineChart').getContext('2d');
+            const { weeks, byWeek, categories } = data;
+            
+            // Top 6 categories by total count (excluding "Excluded")
+            const catTotals = {};
+            for (const cat of categories) {
+                if (cat === 'Excluded') continue;
+                catTotals[cat] = weeks.reduce((sum, w) => sum + (byWeek[w][cat] || 0), 0);
+            }
+            const topCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
+            
+            const datasets = topCats.map(cat => ({
+                label: cat,
+                data: weeks.map(w => byWeek[w][cat] || 0),
+                borderColor: getCategoryColor(cat),
+                backgroundColor: getCategoryColor(cat) + '33',
+                tension: 0.3,
+                pointRadius: 4,
+                pointHoverRadius: 6,
+                fill: false,
+                borderWidth: 2
+            }));
+
+            chartInstances.trendLine = new Chart(ctx, {
+                type: 'line',
+                data: { labels: weeks, datasets },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: 'rgba(255,255,255,0.8)', padding: 10, font: { size: 11 }, usePointStyle: true }
+                        }
+                    },
+                    scales: {
+                        x: { ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, beginAtZero: true }
+                    }
+                }
+            });
+        }
+
+        function renderDonutChart(data) {
+            const ctx = document.getElementById('donutChart').getContext('2d');
+            const { weeks, byWeek } = data;
+            const latestWeek = weeks[weeks.length - 1];
+            const weekData = byWeek[latestWeek] || {};
+            
+            // Sort by count, group small categories below 2%
+            const sorted = Object.entries(weekData).sort((a,b) => b[1] - a[1]);
+            const total = sorted.reduce((s, e) => s + e[1], 0);
+            const threshold = total * 0.02;
+            
+            const labels = [];
+            const values = [];
+            const colors = [];
+            let otherSum = 0;
+            
+            for (const [cat, count] of sorted) {
+                if (count < threshold && cat !== 'Excluded') {
+                    otherSum += count;
+                } else {
+                    labels.push(cat);
+                    values.push(count);
+                    colors.push(getCategoryColor(cat));
+                }
+            }
+            if (otherSum > 0) {
+                labels.push('Other (small)');
+                values.push(otherSum);
+                colors.push('#455a64');
+            }
+
+            chartInstances.donut = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels,
+                    datasets: [{ data: values, backgroundColor: colors, borderColor: 'rgba(26,26,46,0.8)', borderWidth: 2 }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: 'rgba(255,255,255,0.8)', padding: 8, font: { size: 10 }, usePointStyle: true }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: (item) => {
+                                    const pct = ((item.raw / total) * 100).toFixed(1);
+                                    return ` ${item.label}: ${item.raw} (${pct}%)`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        function renderExcludedChart(data) {
+            const ctx = document.getElementById('excludedChart').getContext('2d');
+            const { weeks, byWeek } = data;
+            
+            const inScopeData = weeks.map(w => {
+                const total = Object.values(byWeek[w]).reduce((s, v) => s + v, 0);
+                const excluded = byWeek[w]['Excluded'] || 0;
+                return total - excluded;
+            });
+            const excludedData = weeks.map(w => byWeek[w]['Excluded'] || 0);
+
+            chartInstances.excluded = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: weeks,
+                    datasets: [
+                        {
+                            label: 'In-Scope',
+                            data: inScopeData,
+                            backgroundColor: '#00d4ff',
+                            borderRadius: 4
+                        },
+                        {
+                            label: 'Excluded',
+                            data: excludedData,
+                            backgroundColor: '#90a4ae',
+                            borderRadius: 4
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: { color: 'rgba(255,255,255,0.8)', padding: 12, font: { size: 12 } }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                afterBody: (items) => {
+                                    const weekIdx = items[0]?.dataIndex;
+                                    const total = inScopeData[weekIdx] + excludedData[weekIdx];
+                                    const exclPct = total > 0 ? ((excludedData[weekIdx] / total) * 100).toFixed(1) : 0;
+                                    return `Exclusion rate: ${exclPct}%`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
+                        y: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: 'Incidents', color: 'rgba(255,255,255,0.6)' } }
+                    }
+                }
+            });
+        }
+
+        async function loadTrends() {
+            const loadingEl = document.getElementById('trendsLoading');
+            const errorEl = document.getElementById('trendsError');
+            const contentEl = document.getElementById('trendsContent');
+            
+            try {
+                loadingEl.style.display = 'block';
+                errorEl.style.display = 'none';
+                contentEl.style.display = 'none';
+                
+                const entities = await fetchTableData();
+                if (entities.length === 0) {
+                    errorEl.innerHTML = '<h3>No data</h3><p>No incident records found in the table.</p>';
+                    errorEl.style.display = 'block';
+                    loadingEl.style.display = 'none';
+                    return;
+                }
+                
+                allTableEntities = entities;
+                allAggregatedData = aggregateData(entities);
+                
+                loadingEl.style.display = 'none';
+                contentEl.style.display = 'block';
+                
+                // Populate week selectors
+                populateTrendWeekSelectors(allAggregatedData.weeks);
+
+                // Initial render
+                renderTrendStats(entities, allAggregatedData);
+                renderStackedBarChart(allAggregatedData);
+                renderTrendLineChart(allAggregatedData);
+                renderDonutChart(allAggregatedData);
+                renderExcludedChart(allAggregatedData);
+                
+                // Wire up week filter events
+                document.getElementById('trendWeekFrom').addEventListener('change', () => refreshTrendCharts());
+                document.getElementById('trendWeekTo').addEventListener('change', () => refreshTrendCharts());
+                document.getElementById('trendResetBtn').addEventListener('click', () => {
+                    populateTrendWeekSelectors(allAggregatedData.weeks);
+                    refreshTrendCharts();
+                });
+
+                trendsLoaded = true;
+                
+            } catch (error) {
+                console.error('Trends error:', error);
+                loadingEl.style.display = 'none';
+                errorEl.innerHTML = `<h3>⚠️ Error loading trends</h3><p>${error.message}</p><p style="margin-top:10px;font-size:0.9rem;">Check browser console for details</p>`;
+                errorEl.style.display = 'block';
+            }
+        }
+
+        // ============================================================
+        // Initialize
+        // ============================================================
+        async function init() {
+            try {
+                allReports = await fetchReports();
+                renderReports(allReports);
+                updateStats(allReports);
+                populateWeekFilter(allReports);
+                
+                document.getElementById('searchInput').addEventListener('input', () => applyFilters());
+                
+                document.querySelectorAll('.filter-btn').forEach(btn => {
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                        btn.classList.add('active');
+                        activeTimeFilter = btn.dataset.filter;
+                        applyFilters();
+                    });
+                });
+
+                document.getElementById('weekFilter').addEventListener('change', (e) => {
+                    activeWeekFilter = e.target.value;
+                    applyFilters();
+                });
+            } catch (error) {
+                document.getElementById('reportsContainer').innerHTML = `
+                    <div class="error">
+                        <h3>⚠️ Error loading reports</h3>
+                        <p>${error.message}</p>
+                        <p style="margin-top:10px;font-size:0.9rem;">Check browser console for details</p>
+                    </div>`;
+            }
+        }
+        
+        init();
+    </script>
+</body>
+</html>

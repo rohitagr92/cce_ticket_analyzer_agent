@@ -336,7 +336,7 @@ function Get-BlobMarkdownContent {
 
         if (-not $Script:IsAzureAutomation) {
             # Local development - use local template files
-            $localPath = ".\Templates\$FileName"
+            $localPath = Join-Path $Script:ScriptDirectory "..\templates\$FileName"
             if (Test-Path $localPath) {
                 Write-ScriptLog "Loading local template: $localPath" -Level Info
                 $content = Get-Content $localPath -Raw -Encoding UTF8

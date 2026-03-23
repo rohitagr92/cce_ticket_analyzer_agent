@@ -15,11 +15,11 @@ Write-Host ""
 
 # Define the template files to upload (without .md extension for blob names)
 $templateFiles = @{
-    "WorkNotesCleanup.md" = ".\Templates\WorkNotesCleanup.md"
-    "WorkNotesSummary.md" = ".\Templates\WorkNotesSummary.md"
-    "TicketCategorisation.md" = ".\Templates\TicketCategorisation.md"
-    "EnvironmentContext.md" = ".\Templates\EnvironmentContext.md"
-    "TrendSubCategorisation.md" = ".\Templates\TrendSubCategorisation.md"
+    "WorkNotesCleanup.md" = "$PSScriptRoot\..\templates\WorkNotesCleanup.md"
+    "WorkNotesSummary.md" = "$PSScriptRoot\..\templates\WorkNotesSummary.md"
+    "TicketCategorisation.md" = "$PSScriptRoot\..\templates\TicketCategorisation.md"
+    "EnvironmentContext.md" = "$PSScriptRoot\..\templates\EnvironmentContext.md"
+    "TrendSubCategorisation.md" = "$PSScriptRoot\..\templates\TrendSubCategorisation.md"
 }
 
 try {

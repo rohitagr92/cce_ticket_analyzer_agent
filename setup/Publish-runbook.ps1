@@ -1,7 +1,7 @@
 [CmdletBinding()]
 param(
     [Parameter()]
-    [string]$SourceFile = 'incident-analyzer-rb.ps1',
+    [string]$SourceFile = '..\runbooks\incident-analyzer-rb.ps1',
     
     [Parameter()]
     [string]$RunbookName,

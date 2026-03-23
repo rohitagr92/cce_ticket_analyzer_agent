@@ -42,7 +42,7 @@ if ($Script:IsAzureAutomation) {
 
     $Script:ScriptDirectory = $PSScriptRoot
     Set-Location $Script:ScriptDirectory
-    $configPath = ".\LocalConfig.psd1"
+    $configPath = Join-Path $Script:ScriptDirectory "..\config\LocalConfig.psd1"
     if (Test-Path $configPath) {
         Write-Host "Loading local configuration from $configPath" -ForegroundColor Green
         $Script:LocalConfig = Import-PowerShellDataFile -Path $configPath

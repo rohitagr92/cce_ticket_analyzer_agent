@@ -61,8 +61,7 @@ if ($Script:IsAzureAutomation) {
     # Local development - load from LocalConfig.psd1
     $Script:ScriptDirectory = $PSScriptRoot
     Set-Location $Script:ScriptDirectory
-    # $configPath = Join-Path $Script:ScriptDirectory "LocalConfig.psd1"
-    $configPath = ".\LocalConfig.psd1"
+    $configPath = Join-Path $Script:ScriptDirectory "..\config\LocalConfig.psd1"
     if (Test-Path $configPath) {
         Write-Host "Loading local configuration from $configPath" -ForegroundColor Green
         $Script:LocalConfig = Import-PowerShellDataFile -Path $configPath
@@ -336,7 +335,7 @@ function Get-BlobMarkdownContent {
 
         if (-not $Script:IsAzureAutomation) {
             # Local development - use local template files
-            $localPath = ".\Templates\$FileName"
+            $localPath = Join-Path $Script:ScriptDirectory "..\templates\$FileName"
             if (Test-Path $localPath) {
                 Write-ScriptLog "Loading local template: $localPath" -Level Info
                 $content = Get-Content $localPath -Raw -Encoding UTF8

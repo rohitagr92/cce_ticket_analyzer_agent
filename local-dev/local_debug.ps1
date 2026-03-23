@@ -18,6 +18,6 @@ Write-Host "Config: LocalConfig.psd1" -ForegroundColor Cyan
 Write-Host "Reports: .\results folder" -ForegroundColor Cyan
 
 # Run the runbook
-.\incident-analyzer-rb.ps1
+..\runbooks\incident-analyzer-rb.ps1
 
 Write-Host "`n=== Debug Complete ===" -ForegroundColor Green

@@ -184,10 +184,11 @@ The script supports two AI backends, selected via the `UseClaudeModel` configura
 
 | Template | Used In |
 |---|---|
-| `WorkNotesCleanup.md` | Cleaning raw work notes |
-| `WorkNotesSummary.md` | Summarizing cleaned notes |
-| `TicketCategorisation.md` | Strict category assignment |
-| `EnvironmentContext.md` | Appended to summary & categorization prompts as domain context |
+| `ProductivityTools_WorkNotesCleanup.md` | Cleaning raw work notes |
+| `ProductivityTools_WorkNotesSummary.md` | Summarizing cleaned notes |
+| `ProductivityTools_TicketCategorisation.md` | Strict category assignment |
+| `ProductivityTools_EnvironmentContext.md` | Appended to summary & categorization prompts as domain context |
+| `ProductivityTools_PortfolioSummary.md` | Portfolio-level trend/insight summary |
 
 ### Data Artifacts
 
@@ -267,7 +268,7 @@ Compares the most recent 7-day window of incidents against the previous 7-day wi
 │  ┌──────────────────────────────────────┐    │
 │  │ 1. Gather current-period tickets     │    │
 │  │ 2. Send to AI in batches of 30       │    │
-│  │    Prompt: TrendSubCategorisation.md  │    │
+│  │    Prompt: ProductivityTools_PortfolioSummary.md  │    │
 │  │    → assigns a sub-category +        │    │
 │  │      justification per ticket        │    │
 │  │ 3. Repeat for previous-period        │    │

@@ -4,6 +4,8 @@
 
 .DESCRIPTION
     This script creates the required blob storage containers in your storage account:
+    - templates: For AI prompt templates
+    - logs: For execution logs
     - data: For storing raw incident JSON files
     - results: For storing HTML report files
     
@@ -23,9 +25,11 @@
 #>
 
 param(
-    [string]$ResourceGroupName = "Incidents-analyzer-rg",
-    [string]$StorageAccountName = "incidentsanalyzersa",
+    [string]$ResourceGroupName = "OPSW-Ticket-Analyzer",
+    [string]$StorageAccountName = "opswprodtoolsblob",
     [string]$DataContainerName = "data",
+    [string]$TemplatesContainerName = "templates",
+    [string]$LogsContainerName = "logs",
     [string]$ResultsContainerName = "results"
 )
 
@@ -63,78 +67,68 @@ try {
     Write-Host "Target Configuration:" -ForegroundColor Cyan
     Write-Host "  Resource Group: $ResourceGroupName" -ForegroundColor Gray
     Write-Host "  Storage Account: $StorageAccountName" -ForegroundColor Gray
+    Write-Host "  Templates Container: $TemplatesContainerName" -ForegroundColor Gray
+    Write-Host "  Logs Container: $LogsContainerName" -ForegroundColor Gray
     Write-Host "  Data Container: $DataContainerName" -ForegroundColor Gray
     Write-Host "  Results Container: $ResultsContainerName" -ForegroundColor Gray
     Write-Host ""
     
     # Verify storage account exists
     $storageAccount = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop
-    Write-Host "✓ Found storage account: $($storageAccount.StorageAccountName)" -ForegroundColor Green
+    Write-Host "Found storage account: $($storageAccount.StorageAccountName)" -ForegroundColor Green
     Write-Host ""
     
     # Get storage context
     Write-Host "Getting storage account key..." -ForegroundColor Yellow
     $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName)[0].Value
     $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $storageKey
-    Write-Host "✓ Storage context created" -ForegroundColor Green
+    Write-Host "Storage context created" -ForegroundColor Green
     Write-Host ""
     
-    # Create data container
-    Write-Host "Creating '$DataContainerName' container..." -ForegroundColor Yellow
-    $existingDataContainer = Get-AzStorageContainer -Name $DataContainerName -Context $storageContext -ErrorAction SilentlyContinue
-    
-    if ($existingDataContainer) {
-        Write-Host "  ⚠ Container '$DataContainerName' already exists" -ForegroundColor Yellow
-        Write-Host "  Container details:" -ForegroundColor Gray
-        Write-Host "    - Name: $($existingDataContainer.Name)" -ForegroundColor Gray
-        Write-Host "    - Last Modified: $($existingDataContainer.LastModified)" -ForegroundColor Gray
-        Write-Host "    - Public Access: $($existingDataContainer.PublicAccess)" -ForegroundColor Gray
-    } else {
-        New-AzStorageContainer -Name $DataContainerName -Context $storageContext -Permission Off | Out-Null
-        Write-Host "  ✓ Created '$DataContainerName' container (Private access)" -ForegroundColor Green
-    }
-    
-    # Create results container
-    Write-Host "Creating '$ResultsContainerName' container..." -ForegroundColor Yellow
-    $existingResultsContainer = Get-AzStorageContainer -Name $ResultsContainerName -Context $storageContext -ErrorAction SilentlyContinue
-    
-    if ($existingResultsContainer) {
-        Write-Host "  ⚠ Container '$ResultsContainerName' already exists" -ForegroundColor Yellow
-        Write-Host "  Container details:" -ForegroundColor Gray
-        Write-Host "    - Name: $($existingResultsContainer.Name)" -ForegroundColor Gray
-        Write-Host "    - Last Modified: $($existingResultsContainer.LastModified)" -ForegroundColor Gray
-        Write-Host "    - Public Access: $($existingResultsContainer.PublicAccess)" -ForegroundColor Gray
-    } else {
-        New-AzStorageContainer -Name $ResultsContainerName -Context $storageContext -Permission Off | Out-Null
-        Write-Host "  ✓ Created '$ResultsContainerName' container (Private access)" -ForegroundColor Green
+    $containerNames = @(
+        $TemplatesContainerName,
+        $LogsContainerName,
+        $DataContainerName,
+        $ResultsContainerName
+    )
+
+    foreach ($containerName in $containerNames) {
+        Write-Host "Creating '$containerName' container..." -ForegroundColor Yellow
+        $existingContainer = Get-AzStorageContainer -Name $containerName -Context $storageContext -ErrorAction SilentlyContinue
+        
+        if ($existingContainer) {
+            Write-Host "  Container '$containerName' already exists" -ForegroundColor Yellow
+            Write-Host "  Container details:" -ForegroundColor Gray
+            Write-Host "    - Name: $($existingContainer.Name)" -ForegroundColor Gray
+            Write-Host "    - Last Modified: $($existingContainer.LastModified)" -ForegroundColor Gray
+            Write-Host "    - Public Access: $($existingContainer.PublicAccess)" -ForegroundColor Gray
+        } else {
+            New-AzStorageContainer -Name $containerName -Context $storageContext -Permission Off | Out-Null
+            Write-Host "  Created '$containerName' container (Private access)" -ForegroundColor Green
+        }
     }
     
     Write-Host ""
     Write-Host "=== Container Summary ===" -ForegroundColor Cyan
     $allContainers = Get-AzStorageContainer -Context $storageContext | 
-        Where-Object { $_.Name -in @($DataContainerName, $ResultsContainerName, "templates", "logs", "mdm-ai-reports") }
+        Where-Object { $_.Name -in @($TemplatesContainerName, $LogsContainerName, $DataContainerName, $ResultsContainerName, "mdm-ai-reports") }
     
     if ($allContainers) {
         $allContainers | ForEach-Object {
-            $icon = switch ($_.Name) {
-                $DataContainerName { "📁" }
-                $ResultsContainerName { "📊" }
-                "templates" { "📝" }
-                "logs" { "📋" }
-                "mdm-ai-reports" { "📈" }
-                default { "📦" }
+            $description = ""
+            if ($_.Name -eq $TemplatesContainerName) {
+                $description = "(AI prompt templates)"
+            } elseif ($_.Name -eq $LogsContainerName) {
+                $description = "(Execution logs)"
+            } elseif ($_.Name -eq $DataContainerName) {
+                $description = "(Raw incident JSON files)"
+            } elseif ($_.Name -eq $ResultsContainerName) {
+                $description = "(HTML report files)"
+            } elseif ($_.Name -eq "mdm-ai-reports") {
+                $description = "(Legacy reports - optional)"
             }
-            
-            $description = switch ($_.Name) {
-                $DataContainerName { "(Raw incident JSON files)" }
-                $ResultsContainerName { "(HTML report files)" }
-                "templates" { "(AI prompt templates)" }
-                "logs" { "(Execution logs)" }
-                "mdm-ai-reports" { "(Legacy reports - optional)" }
-                default { "" }
-            }
-            
-            Write-Host "  $icon $($_.Name) $description" -ForegroundColor White
+
+            Write-Host "  $($_.Name) $description" -ForegroundColor White
         }
     }
     
@@ -143,13 +137,21 @@ try {
     Write-Host "Blob storage containers configured successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "Container Purpose:" -ForegroundColor Cyan
-    Write-Host "  📁 $DataContainerName" -ForegroundColor White
+    Write-Host "  $TemplatesContainerName" -ForegroundColor White
+    Write-Host "     - Stores AI prompt template markdown files" -ForegroundColor Gray
+    Write-Host "     - Used by runbooks to load environment, work note, and categorization prompts" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  $LogsContainerName" -ForegroundColor White
+    Write-Host "     - Stores execution logs from Azure Automation" -ForegroundColor Gray
+    Write-Host "     - Supports traceability and troubleshooting" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "  $DataContainerName" -ForegroundColor White
     Write-Host "     - Stores raw incident data as JSON files" -ForegroundColor Gray
     Write-Host "     - Files named: incidents_yyyy-MM-dd_HH-mm-ss.json" -ForegroundColor Gray
     Write-Host "     - Used for audit trail and debugging" -ForegroundColor Gray
     Write-Host "     - Can be loaded later with UseStoredIncidents setting" -ForegroundColor Gray
     Write-Host ""
-    Write-Host "  📊 $ResultsContainerName" -ForegroundColor White
+    Write-Host "  $ResultsContainerName" -ForegroundColor White
     Write-Host "     - Stores HTML report files" -ForegroundColor Gray
     Write-Host "     - Files named: MDM_AI_Analysis_Report_*.html" -ForegroundColor Gray
     Write-Host "     - Used when webhook URL is not configured" -ForegroundColor Gray

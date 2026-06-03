@@ -1,0 +1,1 @@
+﻿https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=assignment_group=bf2ca1dddb639c105447610ed39619dc^state=6^ORstate=7&sysparm_display_value=true&sysparm_limit=1000

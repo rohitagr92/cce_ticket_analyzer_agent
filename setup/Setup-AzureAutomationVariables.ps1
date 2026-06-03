@@ -123,21 +123,25 @@ Write-Host "`n=== Step 6: Azure OpenAI / Azure AI Configuration ===" -Foreground
 Write-Host "These variables configure the AI model used for ticket categorization." -ForegroundColor Yellow
 
 # Azure OpenAI Base URL
-Write-Host "`nExample: https://your-openai-resource.openai.azure.com" -ForegroundColor Gray
+Write-Host "`nExample: https://opsw-ticket-analyzer-foundary.cognitiveservices.azure.com" -ForegroundColor Gray
 $AzureOpenAIBaseUrl = Read-Host "Enter Azure OpenAI Base URL (endpoint)"
 
-# Azure OpenAI Deployment name
-Write-Host "`nExample: gpt-4, gpt-35-turbo, or your custom deployment name" -ForegroundColor Gray
-$AzureOpenAIDeployment = Read-Host "Enter Azure OpenAI Deployment name"
+# Azure OpenAI model/deployment name
+Write-Host "`nExample: gpt-5.4-mini" -ForegroundColor Gray
+$AzureOpenAIModel = Read-Host "Enter Azure OpenAI model or deployment name"
+if ([string]::IsNullOrWhiteSpace($AzureOpenAIModel)) {
+    $AzureOpenAIModel = "gpt-5.4-mini"
+}
+$AzureOpenAIDeployment = $AzureOpenAIModel
 
 # Azure OpenAI API Key (will be encrypted)
 $AzureOpenAIApiKey = Read-Host "Enter Azure OpenAI API Key (will be encrypted)" -AsSecureString
 
 # Azure OpenAI API Version
-Write-Host "`nDefault API version: 2024-02-15-preview" -ForegroundColor Gray
-$AzureOpenAIApiVersion = Read-Host "Enter Azure OpenAI API Version (press Enter for '2024-02-15-preview')"
+Write-Host "`nDefault API version: 2025-04-01-preview" -ForegroundColor Gray
+$AzureOpenAIApiVersion = Read-Host "Enter Azure OpenAI API Version (press Enter for '2025-04-01-preview')"
 if ([string]::IsNullOrWhiteSpace($AzureOpenAIApiVersion)) {
-    $AzureOpenAIApiVersion = "2024-02-15-preview"
+    $AzureOpenAIApiVersion = "2025-04-01-preview"
 }
 
 # ============================================================================
@@ -172,7 +176,7 @@ Write-Host "  - Requests URL: $ServiceNowRequestsURL" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Azure OpenAI:" -ForegroundColor White
 Write-Host "  - Base URL: $AzureOpenAIBaseUrl" -ForegroundColor Gray
-Write-Host "  - Deployment: $AzureOpenAIDeployment" -ForegroundColor Gray
+Write-Host "  - Model: $AzureOpenAIModel" -ForegroundColor Gray
 Write-Host "  - API Version: $AzureOpenAIApiVersion" -ForegroundColor Gray
 Write-Host ""
 if (![string]::IsNullOrWhiteSpace($LogicAppWebHookURL)) {
@@ -191,7 +195,7 @@ if ($confirm -ne 'Y' -and $confirm -ne 'y') {
 # STEP 9: Create Automation Variables
 # ============================================================================
 Write-Host "`n=== Step 9: Creating Automation Variables ===" -ForegroundColor Cyan
-Write-Host "Creating 14 automation variables..." -ForegroundColor Yellow
+Write-Host "Creating 15 automation variables..." -ForegroundColor Yellow
 
 # Helper function to create or update automation variables
 function Set-AutomationVariableSafe {
@@ -297,20 +301,25 @@ Set-AutomationVariableSafe -Name "AzureOpenAIDeployment" `
                            -Value $AzureOpenAIDeployment `
                            -Description "Azure OpenAI deployment/model name"
 
-# 12. Azure OpenAI API Key - Authentication key for Azure OpenAI (ENCRYPTED for security)
+# 12. Azure OpenAI Model - Name sent in the Responses API request body
+Set-AutomationVariableSafe -Name "AzureOpenAIModel" `
+                           -Value $AzureOpenAIModel `
+                           -Description "Azure OpenAI model name for Responses API"
+
+# 13. Azure OpenAI API Key - Authentication key for Azure OpenAI (ENCRYPTED for security)
 Set-AutomationVariableSafe -Name "AzureOpenAIApiKey" `
                            -Value $AzureOpenAIApiKey `
                            -Encrypted $true `
                            -Description "Azure OpenAI API key (encrypted)"
 
-# 13. Azure OpenAI API Version - API version for Azure OpenAI service
+# 14. Azure OpenAI API Version - API version for Azure OpenAI service
 Set-AutomationVariableSafe -Name "AzureOpenAIApiVersion" `
                            -Value $AzureOpenAIApiVersion `
                            -Description "Azure OpenAI API version"
 
 Write-Host "`n--- Notification Configuration Variables ---" -ForegroundColor Cyan
 
-# 14. Logic App Webhook URL - URL to trigger email notifications via Logic App
+# 15. Logic App Webhook URL - URL to trigger email notifications via Logic App
 if (![string]::IsNullOrWhiteSpace($LogicAppWebHookURL)) {
     Set-AutomationVariableSafe -Name "LogicAppSendAIEmailWebHookURL" `
                                -Value $LogicAppWebHookURL `
@@ -342,6 +351,7 @@ try {
         "ServiceNowIncidentsScope",
         "TokenUrl",
         "AzureOpenAIBaseUrl",
+        "AzureOpenAIModel",
         "AzureOpenAIDeployment",
         "AzureOpenAIApiKey",
         "AzureOpenAIApiVersion",
@@ -373,10 +383,11 @@ try {
 Write-Host "`n=== Next Steps ===" -ForegroundColor Cyan
 Write-Host "1. Upload prompt template files to storage container: $PromptContainerName" -ForegroundColor Yellow
 Write-Host "   Required files:" -ForegroundColor Yellow
-Write-Host "   - TicketCategorisation.md" -ForegroundColor Gray
-Write-Host "   - WorkNotesCleanup.md" -ForegroundColor Gray
-Write-Host "   - WorkNotesSummary.md" -ForegroundColor Gray
-Write-Host "   - IntuneEnvironmentContext.md" -ForegroundColor Gray
+Write-Host "   - ProductivityTools_TicketCategorisation.md" -ForegroundColor Gray
+Write-Host "   - ProductivityTools_WorkNotesCleanup.md" -ForegroundColor Gray
+Write-Host "   - ProductivityTools_WorkNotesSummary.md" -ForegroundColor Gray
+Write-Host "   - ProductivityTools_EnvironmentContext.md" -ForegroundColor Gray
+Write-Host "   - ProductivityTools_PortfolioSummary.md" -ForegroundColor Gray
 Write-Host ""
 Write-Host "2. Import the incident-analyzer-rb.ps1 runbook to your Automation Account" -ForegroundColor Yellow
 Write-Host ""

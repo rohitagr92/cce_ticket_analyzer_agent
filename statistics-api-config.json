@@ -1,0 +1,19 @@
+{
+    "TableName":  "IncidentsCategoryStats",
+    "Schema":  {
+                   "Properties":  [
+                                      "Category",
+                                      "Date",
+                                      "YearWeek",
+                                      "Year",
+                                      "WeekNumber"
+                                  ],
+                   "RowKey":  "IncidentID (e.g., INC15285226)",
+                   "PartitionKey":  "YearWeek (e.g., 2026-W06)"
+               },
+    "StorageAccount":  "opswprodtoolsblob",
+    "SasExpiry":  "2027-05-27",
+    "BaseUrl":  "https://opswprodtoolsblob.table.core.windows.net/IncidentsCategoryStats",
+    "SasToken":  "sv=2017-07-29\u0026tn=IncidentsCategoryStats\u0026sig=FWJmrcQBA%2FRafBlkKiXbnqlB7zuk2fPUV3GDvsik7VA%3D\u0026se=2027-05-27T04%3A11%3A52Z\u0026sp=raud",
+    "FullUrl":  "https://opswprodtoolsblob.table.core.windows.net/IncidentsCategoryStatssv=2017-07-29\u0026tn=IncidentsCategoryStats\u0026sig=FWJmrcQBA%2FRafBlkKiXbnqlB7zuk2fPUV3GDvsik7VA%3D\u0026se=2027-05-27T04%3A11%3A52Z\u0026sp=raud"
+}

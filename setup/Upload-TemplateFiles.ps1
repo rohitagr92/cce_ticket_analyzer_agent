@@ -2,9 +2,9 @@
 # This script uploads the prompt template markdown files to Azure Storage
 
 param(
-    [string]$StorageAccountName = "incidentsanalyzersa",
+    [string]$StorageAccountName = "opswprodtoolsblob",
     [string]$ContainerName = "templates",
-    [string]$ResourceGroupName = "Incidents-analyzer-rg"
+    [string]$ResourceGroupName = "OPSW-Ticket-Analyzer"
 )
 
 Write-Host "`n=== Uploading Template Files to Azure Blob Storage ===" -ForegroundColor Cyan
@@ -13,13 +13,16 @@ Write-Host "Container: $ContainerName" -ForegroundColor Gray
 Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Gray
 Write-Host ""
 
-# Define the template files to upload (without .md extension for blob names)
+# Define the template files to upload
+# Blob name (what runbook expects) = local file path
 $templateFiles = @{
-    "WorkNotesCleanup.md" = "$PSScriptRoot\..\templates\WorkNotesCleanup.md"
-    "WorkNotesSummary.md" = "$PSScriptRoot\..\templates\WorkNotesSummary.md"
-    "TicketCategorisation.md" = "$PSScriptRoot\..\templates\TicketCategorisation.md"
-    "EnvironmentContext.md" = "$PSScriptRoot\..\templates\EnvironmentContext.md"
-    "TrendSubCategorisation.md" = "$PSScriptRoot\..\templates\TrendSubCategorisation.md"
+    "WorkNotesCleanup_ProductivityTools.md"       = "$PSScriptRoot\..\templates\WorkNotesCleanup_ProductivityTools.md"
+    "WorkNotesSummary_ProductivityTools.md"       = "$PSScriptRoot\..\templates\WorkNotesSummary_ProductivityTools.md"
+    "TicketCategorisation_ProductivityTools.md"   = "$PSScriptRoot\..\templates\TicketCategorisation_ProductivityTools.md"
+    "TrendSubCategorisation_ProductivityTools.md" = "$PSScriptRoot\..\templates\TrendSubCategorisation_ProductivityTools.md"
+    "EnvironmentContext_ProductivityTools.md"     = "$PSScriptRoot\..\templates\EnvironmentContext_ProductivityTools.md"
+    "PossibleRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\templates\PossibleRootCause_ProductivityTools.md"
+    "DetailedRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\templates\DetailedRootCause_ProductivityTools.md"
 }
 
 try {
@@ -30,17 +33,13 @@ try {
         Write-Host "Not connected to Azure. Please sign in..." -ForegroundColor Yellow
         Connect-AzAccount -UseDeviceAuthentication
     } else {
-        Write-Host "✓ Connected as: $($context.Account.Id)" -ForegroundColor Green
+        Write-Host "Connected as: $($context.Account.Id)" -ForegroundColor Green
     }
     
-    # Get storage account key
-    Write-Host "`nGetting storage account key..." -ForegroundColor Yellow
-    $storageAccountKey = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName)[0].Value
-    
-    # Create storage context using account key
-    Write-Host "Creating storage context..." -ForegroundColor Yellow
-    $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $storageAccountKey
-    Write-Host "✓ Storage context created" -ForegroundColor Green
+    # Get storage context using Azure AD token (no key required — needs Storage Blob Data Contributor role)
+    Write-Host "`nCreating storage context via Azure AD..." -ForegroundColor Yellow
+    $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
+    Write-Host "Storage context created" -ForegroundColor Green
     
     # Check if container exists, create if not
     Write-Host "`nChecking container existence..." -ForegroundColor Yellow
@@ -49,11 +48,24 @@ try {
     if (-not $container) {
         Write-Host "Container '$ContainerName' not found. Creating..." -ForegroundColor Yellow
         New-AzStorageContainer -Name $ContainerName -Context $storageContext -Permission Off | Out-Null
-        Write-Host "✓ Container created" -ForegroundColor Green
+        Write-Host "Container created" -ForegroundColor Green
     } else {
-        Write-Host "✓ Container exists" -ForegroundColor Green
+        Write-Host "Container exists" -ForegroundColor Green
     }
     
+    # Remove all existing blobs from the container
+    Write-Host "`n=== Removing Old Blobs from Container ===" -ForegroundColor Cyan
+    $existingBlobs = Get-AzStorageBlob -Container $ContainerName -Context $storageContext -ErrorAction SilentlyContinue
+    if ($existingBlobs) {
+        foreach ($blob in $existingBlobs) {
+            Remove-AzStorageBlob -Blob $blob.Name -Container $ContainerName -Context $storageContext -Force
+            Write-Host "  Deleted: $($blob.Name)" -ForegroundColor DarkGray
+        }
+        Write-Host "Old blobs removed." -ForegroundColor Green
+    } else {
+        Write-Host "Container is already empty." -ForegroundColor Gray
+    }
+
     # Upload each template file
     Write-Host "`n=== Uploading Template Files ===" -ForegroundColor Cyan
     $uploadedCount = 0
@@ -64,7 +76,7 @@ try {
         
         # Check if file exists
         if (-not (Test-Path $filePath)) {
-            Write-Host "✗ File not found: $filePath" -ForegroundColor Red
+            Write-Host "File not found: $filePath" -ForegroundColor Red
             $failedFiles += $blobName
             continue
         }
@@ -77,17 +89,16 @@ try {
                                      -Container $ContainerName `
                                      -Blob $blobName `
                                      -Context $storageContext `
-                                     -Properties @{"ContentType"="text/markdown"} `
                                      -Force | Out-Null
             
             # Get file size for display
             $fileSize = [math]::Round((Get-Item $filePath).Length / 1KB, 1)
             
-            Write-Host "  ✓ Uploaded: $blobName ($fileSize KB)" -ForegroundColor Green
+            Write-Host "  Uploaded: $blobName ($fileSize KB)" -ForegroundColor Green
             $uploadedCount++
             
         } catch {
-            Write-Host "  ✗ Failed to upload $blobName : $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "  Failed to upload $blobName : $($_.Exception.Message)" -ForegroundColor Red
             $failedFiles += $blobName
         }
     }
@@ -108,17 +119,17 @@ try {
         foreach ($blob in $blobs) {
             $blobSize = [math]::Round($blob.Length / 1KB, 1)
             $lastModified = $blob.LastModified.ToString("yyyy-MM-dd HH:mm:ss")
-            Write-Host "  📄 $($blob.Name) ($blobSize KB, Modified: $lastModified)" -ForegroundColor Gray
+            Write-Host "  $($blob.Name) ($blobSize KB, Modified: $lastModified)" -ForegroundColor Gray
         }
     } else {
         Write-Host "  No files found in container" -ForegroundColor Yellow
     }
     
-    Write-Host "`n✓ Template upload process completed!" -ForegroundColor Green
+    Write-Host "`nTemplate upload process completed!" -ForegroundColor Green
     Write-Host "Your runbook can now access these templates from blob storage." -ForegroundColor Cyan
     
 } catch {
-    Write-Host "`n✗ Error during upload process:" -ForegroundColor Red
+    Write-Host "`nError during upload process:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
     Write-Host "Troubleshooting:" -ForegroundColor Yellow

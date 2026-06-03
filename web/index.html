@@ -1,1084 +1,936 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PC Client Health Reports</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-            min-height: 100vh;
-            color: #fff;
-        }
-        .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
-        
-        /* Header */
-        .header {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 30px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .header h1 {
-            font-size: 2.5rem;
-            background: linear-gradient(90deg, #00d4ff, #0099ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 10px;
-        }
-        .header p { color: rgba(255,255,255,0.7); font-size: 1.1rem; }
-        
-        /* Tab Navigation */
-        .tab-nav {
-            display: flex;
-            gap: 5px;
-            margin-bottom: 30px;
-        }
-        .tab-btn {
-            padding: 14px 30px;
-            border: none;
-            border-radius: 12px 12px 0 0;
-            background: rgba(255,255,255,0.05);
-            color: rgba(255,255,255,0.6);
-            cursor: pointer;
-            transition: all 0.3s ease;
-            font-size: 1rem;
-            font-weight: 600;
-            border: 1px solid rgba(255,255,255,0.08);
-            border-bottom: none;
-        }
-        .tab-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
-        .tab-btn.active {
-            background: rgba(0,212,255,0.15);
-            color: #00d4ff;
-            border-color: rgba(0,212,255,0.3);
-        }
-        .tab-content { display: none; }
-        .tab-content.active { display: block; }
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Incident Insights — IT Support Analytics</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<style>
+  :root {
+    --intel-classic: #003C71;
+    --intel-blue: #0071C5;
+    --intel-energy: #00C7FD;
+    --intel-daisy: #FEC60D;
+    --bg: #f4f7fb;
+    --card: #ffffff;
+    --text: #1a2433;
+    --muted: #5b6b7f;
+    --border: #dde4ee;
+    --accent-trend: #6f42c1;
+    --danger: #d64545;
+    --success: #2ea36b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, var(--intel-classic) 0%, var(--intel-blue) 100%);
+    color: #fff;
+    padding: 28px 32px 0 32px;
+    box-shadow: 0 2px 10px rgba(0,60,113,0.15);
+  }
+  .header-inner { max-width: 1400px; margin: 0 auto; }
+  header h1 { margin: 0 0 4px 0; font-size: 1.8rem; font-weight: 600; }
+  header p.subtitle { margin: 0 0 20px 0; color: rgba(255,255,255,0.85); font-size: 0.95rem; }
+  .user-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .user-info { font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-right: 12px; }
+  .signout { color: #fff; text-decoration: none; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 4px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.25); }
+  .signout:hover { background: rgba(255,255,255,0.25); }
 
-        /* Search and Filters */
-        .controls {
-            display: flex;
-            gap: 15px;
-            margin-bottom: 30px;
-            flex-wrap: wrap;
-        }
-        .search-box {
-            flex: 1;
-            min-width: 300px;
-            position: relative;
-        }
-        .search-box input {
-            width: 100%;
-            padding: 15px 20px 15px 50px;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            font-size: 1rem;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.3s ease;
-        }
-        .search-box input:focus {
-            outline: none;
-            background: rgba(255,255,255,0.15);
-            border-color: #00d4ff;
-        }
-        .search-box::before {
-            content: '🔍';
-            position: absolute;
-            left: 18px;
-            top: 50%;
-            transform: translateY(-50%);
-            font-size: 1.2rem;
-        }
-        .filter-btn {
-            padding: 15px 25px;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .filter-btn:hover, .filter-btn.active {
-            background: linear-gradient(90deg, #00d4ff, #0099ff);
-        }
-        .week-select {
-            padding: 15px 20px;
-            border: none;
-            border-radius: 12px;
-            background: rgba(255,255,255,0.1);
-            color: #fff;
-            font-size: 1rem;
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255,255,255,0.1);
-            cursor: pointer;
-            min-width: 140px;
-            transition: all 0.3s ease;
-            appearance: none;
-            -webkit-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 15px center;
-            padding-right: 40px;
-        }
-        .week-select:focus {
-            outline: none;
-            border-color: #00d4ff;
-            background-color: rgba(255,255,255,0.15);
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='white' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 15px center;
-        }
-        .week-select option {
-            background: #1a1a2e;
-            color: #fff;
-        }
-        
-        /* Stats */
-        .stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-        .stat-card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .stat-card .number {
-            font-size: 2.5rem;
-            font-weight: bold;
-            background: linear-gradient(90deg, #00d4ff, #0099ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .stat-card .label { color: rgba(255,255,255,0.7); margin-top: 5px; }
-        
-        /* Reports Grid */
-        .reports-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
-            gap: 20px;
-        }
-        .report-card {
-            background: rgba(255,255,255,0.1);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 25px;
-            border: 1px solid rgba(255,255,255,0.1);
-            transition: all 0.3s ease;
-            cursor: pointer;
-        }
-        .report-card:hover {
-            transform: translateY(-5px);
-            border-color: #00d4ff;
-            box-shadow: 0 20px 40px rgba(0,212,255,0.2);
-        }
-        .report-card h3 {
-            font-size: 1.1rem;
-            margin-bottom: 15px;
-            color: #fff;
-            word-break: break-word;
-        }
-        .report-meta {
-            display: flex;
-            justify-content: space-between;
-            color: rgba(255,255,255,0.6);
-            font-size: 0.9rem;
-        }
-        .report-date { color: #00d4ff; }
-        
-        /* Loading */
-        .loading {
-            text-align: center;
-            padding: 50px;
-            color: rgba(255,255,255,0.7);
-        }
-        .loading::after {
-            content: '';
-            display: inline-block;
-            width: 30px;
-            height: 30px;
-            border: 3px solid rgba(255,255,255,0.3);
-            border-top-color: #00d4ff;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin-left: 15px;
-            vertical-align: middle;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 50px;
-            color: rgba(255,255,255,0.5);
-        }
-        .empty-state h3 { margin-bottom: 10px; }
-        
-        /* Error */
-        .error {
-            background: rgba(255,0,0,0.2);
-            border: 1px solid rgba(255,0,0,0.3);
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-            color: #ff6b6b;
-        }
+  .tabs { display: flex; gap: 4px; margin-top: 6px; }
+  .tab {
+    background: transparent; border: none; color: rgba(255,255,255,0.75);
+    padding: 12px 20px; font-size: 0.95rem; font-weight: 500; cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: color .15s ease, border-color .15s ease;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .tab:hover { color: #fff; }
+  .tab.active { color: #fff; border-bottom-color: var(--intel-energy); }
+  .tab .count { background: rgba(255,255,255,0.18); padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
 
-        /* Trends styles */
-        .chart-container {
-            background: rgba(255,255,255,0.08);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 25px;
-            margin-bottom: 25px;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .chart-container h3 {
-            color: #00d4ff;
-            margin-bottom: 20px;
-            font-size: 1.2rem;
-        }
-        .chart-wrapper {
-            position: relative;
-            width: 100%;
-        }
-        .chart-wrapper.tall { height: 450px; }
-        .chart-wrapper.medium { height: 350px; }
-        .charts-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 25px;
-            margin-bottom: 25px;
-        }
-        @media (max-width: 900px) {
-            .charts-row { grid-template-columns: 1fr; }
-        }
-        .trend-stats {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-            gap: 15px;
-            margin-bottom: 25px;
-        }
-        .trend-stat-card {
-            background: rgba(255,255,255,0.1);
-            border-radius: 12px;
-            padding: 18px;
-            text-align: center;
-            border: 1px solid rgba(255,255,255,0.1);
-        }
-        .trend-stat-card .number {
-            font-size: 2rem;
-            font-weight: bold;
-            background: linear-gradient(90deg, #00d4ff, #0099ff);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-        }
-        .trend-stat-card .label {
-            color: rgba(255,255,255,0.7);
-            margin-top: 4px;
-            font-size: 0.85rem;
-        }
-        .trend-stat-card .change {
-            font-size: 0.8rem;
-            margin-top: 4px;
-            font-weight: 600;
-        }
-        .change.up { color: #ff6b6b; }
-        .change.down { color: #28a745; }
-        .change.flat { color: rgba(255,255,255,0.4); }
-        .trends-controls {
-            display: flex;
-            gap: 12px;
-            margin-bottom: 25px;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        .trends-controls label {
-            color: rgba(255,255,255,0.7);
-            font-size: 0.9rem;
-        }
-        .trends-controls .week-select {
-            min-width: 130px;
-        }
-    </style>
+  main { max-width: 1400px; margin: 0 auto; padding: 28px 32px; }
+  .tab-pane { display: none; }
+  .tab-pane.active { display: block; }
+
+  .toolbar { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; align-items: center; }
+  .toolbar input[type="search"], .toolbar select {
+    padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px;
+    font-size: 0.95rem; background: #fff;
+  }
+  .toolbar input[type="search"] { flex: 1; min-width: 240px; }
+  .toolbar input[type="search"]:focus, .toolbar select:focus { outline: 2px solid var(--intel-blue); border-color: var(--intel-blue); }
+  .summary { color: var(--muted); font-size: 0.9rem; }
+  .label-inline { color: var(--muted); font-size: 0.85rem; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 14px; margin-bottom: 22px; }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 16px 18px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .stat-card .number {
+    font-size: 1.8rem; font-weight: 700; color: var(--intel-classic);
+  }
+  .stat-card .label { color: var(--muted); font-size: 0.85rem; margin-top: 2px; }
+  .stat-card .change { font-size: 0.8rem; font-weight: 600; margin-top: 4px; }
+  .change.up   { color: var(--danger); }
+  .change.down { color: var(--success); }
+  .change.flat { color: var(--muted); }
+
+  .runs { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; }
+  .run-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+    transition: box-shadow .15s ease, transform .15s ease;
+  }
+  .run-card:hover { box-shadow: 0 6px 20px rgba(0,60,113,0.12); transform: translateY(-2px); }
+  .run-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 12px; gap: 8px; }
+  .ww-pill { background: var(--intel-blue); color: #fff; padding: 4px 12px; border-radius: 999px; font-weight: 600; font-size: 0.85rem; }
+  .ww-pill.trend { background: var(--accent-trend); }
+  .run-date { color: var(--muted); font-size: 0.8rem; }
+  .run-meta { color: var(--muted); font-size: 0.85rem; margin-bottom: 14px; word-break: break-all; }
+  .run-links { display: flex; flex-direction: column; gap: 8px; }
+  .run-links a {
+    display: flex; align-items: center; gap: 8px;
+    padding: 9px 14px; border-radius: 6px; text-decoration: none;
+    font-size: 0.9rem; font-weight: 500; border: 1px solid var(--border);
+    color: var(--intel-classic); background: #fff;
+  }
+  .run-links a:hover { background: #eef5fb; border-color: var(--intel-blue); }
+  .run-links a.primary {
+    background: linear-gradient(135deg, var(--intel-classic), var(--intel-blue));
+    color: #fff; border-color: transparent;
+  }
+  .icon { font-size: 1rem; }
+
+  .state { background: #fff; border: 1px dashed var(--border); border-radius: 10px; padding: 40px 24px; text-align: center; color: var(--muted); }
+  .state.error { border-color: #e89090; background: #fff5f5; color: #8b2424; }
+
+  /* Trends */
+  .chart-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 22px; margin-bottom: 20px; box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .chart-card h3 { margin: 0 0 14px 0; color: var(--intel-classic); font-size: 1.05rem; }
+  .chart-wrap { position: relative; width: 100%; }
+  .chart-wrap.tall   { height: 420px; }
+  .chart-wrap.medium { height: 320px; }
+  .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 980px) { .charts-row { grid-template-columns: 1fr; } }
+
+  footer { margin-top: 40px; padding: 16px 32px; text-align: center; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
+
+  .loading { text-align: center; padding: 60px 24px; color: var(--muted); }
+  .loading::after {
+    content: ''; display: inline-block; width: 20px; height: 20px;
+    border: 3px solid var(--border); border-top-color: var(--intel-blue);
+    border-radius: 50%; animation: spin 0.9s linear infinite;
+    margin-left: 14px; vertical-align: middle;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .btn-outline {
+    color: var(--intel-classic); background: #fff; border: 1px solid var(--border);
+    padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; font-family: inherit;
+  }
+  .btn-outline:hover { background: #eef5fb; border-color: var(--intel-blue); }
+  .btn-primary {
+    color: #fff; background: var(--intel-classic); border: 1px solid var(--intel-classic);
+    padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; font-family: inherit;
+  }
+  .btn-primary:hover { background: var(--intel-blue); border-color: var(--intel-blue); }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>📊 PC Client Health Reports</h1>
-            <p>AI-powered incident analysis and categorization reports</p>
-        </div>
+<header>
+  <div class="header-inner">
+    <div class="user-bar">
+      <div>
+        <h1>IT Support &mdash; Incident Insights</h1>
+        <p class="subtitle">AI-powered incident analysis and categorization reports</p>
+      </div>
+      <div>
+        <span class="user-info" id="userInfo">Loading...</span>
+        <a class="signout" href="/.auth/logout">Sign out</a>
+      </div>
+    </div>
+    <div class="tabs" role="tablist">
+      <button class="tab active" role="tab" data-tab="reports">
+        <span class="icon">&#128202;</span> Reports <span class="count" id="countReports">0</span>
+      </button>
+      <button class="tab" role="tab" data-tab="trends">
+        <span class="icon">&#128200;</span> Trends
+      </button>
+      <button class="tab" role="tab" data-tab="ops">
+        <span class="icon">&#128203;</span> Ops Report
+      </button>
+    </div>
+  </div>
+</header>
 
-        <!-- Tab Navigation -->
-        <div class="tab-nav">
-            <button class="tab-btn active" data-tab="reports">📄 Reports</button>
-            <button class="tab-btn" data-tab="trends">📈 Trends</button>
-        </div>
-
-        <!-- REPORTS TAB -->
-        <div id="tab-reports" class="tab-content active">
-            <div class="controls">
-                <div class="search-box">
-                    <input type="text" id="searchInput" placeholder="Search reports...">
-                </div>
-                <button class="filter-btn active" data-filter="all">All</button>
-                <button class="filter-btn" data-filter="today">Today</button>
-                <button class="filter-btn" data-filter="week">This Week</button>
-                <button class="filter-btn" data-filter="month">This Month</button>
-                <select class="week-select" id="weekFilter">
-                    <option value="all">All Weeks</option>
-                </select>
-            </div>
-            
-            <div class="stats">
-                <div class="stat-card">
-                    <div class="number" id="totalReports">-</div>
-                    <div class="label">Total Reports</div>
-                </div>
-                <div class="stat-card">
-                    <div class="number" id="todayReports">-</div>
-                    <div class="label">Today</div>
-                </div>
-                <div class="stat-card">
-                    <div class="number" id="weekReports">-</div>
-                    <div class="label">This Week</div>
-                </div>
-            </div>
-            
-            <div id="reportsContainer" class="reports-grid">
-                <div class="loading">Loading reports...</div>
-            </div>
-        </div>
-
-        <!-- TRENDS TAB -->
-        <div id="tab-trends" class="tab-content">
-            <div id="trendsLoading" class="loading">Loading trend data from Azure Table...</div>
-            <div id="trendsError" class="error" style="display:none;"></div>
-            <div id="trendsContent" style="display:none;">
-                
-                <!-- Week range filter -->
-                <div class="trends-controls">
-                    <label>From:</label>
-                    <select class="week-select" id="trendWeekFrom"></select>
-                    <label>To:</label>
-                    <select class="week-select" id="trendWeekTo"></select>
-                    <button class="filter-btn" id="trendResetBtn" style="padding:10px 20px;">Reset</button>
-                </div>
-
-                <!-- Summary stats -->
-                <div class="trend-stats" id="trendStatsContainer"></div>
-                
-                <!-- Total incidents per week - stacked bar -->
-                <div class="chart-container">
-                    <h3>📊 Weekly Incident Volume by Category</h3>
-                    <div class="chart-wrapper tall">
-                        <canvas id="stackedBarChart"></canvas>
-                    </div>
-                </div>
-
-                <!-- Two side-by-side charts -->
-                <div class="charts-row">
-                    <!-- Top categories trend line -->
-                    <div class="chart-container">
-                        <h3>📈 Top Category Trends</h3>
-                        <div class="chart-wrapper medium">
-                            <canvas id="trendLineChart"></canvas>
-                        </div>
-                    </div>
-                    
-                    <!-- Latest week donut -->
-                    <div class="chart-container">
-                        <h3>🍩 Latest Week Breakdown</h3>
-                        <div class="chart-wrapper medium">
-                            <canvas id="donutChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Excluded vs In-scope trend -->
-                <div class="chart-container">
-                    <h3>🔍 In-Scope vs Excluded Incidents</h3>
-                    <div class="chart-wrapper medium">
-                        <canvas id="excludedChart"></canvas>
-                    </div>
-                </div>
-            </div>
-        </div>
+<main>
+  <!-- REPORTS TAB -->
+  <section class="tab-pane active" id="pane-reports">
+    <div class="toolbar">
+      <input type="search" id="searchBox" placeholder="Search reports by name, week, or date..." />
+      <select id="weekFilter"><option value="all">All weeks</option></select>
+      <div class="summary" id="summary"></div>
     </div>
 
-    <script>
-        // ============================================================
-        // Configuration
-        // ============================================================
-        const CONFIG = {
-            storageAccount: 'incidentsanalyzersa',
-            container: 'results',
-            sasToken: 'se=2028-01-29T23%3A22%3A45Z&sp=rl&sv=2022-11-02&sr=c&sig=pV73hq6HNnJv8bwoi8MqVHLnlrRyTyIc7foYv0AaoZM%3D',
-            tableSasToken: 'se=2027-02-28T23%3A18%3A58Z&sp=rl&spr=https&sv=2022-11-02&ss=t&srt=sco&sig=E2AhCoVJJmjisEiTjGJFzbmjegKPOPKMWLwygcdnVNc%3D',
-            tableName: 'IncidentsCategoryStats'
-        };
-        
-        const blobBaseUrl = `https://${CONFIG.storageAccount}.blob.core.windows.net/${CONFIG.container}`;
-        const tableBaseUrl = `https://${CONFIG.storageAccount}.table.core.windows.net`;
-        
-        // Category color palette (consistent across all charts)
-        const CATEGORY_COLORS = {
-            'Hardware Issues':              '#e74c3c',
-            'Drivers and BIOS Issues':      '#e67e22',
-            'How Do I / User Education':    '#f39c12',
-            'Compliance/Policy Issues':     '#2ecc71',
-            'Windows OS Issues':            '#3498db',
-            'Network / Connectivity Issues':'#1abc9c',
-            'Slowness / Performance Issues':'#9b59b6',
-            'Browser Issues':              '#e91e63',
-            'Application Issues':          '#00bcd4',
-            'Deployment/PC Setup Issues':   '#ff9800',
-            'Boot Failures':               '#795548',
-            'Other / Miscellaneous':       '#607d8b',
-            'Authentication/Account Issues':'#8bc34a',
-            'AVD (Azure Virtual Desktop) Issues': '#673ab7',
-            'System Crashes / Blue Screens':'#f44336',
-            'Audio Problems':              '#009688',
-            'Security/Malware Issues':     '#ff5722',
-            'Mac OS or Mac Hardware Issues':'#78909c',
-            'Linux Issues':                '#ffc107',
-            'Excluded':                    '#90a4ae'
-        };
+    <div class="stats">
+      <div class="stat-card"><div class="number" id="statTotal">-</div><div class="label">Total reports</div></div>
+      <div class="stat-card"><div class="number" id="statWeekly">-</div><div class="label">Weekly reports</div></div>
+      <div class="stat-card"><div class="number" id="statTrends">-</div><div class="label">Trend reports</div></div>
+      <div class="stat-card"><div class="number" id="statLatest">-</div><div class="label">Latest run</div></div>
+    </div>
 
-        function getCategoryColor(category) {
-            return CATEGORY_COLORS[category] || '#' + Math.floor(Math.random()*16777215).toString(16).padStart(6,'0');
-        }
+    <div id="reportsContent"><div class="loading">Loading reports</div></div>
+  </section>
 
-        let allReports = [];
-        let trendsLoaded = false;
-        let activeTimeFilter = 'all';
-        let activeWeekFilter = 'all';
+  <!-- TRENDS TAB -->
+  <section class="tab-pane" id="pane-trends">
+    <div id="trendsLoading" class="loading">Loading trend data from Azure Table</div>
+    <div id="trendsError" class="state error" style="display:none;"></div>
+    <div id="trendsContent" style="display:none;">
+      <div class="toolbar">
+        <span class="label-inline">Service</span>
+        <select id="trendService">
+          <option value="Productivity Tools">Productivity Tools</option>
+          <option value="Email and Calendaring">Email and Calendaring</option>
+        </select>
+        <span class="label-inline">From</span>
+        <select id="trendWeekFrom"></select>
+        <span class="label-inline">To</span>
+        <select id="trendWeekTo"></select>
+        <button class="btn-outline" id="trendResetBtn">Reset Range</button>
+        <div class="summary" id="trendSummary"></div>
+      </div>
 
-        // Chart instances (for destroy/recreate on filter)
-        let chartInstances = {};
-        let allTableEntities = null;
-        let allAggregatedData = null;
+      <div class="stats" id="trendStats"></div>
 
-        // ============================================================
-        // Tab Navigation
-        // ============================================================
-        document.querySelectorAll('.tab-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-                document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-                btn.classList.add('active');
-                document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
-                
-                // Lazy-load trends data on first click
-                if (btn.dataset.tab === 'trends' && !trendsLoaded) {
-                    loadTrends();
-                }
-            });
-        });
+      <div class="chart-card">
+        <h3>&#128202; Weekly Incident Volume by Category (Product)</h3>
+        <div class="chart-wrap tall"><canvas id="chartCategoryWeekly"></canvas></div>
+      </div>
 
-        // ============================================================
-        // REPORTS TAB
-        // ============================================================
-        function encodeBlobName(name) {
-            return name.split('/').map(part => encodeURIComponent(part)).join('/');
-        }
-        
-        async function fetchReports() {
-            try {
-                const listUrl = `${blobBaseUrl}?restype=container&comp=list&${CONFIG.sasToken}`;
-                const response = await fetch(listUrl);
-                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                
-                const xmlText = await response.text();
-                const parser = new DOMParser();
-                const xmlDoc = parser.parseFromString(xmlText, 'text/xml');
-                const blobs = xmlDoc.getElementsByTagName('Blob');
-                const reports = [];
-                
-                for (const blob of blobs) {
-                    const name = blob.getElementsByTagName('Name')[0]?.textContent;
-                    const lastModified = blob.getElementsByTagName('Last-Modified')[0]?.textContent;
-                    const size = blob.getElementsByTagName('Content-Length')[0]?.textContent;
-                    
-                    if (name && name.endsWith('.html')) {
-                        reports.push({
-                            name,
-                            lastModified: new Date(lastModified),
-                            size: parseInt(size) || 0,
-                            url: `${blobBaseUrl}/${encodeBlobName(name)}?${CONFIG.sasToken}`
-                        });
-                    }
-                }
-                reports.sort((a, b) => b.lastModified - a.lastModified);
-                return reports;
-            } catch (error) {
-                console.error('Error fetching reports:', error);
-                throw error;
+      <div class="chart-card">
+        <h3>&#128270; Weekly Incident Volume by Root Cause</h3>
+        <div class="chart-wrap tall"><canvas id="chartRootCauseWeekly"></canvas></div>
+      </div>
+
+      <div class="charts-row">
+        <div class="chart-card">
+          <h3>&#127942; Incident Volume by Top 5 Root Cause</h3>
+          <div class="chart-wrap medium"><canvas id="chartTop5RootCause"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <h3>&#128256; Misrouted / Excluded Tickets per Week</h3>
+          <div class="chart-wrap medium"><canvas id="chartMisrouted"></canvas></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPS REPORT TAB -->
+  <section class="tab-pane" id="pane-ops">
+    <div id="opsLoading" class="loading">Loading incident data</div>
+    <div id="opsError" class="state error" style="display:none;"></div>
+    <div id="opsContent" style="display:none;">
+      <div class="chart-card" style="margin-bottom:18px;">
+        <h3>&#128269; Operational Filters</h3>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <span class="label-inline">Product</span>
+          <select id="opsProduct" style="min-width:280px;"></select>
+          <span class="label-inline">Subcategory (Symptom)</span>
+          <select id="opsSubcategory" style="min-width:260px;"></select>
+          <span class="label-inline">Root Cause</span>
+          <select id="opsRootCause" style="min-width:260px;"></select>
+        </div>
+        <div class="toolbar" style="margin-bottom:0;">
+          <span class="label-inline">From WW</span>
+          <select id="opsWeekFrom" style="min-width:140px;"></select>
+          <span class="label-inline">To WW</span>
+          <select id="opsWeekTo" style="min-width:140px;"></select>
+          <button class="btn-outline" id="opsResetBtn">Reset</button>
+          <button class="btn-primary" id="opsDownloadBtn">&#11015; Download CSV</button>
+          <div class="summary" id="opsSummary"></div>
+        </div>
+      </div>
+
+      <div class="stats" id="opsStats"></div>
+
+      <div class="chart-card">
+        <h3>&#128203; Matching Incidents</h3>
+        <div id="opsTableWrap"></div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>Intel End-User Collaboration &middot; data refreshed by daily Azure Automation runbooks</footer>
+
+<script>
+(async function () {
+  const $ = (id) => document.getElementById(id);
+
+  // Category color palette — matches TicketCategorisation_ProductivityTools.md product list
+  const CATEGORY_COLORS = {
+    'Microsoft OneDrive Issues':                        '#0071C5',
+    'Microsoft 365 Apps for Enterprise Issues':         '#003C71',
+    'Microsoft 365 Copilot Issues':                     '#00C7FD',
+    'Microsoft Excel Issues':                           '#217346',
+    'Microsoft OneNote Issues':                         '#7719AA',
+    'Shared File Service (Share Drives) Issues':        '#795548',
+    'Microsoft Forms Issues':                           '#008272',
+    'Microsoft Word Issues':                            '#2B579A',
+    'Microsoft PowerPoint Issues':                      '#D24726',
+    'Microsoft Project Issues':                         '#31752F',
+    'Google Workspace Issues':                          '#EA4335',
+    'Microsoft Visio Issues':                           '#3955A3',
+    'Microsoft Loop Issues':                            '#0078D4',
+    'Microsoft 365 Groups / Planner / To Do Issues':    '#FEC60D',
+    'Smartsheet Issues':                                '#1B7244',
+    'Canva Issues':                                     '#7D2AE7',
+    'Other / Miscellaneous':                            '#607D8B',
+    'Excluded':                                         '#90A4AE'
+  };
+  // Deterministic color for unknown categories (hash-based, not random)
+  const colorFor = (c) => CATEGORY_COLORS[c] || ('#' + Math.abs(
+    c.split('').reduce((h, ch) => (h << 5) - h + ch.charCodeAt(0), 0) & 0xFFFFFF
+  ).toString(16).padStart(6, '0'));
+
+  // --- Identify user ---
+  try {
+    const meRes = await fetch('/.auth/me');
+    if (meRes.ok) {
+      const p = (await meRes.json()).clientPrincipal;
+      $('userInfo').textContent = (p && p.userDetails) ? p.userDetails : 'Anonymous';
+    }
+  } catch (e) { $('userInfo').textContent = ''; }
+
+  // --- Load runtime config ---
+  let cfg;
+  try {
+    const res = await fetch('config.json', { cache: 'no-store' });
+    if (!res.ok) throw new Error('config.json HTTP ' + res.status);
+    cfg = await res.json();
+  } catch (e) {
+    $('reportsContent').innerHTML = '<div class="state error">Could not load config.json: ' + e.message + '</div>';
+    return;
+  }
+  const blobBaseUrl  = cfg.containerBaseUrl.replace(/\/$/, '');
+  const blobSas      = cfg.sasToken.startsWith('?') ? cfg.sasToken : ('?' + cfg.sasToken);
+  const tableBaseUrl = (cfg.tableBaseUrl || '').replace(/\/$/, '');
+  const tableName    = cfg.tableName || 'IncidentsCategoryStats';
+  const tableSas     = (cfg.tableSasToken || '').replace(/^\?/, '');
+
+  const blobUrl = (name) => blobBaseUrl + '/' + encodeURIComponent(name) + blobSas;
+
+  // ====================================================================
+  // REPORTS TAB
+  // ====================================================================
+  let allReports = [];
+  let weekFilter = 'all';
+
+  async function listReports() {
+    const url = blobBaseUrl + '?restype=container&comp=list' + blobSas.replace('?', '&');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('Blob list HTTP ' + res.status);
+    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+    const out = [];
+    for (const b of xml.getElementsByTagName('Blob')) {
+      const name = b.getElementsByTagName('Name')[0]?.textContent;
+      const lm   = b.getElementsByTagName('Last-Modified')[0]?.textContent;
+      const size = parseInt(b.getElementsByTagName('Content-Length')[0]?.textContent || '0', 10);
+      if (!name || !name.endsWith('.html')) continue;
+      const wm = name.match(/(\d{4})-W(\d{2})/);
+      out.push({
+        name,
+        lastModified: new Date(lm),
+        size,
+        week_label: wm ? ('WW' + wm[2] + ' ' + wm[1]) : '',
+        run_id: wm ? (wm[1] + '-W' + wm[2]) : '',
+        kind: /Trend_Analysis/i.test(name) ? 'trend' : 'report'
+      });
+    }
+    out.sort((a, b) => b.lastModified - a.lastModified);
+    return out;
+  }
+
+  function fmtDate(d) {
+    if (!d) return '';
+    try { return d.toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }); }
+    catch (e) { return String(d); }
+  }
+
+  function renderReportStats() {
+    const total = allReports.length;
+    const weekly = allReports.filter(r => r.kind === 'report').length;
+    const trends = allReports.filter(r => r.kind === 'trend').length;
+    $('statTotal').textContent = total;
+    $('statWeekly').textContent = weekly;
+    $('statTrends').textContent = trends;
+    $('statLatest').textContent = total ? fmtDate(allReports[0].lastModified) : '-';
+  }
+
+  function populateWeekFilter() {
+    const weeks = new Set();
+    for (const r of allReports) if (r.run_id) weeks.add(r.run_id);
+    const sel = $('weekFilter');
+    sel.innerHTML = '<option value="all">All weeks</option>' +
+      [...weeks].sort().reverse().map(w => '<option value="' + w + '">' + w + '</option>').join('');
+  }
+
+  function renderReports() {
+    const q = $('searchBox').value.trim().toLowerCase();
+    let items = allReports;
+    if (weekFilter !== 'all') items = items.filter(r => r.run_id === weekFilter);
+    if (q) items = items.filter(r =>
+      r.name.toLowerCase().includes(q) ||
+      (r.week_label || '').toLowerCase().includes(q) ||
+      (r.lastModified.toISOString().toLowerCase().includes(q))
+    );
+
+    if (items.length === 0) {
+      $('reportsContent').innerHTML = '<div class="state">No reports match your filter.</div>';
+      $('summary').textContent = '0 reports';
+      return;
+    }
+    const html = items.map((r) => {
+      const isTrend = r.kind === 'trend';
+      const pillClass = isTrend ? 'ww-pill trend' : 'ww-pill';
+      const sizeText = (r.size / 1024).toFixed(1) + ' KB';
+      const linkLabel = isTrend ? 'Open trend analysis' : 'Open weekly report';
+      const iconCode  = isTrend ? '&#128200;' : '&#128202;';
+      return '<div class="run-card">' +
+        '<div class="run-head"><span class="' + pillClass + '">' + (r.week_label || 'Run') + '</span><span class="run-date">' + fmtDate(r.lastModified) + '</span></div>' +
+        '<div class="run-meta"><code>' + r.name + '</code> &middot; ' + sizeText + '</div>' +
+        '<div class="run-links"><a class="primary" href="' + blobUrl(r.name) + '" target="_blank" rel="noopener"><span class="icon">' + iconCode + '</span> ' + linkLabel + '</a></div>' +
+        '</div>';
+    }).join('');
+    $('reportsContent').innerHTML = '<div class="runs">' + html + '</div>';
+    $('summary').textContent = items.length + ' of ' + allReports.length + ' reports';
+  }
+
+  // ====================================================================
+  // SHARED TABLE LOADER (used by Trends and Ops Report tabs)
+  // ====================================================================
+  let allEntities = null;
+  let aggregated = null;
+  let tableLoadPromise = null;
+
+  async function ensureTableLoaded() {
+    if (allEntities) return allEntities;
+    if (!tableLoadPromise) {
+      tableLoadPromise = (async () => {
+        const entities = await fetchTableEntities();
+        allEntities = entities;
+        aggregated = aggregate(entities);
+        return entities;
+      })();
+    }
+    return tableLoadPromise;
+  }
+
+  // ====================================================================
+  // TRENDS TAB
+  // ====================================================================
+  let trendsLoaded = false;
+  const chartInstances = {};
+
+  async function fetchTableEntities() {
+    const all = [];
+    let url = tableBaseUrl + '/' + tableName + '()?' + tableSas;
+    while (url) {
+      const res = await fetch(url, { headers: { Accept: 'application/json;odata=nometadata' } });
+      if (!res.ok) throw new Error('Table HTTP ' + res.status + ': ' + (await res.text()));
+      const j = await res.json();
+      all.push(...(j.value || []));
+      const nPK = res.headers.get('x-ms-continuation-NextPartitionKey');
+      const nRK = res.headers.get('x-ms-continuation-NextRowKey');
+      if (nPK) {
+        url = tableBaseUrl + '/' + tableName + '()?' + tableSas +
+              '&NextPartitionKey=' + encodeURIComponent(nPK) +
+              (nRK ? '&NextRowKey=' + encodeURIComponent(nRK) : '');
+      } else { url = null; }
+    }
+    return all;
+  }
+
+  // Aggregate entities into { byWeek, weeks, categories } keyed on e.Category
+  function aggregate(entities) {
+    const byWeek = {}; const cats = new Set();
+    for (const e of entities) {
+      const w = e.PartitionKey || e.YearWeek;
+      const c = e.Category || 'Unknown';
+      if (!w) continue;
+      if (!byWeek[w]) byWeek[w] = {};
+      byWeek[w][c] = (byWeek[w][c] || 0) + 1;
+      cats.add(c);
+    }
+    const weeks = Object.keys(byWeek).sort();
+    return { byWeek, weeks, categories: [...cats].sort() };
+  }
+
+  // Generic aggregation by any entity field (Subcategory, PossibleRootCause, etc.)
+  function aggregateField(entities, field) {
+    const byWeek = {}; const vals = new Set();
+    for (const e of entities) {
+      const w = e.PartitionKey || e.YearWeek;
+      const v = (String(e[field] || 'Unknown')).trim() || 'Unknown';
+      if (!w) continue;
+      if (!byWeek[w]) byWeek[w] = {};
+      byWeek[w][v] = (byWeek[w][v] || 0) + 1;
+      vals.add(v);
+    }
+    const weeks = Object.keys(byWeek).sort();
+    return { byWeek, weeks, categories: [...vals].sort() };
+  }
+
+  function destroyCharts() {
+    for (const k of Object.keys(chartInstances)) {
+      try { chartInstances[k]?.destroy(); } catch (e) {}
+      chartInstances[k] = null;
+    }
+  }
+
+  // Filter allEntities by selected service + date range
+  function getDateFilteredEntities() {
+    const from    = $('trendWeekFrom').value;
+    const to      = $('trendWeekTo').value;
+    const service = $('trendService').value;
+    return allEntities.filter(e => {
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if (service === 'Productivity Tools') return !e.Service || e.Service === 'Productivity Tools';
+      return e.Service === service;
+    });
+  }
+
+  function populateWeekSelectors(weeks) {
+    const opts = weeks.map(w => '<option value="' + w + '">' + w + '</option>').join('');
+    $('trendWeekFrom').innerHTML = opts; $('trendWeekTo').innerHTML = opts;
+    $('trendWeekFrom').value = weeks[0]; $('trendWeekTo').value = weeks[weeks.length - 1];
+  }
+
+  function renderTrendStats(entities) {
+    const data = aggregate(entities);
+    const { weeks } = data;
+    const latest = weeks[weeks.length - 1];
+    const latestCount = latest ? Object.values(data.byWeek[latest] || {}).reduce((a, b) => a + b, 0) : 0;
+    let wowHtml = '';
+    if (weeks.length >= 2) {
+      const prev = weeks[weeks.length - 2];
+      const prevCount = Object.values(data.byWeek[prev] || {}).reduce((a, b) => a + b, 0);
+      const diff = latestCount - prevCount;
+      const pct = prevCount > 0 ? Math.round((diff / prevCount) * 100) : 0;
+      const cls = diff > 0 ? 'up' : (diff < 0 ? 'down' : 'flat');
+      const arrow = diff > 0 ? '&#x2191;' : (diff < 0 ? '&#x2193;' : '&#x2192;');
+      wowHtml = '<div class="change ' + cls + '">' + arrow + ' ' + Math.abs(pct) + '% vs prev week</div>';
+    }
+    $('trendStats').innerHTML =
+      '<div class="stat-card"><div class="number">' + entities.length + '</div><div class="label">Incidents in range</div></div>' +
+      '<div class="stat-card"><div class="number">' + weeks.length + '</div><div class="label">Weeks covered</div></div>' +
+      '<div class="stat-card"><div class="number">' + latestCount + '</div><div class="label">Latest week (' + (latest || '-') + ')</div>' + wowHtml + '</div>';
+  }
+
+  // Reusable stacked-bar chart renderer
+  function renderStackedBarChart(canvasId, instKey, data) {
+    const ctx = $(canvasId).getContext('2d');
+    const { weeks, byWeek, categories } = data;
+    const totals = {};
+    for (const c of categories) totals[c] = weeks.reduce((s, w) => s + (byWeek[w][c] || 0), 0);
+    const sorted = [...categories].sort((a, b) => totals[b] - totals[a]);
+    const datasets = sorted.map(c => ({
+      label: c, data: weeks.map(w => byWeek[w][c] || 0),
+      backgroundColor: colorFor(c), borderRadius: 2
+    }));
+    chartInstances[instKey] = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: weeks, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { font: { size: 10 }, usePointStyle: true, padding: 8 } },
+          tooltip: {
+            callbacks: {
+              afterTitle: (items) => {
+                const idx = items[0]?.dataIndex;
+                return 'Total: ' + datasets.reduce((s, ds) => s + (ds.data[idx] || 0), 0);
+              }
             }
+          }
+        },
+        scales: {
+          x: { stacked: true, grid: { color: 'rgba(0,0,0,0.04)' } },
+          y: { stacked: true, grid: { color: 'rgba(0,0,0,0.06)' }, title: { display: true, text: 'Incidents' } }
         }
-        
-        function renderReports(reports) {
-            const container = document.getElementById('reportsContainer');
-            if (reports.length === 0) {
-                container.innerHTML = '<div class="empty-state"><h3>No reports found</h3><p>Reports will appear here once generated</p></div>';
-                return;
-            }
-            container.innerHTML = reports.map(report => {
-                const date = report.lastModified.toLocaleDateString('en-US', { year:'numeric', month:'short', day:'numeric', hour:'2-digit', minute:'2-digit' });
-                const sizeKB = (report.size / 1024).toFixed(1);
-                const displayName = report.name.replace('.html', '').replace(/-/g, ' ');
-                return `<div class="report-card" onclick="openReport('${encodeURIComponent(report.url)}')">
-                    <h3>📄 ${displayName}</h3>
-                    <div class="report-meta"><span class="report-date">${date}</span><span>${sizeKB} KB</span></div>
-                </div>`;
-            }).join('');
+      }
+    });
+  }
+
+  function renderTop5RootCause(entities) {
+    const ctx = $('chartTop5RootCause').getContext('2d');
+    const counts = {};
+    for (const e of entities) {
+      const r = (String(e.PossibleRootCause || e.RootCause || '')).trim();
+      if (!r || r === 'Unknown') continue;
+      counts[r] = (counts[r] || 0) + 1;
+    }
+    const top5 = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 5);
+    const pal = ['#0071C5', '#00C7FD', '#003C71', '#FEC60D', '#6f42c1'];
+    chartInstances.top5RC = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: top5.map(e => e[0]),
+        datasets: [{ label: 'Incidents', data: top5.map(e => e[1]), backgroundColor: top5.map((_, i) => pal[i]), borderRadius: 6 }]
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.06)' }, title: { display: true, text: 'Incidents' } },
+          y: { grid: { display: false }, ticks: { font: { size: 11 } } }
         }
-        
-        async function openReport(url) {
-            try {
-                const response = await fetch(decodeURIComponent(url));
-                const htmlContent = await response.text();
-                const newWindow = window.open('', '_blank');
-                newWindow.document.write(htmlContent);
-                newWindow.document.close();
-            } catch (error) {
-                alert('Failed to open report: ' + error.message);
-            }
+      }
+    });
+  }
+
+  function renderMisroutedChart(catData) {
+    const ctx = $('chartMisrouted').getContext('2d');
+    const { weeks, byWeek } = catData;
+    const misrouted = weeks.map(w => byWeek[w]['Excluded'] || 0);
+    const total     = weeks.map(w => Object.values(byWeek[w]).reduce((a, b) => a + b, 0));
+    chartInstances.misrouted = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: weeks,
+        datasets: [
+          { label: 'Misrouted / Excluded', data: misrouted, backgroundColor: '#e74c3c', borderRadius: 4 },
+          { label: 'In-scope', data: total.map((t, i) => t - misrouted[i]), backgroundColor: '#0071C5', borderRadius: 4 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } } },
+        scales: {
+          x: { stacked: true, grid: { color: 'rgba(0,0,0,0.04)' } },
+          y: { stacked: true, grid: { color: 'rgba(0,0,0,0.06)' }, title: { display: true, text: 'Incidents' } }
         }
-        
-        function updateStats(reports) {
-            const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekAgo = new Date(today.getTime() - 7*24*60*60*1000);
-            document.getElementById('totalReports').textContent = reports.length;
-            document.getElementById('todayReports').textContent = reports.filter(r => r.lastModified >= today).length;
-            document.getElementById('weekReports').textContent = reports.filter(r => r.lastModified >= weekAgo).length;
-        }
-        
-        function extractWeekLabel(name) {
-            // Match patterns like 2026-W10, 2026_W10, W10 etc.
-            const m = name.match(/(\d{4})[_-]?(W\d{1,2})/i);
-            return m ? `${m[1]}-${m[2].toUpperCase()}` : null;
-        }
+      }
+    });
+  }
 
-        function populateWeekFilter(reports) {
-            const weeks = new Set();
-            for (const r of reports) {
-                const w = extractWeekLabel(r.name);
-                if (w) weeks.add(w);
-            }
-            const select = document.getElementById('weekFilter');
-            const sorted = [...weeks].sort().reverse();
-            select.innerHTML = '<option value="all">All Weeks</option>' +
-                sorted.map(w => `<option value="${w}">${w}</option>`).join('');
-        }
+  function refreshCharts() {
+    const filtered = getDateFilteredEntities();
+    destroyCharts();
+    if (filtered.length === 0) {
+      $('trendSummary').textContent = '0 incidents in selected range';
+      $('trendStats').innerHTML = '';
+      return;
+    }
+    const catData = aggregate(filtered);
+    const rcData  = aggregateField(filtered, 'PossibleRootCause');
+    renderTrendStats(filtered);
+    renderStackedBarChart('chartCategoryWeekly',    'catBar', catData);
+    renderStackedBarChart('chartRootCauseWeekly',   'rcBar',  rcData);
+    renderTop5RootCause(filtered);
+    renderMisroutedChart(catData);
+    $('trendSummary').textContent = filtered.length + ' incidents across ' + catData.weeks.length + ' weeks';
+  }
 
-        function getFilteredReports() {
-            let filtered = allReports;
+  async function loadTrends() {
+    const loading = $('trendsLoading'), err = $('trendsError'), content = $('trendsContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No trend data yet</h3><p>Run the analyzer runbook to populate weekly data.</p>';
+        err.style.display = 'block';
+        trendsLoaded = true; return;
+      }
+      populateWeekSelectors(aggregated.weeks);
+      loading.style.display = 'none'; content.style.display = 'block';
+      $('trendService').addEventListener('change', () => { populateWeekSelectors(aggregated.weeks); refreshCharts(); });
+      $('trendWeekFrom').addEventListener('change', refreshCharts);
+      $('trendWeekTo').addEventListener('change', refreshCharts);
+      $('trendResetBtn').addEventListener('click', () => { populateWeekSelectors(aggregated.weeks); refreshCharts(); });
+      refreshCharts();
+      trendsLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load trends</h3><p>' + e.message + '</p>';
+      err.style.display = 'block';
+    }
+  }
 
-            // Time filter
-            const now = new Date();
-            const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-            const weekAgo = new Date(today.getTime() - 7*24*60*60*1000);
-            const monthAgo = new Date(today.getTime() - 30*24*60*60*1000);
-            switch (activeTimeFilter) {
-                case 'today': filtered = filtered.filter(r => r.lastModified >= today); break;
-                case 'week':  filtered = filtered.filter(r => r.lastModified >= weekAgo); break;
-                case 'month': filtered = filtered.filter(r => r.lastModified >= monthAgo); break;
-            }
+  // ====================================================================
+  // OPS REPORT TAB
+  // ====================================================================
+  let opsLoaded = false;
 
-            // Week filter
-            if (activeWeekFilter !== 'all') {
-                filtered = filtered.filter(r => extractWeekLabel(r.name) === activeWeekFilter);
-            }
+  // Exact product category names from TicketCategorisation_ProductivityTools.md
+  const PRODUCT_LIST = [
+    'All Products',
+    'Microsoft OneDrive Issues',
+    'Microsoft 365 Apps for Enterprise Issues',
+    'Microsoft 365 Copilot Issues',
+    'Microsoft Excel Issues',
+    'Microsoft OneNote Issues',
+    'Shared File Service (Share Drives) Issues',
+    'Microsoft Forms Issues',
+    'Microsoft Word Issues',
+    'Microsoft PowerPoint Issues',
+    'Microsoft Project Issues',
+    'Google Workspace Issues',
+    'Microsoft Visio Issues',
+    'Microsoft Loop Issues',
+    'Microsoft 365 Groups / Planner / To Do Issues',
+    'Smartsheet Issues',
+    'Canva Issues',
+    'Other / Miscellaneous'
+  ];
 
-            // Search filter
-            const query = document.getElementById('searchInput').value.toLowerCase();
-            if (query) {
-                filtered = filtered.filter(r => r.name.toLowerCase().includes(query));
-            }
+  // Convert "2026-W20" → "26-WW20" for display
+  function formatWW(yw) {
+    const m = /^(\d{4})-W(\d{2})$/.exec(yw);
+    if (!m) return yw;
+    return m[1].slice(2) + '-WW' + m[2];
+  }
 
-            return filtered;
-        }
+  function esc(s) {
+    return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
-        function applyFilters() {
-            renderReports(getFilteredReports());
-        }
+  function populateOpsProducts() {
+    $('opsProduct').innerHTML = PRODUCT_LIST
+      .map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
+  }
 
-        // ============================================================
-        // TRENDS TAB
-        // ============================================================
-        async function fetchTableData() {
-            const allEntities = [];
-            let url = `${tableBaseUrl}/${CONFIG.tableName}()?${CONFIG.tableSasToken}`;
-            let page = 0;
-            
-            while (url) {
-                page++;
-                const response = await fetch(url, {
-                    headers: { 'Accept': 'application/json;odata=nometadata' },
-                    mode: 'cors'
-                });
-                
-                if (!response.ok) {
-                    const errText = await response.text();
-                    throw new Error(`Table query failed (${response.status}): ${errText}`);
-                }
-                
-                const data = await response.json();
-                allEntities.push(...data.value);
-                console.log(`[Pagination] Page ${page}: fetched ${data.value.length} rows, total so far: ${allEntities.length}`);
-                
-                // Handle continuation token pagination
-                const nextPK = response.headers.get('x-ms-continuation-NextPartitionKey');
-                const nextRK = response.headers.get('x-ms-continuation-NextRowKey');
-                console.log(`[Pagination] NextPartitionKey: ${nextPK}, NextRowKey: ${nextRK}`);
-                if (nextPK) {
-                    url = `${tableBaseUrl}/${CONFIG.tableName}()?${CONFIG.tableSasToken}&NextPartitionKey=${encodeURIComponent(nextPK)}${nextRK ? '&NextRowKey=' + encodeURIComponent(nextRK) : ''}`;
-                } else {
-                    url = null;
-                }
-            }
-            console.log(`[Pagination] Complete: ${allEntities.length} total entities in ${page} pages`);
-            return allEntities;
-        }
+  function populateOpsWeeks(weeks) {
+    const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
+    $('opsWeekFrom').innerHTML = opts; $('opsWeekTo').innerHTML = opts;
+    $('opsWeekFrom').value = weeks[0]; $('opsWeekTo').value = weeks[weeks.length - 1];
+  }
 
-        function aggregateData(entities) {
-            // Build: { "2026-W10": { "Hardware Issues": 5, ... }, ... }
-            const byWeek = {};
-            const allCategories = new Set();
-            
-            for (const e of entities) {
-                const week = e.PartitionKey || e.YearWeek;
-                const cat = e.Category || 'Unknown';
-                if (!week) continue;
-                
-                if (!byWeek[week]) byWeek[week] = {};
-                byWeek[week][cat] = (byWeek[week][cat] || 0) + 1;
-                allCategories.add(cat);
-            }
-            
-            // Sort weeks chronologically
-            const weeks = Object.keys(byWeek).sort();
-            
-            return { byWeek, weeks, categories: [...allCategories].sort() };
-        }
+  // Incidents filtered only by product + week range (for cascading sub/RC dropdowns)
+  function getBaseFilteredIncidents() {
+    if (!allEntities) return [];
+    const product = $('opsProduct').value;
+    const from    = $('opsWeekFrom').value;
+    const to      = $('opsWeekTo').value;
+    return allEntities.filter(e => {
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if (product !== 'All Products' && (e.Category || '') !== product) return false;
+      return true;
+    });
+  }
 
-        function renderTrendStats(entities, data) {
-            const container = document.getElementById('trendStatsContainer');
-            const { weeks } = data;
-            
-            const totalIncidents = entities.length;
-            const totalWeeks = weeks.length;
-            const latestWeek = weeks[weeks.length - 1];
-            const latestCount = Object.values(data.byWeek[latestWeek] || {}).reduce((a, b) => a + b, 0);
-            
-            // Week-over-week change
-            let wowChange = '';
-            if (weeks.length >= 2) {
-                const prevWeek = weeks[weeks.length - 2];
-                const prevCount = Object.values(data.byWeek[prevWeek] || {}).reduce((a, b) => a + b, 0);
-                const diff = latestCount - prevCount;
-                const pct = prevCount > 0 ? Math.round((diff / prevCount) * 100) : 0;
-                const cls = diff > 0 ? 'up' : diff < 0 ? 'down' : 'flat';
-                const arrow = diff > 0 ? '↑' : diff < 0 ? '↓' : '→';
-                wowChange = `<div class="change ${cls}">${arrow} ${Math.abs(pct)}% vs prev week</div>`;
-            }
+  function populateOpsSubcategories(preserveValue) {
+    const sel  = $('opsSubcategory');
+    const prev = preserveValue ? sel.value : '__all__';
+    const counts = {};
+    for (const e of getBaseFilteredIncidents()) {
+      const s = (e.Subcategory || '').trim();
+      if (s) counts[s] = (counts[s] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    let html = '<option value="__all__">All Subcategories</option>';
+    for (const [s, n] of ranked) html += '<option value="' + esc(s) + '">' + esc(s) + ' (' + n + ')</option>';
+    sel.innerHTML = html;
+    if (preserveValue && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
 
-            // Top category this week
-            const latestWeekData = data.byWeek[latestWeek] || {};
-            const topCategory = Object.entries(latestWeekData).sort((a,b) => b[1] - a[1])[0];
-            
-            // Excluded count this week
-            const excludedCount = latestWeekData['Excluded'] || 0;
-            const inScopeCount = latestCount - excludedCount;
+  function populateOpsRootCauses(preserveValue) {
+    const sel  = $('opsRootCause');
+    const prev = preserveValue ? sel.value : '__all__';
+    const counts = {};
+    for (const e of getBaseFilteredIncidents()) {
+      const r = (e.PossibleRootCause || e.RootCause || '').trim();
+      if (r) counts[r] = (counts[r] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    let html = '<option value="__all__">All Root Causes</option>';
+    for (const [r, n] of ranked) html += '<option value="' + esc(r) + '">' + esc(r) + ' (' + n + ')</option>';
+    sel.innerHTML = html;
+    if (preserveValue && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
 
-            container.innerHTML = `
-                <div class="trend-stat-card">
-                    <div class="number">${totalIncidents}</div>
-                    <div class="label">Total Incidents Tracked</div>
-                </div>
-                <div class="trend-stat-card">
-                    <div class="number">${totalWeeks}</div>
-                    <div class="label">Weeks of Data</div>
-                </div>
-                <div class="trend-stat-card">
-                    <div class="number">${latestCount}</div>
-                    <div class="label">Latest Week (${latestWeek})</div>
-                    ${wowChange}
-                </div>
-                <div class="trend-stat-card">
-                    <div class="number">${inScopeCount}</div>
-                    <div class="label">In-Scope (${latestWeek})</div>
-                </div>
-                <div class="trend-stat-card">
-                    <div class="number">${topCategory ? topCategory[1] : '-'}</div>
-                    <div class="label">${topCategory ? topCategory[0] : 'No data'}</div>
-                    <div class="change flat">Top category this week</div>
-                </div>
-            `;
-        }
+  function getOpsFilteredIncidents() {
+    if (!allEntities) return [];
+    const product  = $('opsProduct').value;
+    const subValue = $('opsSubcategory').value;
+    const rcValue  = $('opsRootCause').value;
+    const from     = $('opsWeekFrom').value;
+    const to       = $('opsWeekTo').value;
+    return allEntities.filter(e => {
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if (product !== 'All Products' && (e.Category || '') !== product) return false;
+      if (subValue !== '__all__' && (e.Subcategory || '').trim() !== subValue) return false;
+      if (rcValue  !== '__all__') {
+        const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+        if (rc !== rcValue) return false;
+      }
+      return true;
+    });
+  }
 
-        function destroyCharts() {
-            for (const key of Object.keys(chartInstances)) {
-                if (chartInstances[key]) { chartInstances[key].destroy(); chartInstances[key] = null; }
-            }
-        }
+  function renderOpsStats(incidents) {
+    const total        = incidents.length;
+    const distinctWeeks = new Set(incidents.map(i => i.PartitionKey)).size;
+    const distinctSubs  = new Set(incidents.map(i => (i.Subcategory || '').trim()).filter(Boolean)).size;
+    const rcCounts = {};
+    for (const i of incidents) {
+      const r = (i.PossibleRootCause || i.RootCause || '').trim();
+      if (r) rcCounts[r] = (rcCounts[r] || 0) + 1;
+    }
+    const topRC = Object.entries(rcCounts).sort((a, b) => b[1] - a[1])[0];
+    $('opsStats').innerHTML =
+      '<div class="stat-card"><div class="number">' + total + '</div><div class="label">Incidents matched</div></div>' +
+      '<div class="stat-card"><div class="number">' + distinctWeeks + '</div><div class="label">Weeks covered</div></div>' +
+      '<div class="stat-card"><div class="number">' + distinctSubs + '</div><div class="label">Distinct subcategories</div></div>' +
+      (topRC ? '<div class="stat-card"><div class="number">' + topRC[1] + '</div><div class="label">' + esc(topRC[0]) + '</div><div class="change flat">Top root cause</div></div>' : '');
+  }
 
-        function filterDataByWeekRange(data) {
-            const fromVal = document.getElementById('trendWeekFrom')?.value;
-            const toVal = document.getElementById('trendWeekTo')?.value;
-            if (!fromVal || !toVal) return data;
+  function renderOpsTable(incidents) {
+    if (incidents.length === 0) {
+      $('opsTableWrap').innerHTML = '<div class="state">No incidents match the selected filters.</div>';
+      return;
+    }
+    const th = (t) => '<th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--intel-classic);">' + t + '</th>';
+    const td = (v) => '<td style="padding:8px 12px;border-bottom:1px solid #f0f4f9;">' + v + '</td>';
+    const rows = incidents
+      .slice()
+      .sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))
+      .map(i => {
+        const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
+        return '<tr>' +
+          td('<a href="' + sn + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">' + esc(i.RowKey || '') + '</a>') +
+          td(esc(i.Date || '')) +
+          td('<span style="white-space:nowrap;">' + formatWW(i.PartitionKey || '') + '</span>') +
+          td(esc(i.Category || '')) +
+          td(esc(i.Subcategory || '')) +
+          td(esc(i.PossibleRootCause || i.RootCause || '')) +
+          td(esc(i.DetailedRootCause || i.AIAnalysis || '')) +
+          '</tr>';
+      }).join('');
+    $('opsTableWrap').innerHTML =
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.88rem;">' +
+      '<thead><tr style="background:#eef5fb;">' +
+      th('Incident') + th('Resolved On') + th('WW') + th('Product') + th('Subcategory (Symptom)') + th('Possible Root Cause') + th('Detailed Root Cause') +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+  }
 
-            const filteredWeeks = data.weeks.filter(w => w >= fromVal && w <= toVal);
-            const filteredByWeek = {};
-            const filteredCategories = new Set();
-            for (const w of filteredWeeks) {
-                filteredByWeek[w] = data.byWeek[w];
-                for (const cat of Object.keys(data.byWeek[w])) filteredCategories.add(cat);
-            }
-            return { byWeek: filteredByWeek, weeks: filteredWeeks, categories: [...filteredCategories].sort() };
-        }
+  function csvField(v) {
+    const s = (v == null ? '' : String(v)).replace(/\r?\n/g, ' ').trim();
+    return '"' + s.replace(/"/g, '""') + '"';
+  }
 
-        function populateTrendWeekSelectors(weeks) {
-            const fromSel = document.getElementById('trendWeekFrom');
-            const toSel = document.getElementById('trendWeekTo');
-            const opts = weeks.map(w => `<option value="${w}">${w}</option>`).join('');
-            fromSel.innerHTML = opts;
-            toSel.innerHTML = opts;
-            fromSel.value = weeks[0];
-            toSel.value = weeks[weeks.length - 1];
-        }
+  function downloadOpsCsv() {
+    const incidents = getOpsFilteredIncidents();
+    if (incidents.length === 0) { alert('No incidents match the current filters.'); return; }
+    const header = ['Incident', 'ServiceNow Link', 'Resolved On', 'WW', 'Product', 'Subcategory (Symptom)', 'Possible Root Cause', 'Detailed Root Cause'];
+    const lines  = [header.map(csvField).join(',')];
+    for (const i of incidents.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))) {
+      const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
+      lines.push([
+        csvField(i.RowKey || ''),
+        csvField(sn),
+        csvField(i.Date || ''),
+        csvField(formatWW(i.PartitionKey || '')),
+        csvField(i.Category || ''),
+        csvField(i.Subcategory || ''),
+        csvField(i.PossibleRootCause || i.RootCause || ''),
+        csvField(i.DetailedRootCause || i.AIAnalysis || '')
+      ].join(','));
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url  = URL.createObjectURL(blob);
+    const prod = ($('opsProduct').value || 'All').replace(/[^A-Za-z0-9]+/g, '-');
+    const fname = 'OpsReport_' + prod + '_' + $('opsWeekFrom').value + '_to_' + $('opsWeekTo').value + '.csv';
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  }
 
-        function refreshTrendCharts() {
-            const filtered = filterDataByWeekRange(allAggregatedData);
-            if (filtered.weeks.length === 0) return;
-            destroyCharts();
+  function refreshOps() {
+    const incidents = getOpsFilteredIncidents();
+    renderOpsStats(incidents);
+    renderOpsTable(incidents);
+    $('opsSummary').textContent = incidents.length + ' incidents';
+  }
 
-            // Filter entities to match selected weeks for stats
-            const fromVal = document.getElementById('trendWeekFrom').value;
-            const toVal = document.getElementById('trendWeekTo').value;
-            const filteredEntities = allTableEntities.filter(e => {
-                const w = e.PartitionKey || e.YearWeek;
-                return w >= fromVal && w <= toVal;
-            });
+  async function loadOps() {
+    const loading = $('opsLoading'), err = $('opsError'), content = $('opsContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No incident data yet</h3><p>Run the analyzer runbook to populate incidents.</p>';
+        err.style.display = 'block';
+        opsLoaded = true; return;
+      }
+      populateOpsProducts();
+      populateOpsWeeks(aggregated.weeks);
+      populateOpsSubcategories(false);
+      populateOpsRootCauses(false);
+      $('opsProduct').addEventListener('change', () => { populateOpsSubcategories(false); populateOpsRootCauses(false); refreshOps(); });
+      $('opsSubcategory').addEventListener('change', refreshOps);
+      $('opsRootCause').addEventListener('change', refreshOps);
+      $('opsWeekFrom').addEventListener('change', () => { populateOpsSubcategories(true); populateOpsRootCauses(true); refreshOps(); });
+      $('opsWeekTo').addEventListener('change', () => { populateOpsSubcategories(true); populateOpsRootCauses(true); refreshOps(); });
+      $('opsResetBtn').addEventListener('click', () => {
+        $('opsProduct').value = 'All Products';
+        populateOpsWeeks(aggregated.weeks);
+        populateOpsSubcategories(false);
+        populateOpsRootCauses(false);
+        refreshOps();
+      });
+      $('opsDownloadBtn').addEventListener('click', downloadOpsCsv);
+      loading.style.display = 'none'; content.style.display = 'block';
+      refreshOps();
+      opsLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load Ops Report</h3><p>' + e.message + '</p>';
+      err.style.display = 'block';
+    }
+  }
 
-            renderTrendStats(filteredEntities, filtered);
-            renderStackedBarChart(filtered);
-            renderTrendLineChart(filtered);
-            renderDonutChart(filtered);
-            renderExcludedChart(filtered);
-        }
+  // --- Tab navigation ---
+  document.querySelectorAll('.tab').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      const tab = btn.getAttribute('data-tab');
+      document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
+      $('pane-' + tab).classList.add('active');
+      if (tab === 'trends' && !trendsLoaded) loadTrends();
+      if (tab === 'ops' && !opsLoaded) loadOps();
+    });
+  });
 
-        function renderStackedBarChart(data) {
-            const ctx = document.getElementById('stackedBarChart').getContext('2d');
-            const { weeks, byWeek, categories } = data;
-            
-            // Sort categories by total count descending for better visual stacking
-            const catTotals = {};
-            for (const cat of categories) {
-                catTotals[cat] = weeks.reduce((sum, w) => sum + (byWeek[w][cat] || 0), 0);
-            }
-            const sortedCats = [...categories].sort((a, b) => catTotals[b] - catTotals[a]);
-            
-            const datasets = sortedCats.map(cat => ({
-                label: cat,
-                data: weeks.map(w => byWeek[w][cat] || 0),
-                backgroundColor: getCategoryColor(cat),
-                borderRadius: 2
-            }));
-
-            chartInstances.stackedBar = new Chart(ctx, {
-                type: 'bar',
-                data: { labels: weeks, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: 'rgba(255,255,255,0.8)', padding: 12, font: { size: 11 }, usePointStyle: true, pointStyle: 'rectRounded' }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                afterTitle: (items) => {
-                                    const weekIdx = items[0]?.dataIndex;
-                                    const weekTotal = datasets.reduce((s, ds) => s + (ds.data[weekIdx] || 0), 0);
-                                    return `Total: ${weekTotal} incidents`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        y: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: 'Incidents', color: 'rgba(255,255,255,0.6)' } }
-                    }
-                }
-            });
-        }
-
-        function renderTrendLineChart(data) {
-            const ctx = document.getElementById('trendLineChart').getContext('2d');
-            const { weeks, byWeek, categories } = data;
-            
-            // Top 6 categories by total count (excluding "Excluded")
-            const catTotals = {};
-            for (const cat of categories) {
-                if (cat === 'Excluded') continue;
-                catTotals[cat] = weeks.reduce((sum, w) => sum + (byWeek[w][cat] || 0), 0);
-            }
-            const topCats = Object.entries(catTotals).sort((a,b) => b[1] - a[1]).slice(0, 6).map(e => e[0]);
-            
-            const datasets = topCats.map(cat => ({
-                label: cat,
-                data: weeks.map(w => byWeek[w][cat] || 0),
-                borderColor: getCategoryColor(cat),
-                backgroundColor: getCategoryColor(cat) + '33',
-                tension: 0.3,
-                pointRadius: 4,
-                pointHoverRadius: 6,
-                fill: false,
-                borderWidth: 2
-            }));
-
-            chartInstances.trendLine = new Chart(ctx, {
-                type: 'line',
-                data: { labels: weeks, datasets },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: 'rgba(255,255,255,0.8)', padding: 10, font: { size: 11 }, usePointStyle: true }
-                        }
-                    },
-                    scales: {
-                        x: { ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        y: { ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, beginAtZero: true }
-                    }
-                }
-            });
-        }
-
-        function renderDonutChart(data) {
-            const ctx = document.getElementById('donutChart').getContext('2d');
-            const { weeks, byWeek } = data;
-            const latestWeek = weeks[weeks.length - 1];
-            const weekData = byWeek[latestWeek] || {};
-            
-            // Sort by count, group small categories below 2%
-            const sorted = Object.entries(weekData).sort((a,b) => b[1] - a[1]);
-            const total = sorted.reduce((s, e) => s + e[1], 0);
-            const threshold = total * 0.02;
-            
-            const labels = [];
-            const values = [];
-            const colors = [];
-            let otherSum = 0;
-            
-            for (const [cat, count] of sorted) {
-                if (count < threshold && cat !== 'Excluded') {
-                    otherSum += count;
-                } else {
-                    labels.push(cat);
-                    values.push(count);
-                    colors.push(getCategoryColor(cat));
-                }
-            }
-            if (otherSum > 0) {
-                labels.push('Other (small)');
-                values.push(otherSum);
-                colors.push('#455a64');
-            }
-
-            chartInstances.donut = new Chart(ctx, {
-                type: 'doughnut',
-                data: {
-                    labels,
-                    datasets: [{ data: values, backgroundColor: colors, borderColor: 'rgba(26,26,46,0.8)', borderWidth: 2 }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'right',
-                            labels: { color: 'rgba(255,255,255,0.8)', padding: 8, font: { size: 10 }, usePointStyle: true }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                label: (item) => {
-                                    const pct = ((item.raw / total) * 100).toFixed(1);
-                                    return ` ${item.label}: ${item.raw} (${pct}%)`;
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        function renderExcludedChart(data) {
-            const ctx = document.getElementById('excludedChart').getContext('2d');
-            const { weeks, byWeek } = data;
-            
-            const inScopeData = weeks.map(w => {
-                const total = Object.values(byWeek[w]).reduce((s, v) => s + v, 0);
-                const excluded = byWeek[w]['Excluded'] || 0;
-                return total - excluded;
-            });
-            const excludedData = weeks.map(w => byWeek[w]['Excluded'] || 0);
-
-            chartInstances.excluded = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: weeks,
-                    datasets: [
-                        {
-                            label: 'In-Scope',
-                            data: inScopeData,
-                            backgroundColor: '#00d4ff',
-                            borderRadius: 4
-                        },
-                        {
-                            label: 'Excluded',
-                            data: excludedData,
-                            backgroundColor: '#90a4ae',
-                            borderRadius: 4
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            position: 'bottom',
-                            labels: { color: 'rgba(255,255,255,0.8)', padding: 12, font: { size: 12 } }
-                        },
-                        tooltip: {
-                            callbacks: {
-                                afterBody: (items) => {
-                                    const weekIdx = items[0]?.dataIndex;
-                                    const total = inScopeData[weekIdx] + excludedData[weekIdx];
-                                    const exclPct = total > 0 ? ((excludedData[weekIdx] / total) * 100).toFixed(1) : 0;
-                                    return `Exclusion rate: ${exclPct}%`;
-                                }
-                            }
-                        }
-                    },
-                    scales: {
-                        x: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.05)' } },
-                        y: { stacked: true, ticks: { color: 'rgba(255,255,255,0.7)' }, grid: { color: 'rgba(255,255,255,0.08)' }, title: { display: true, text: 'Incidents', color: 'rgba(255,255,255,0.6)' } }
-                    }
-                }
-            });
-        }
-
-        async function loadTrends() {
-            const loadingEl = document.getElementById('trendsLoading');
-            const errorEl = document.getElementById('trendsError');
-            const contentEl = document.getElementById('trendsContent');
-            
-            try {
-                loadingEl.style.display = 'block';
-                errorEl.style.display = 'none';
-                contentEl.style.display = 'none';
-                
-                const entities = await fetchTableData();
-                if (entities.length === 0) {
-                    errorEl.innerHTML = '<h3>No data</h3><p>No incident records found in the table.</p>';
-                    errorEl.style.display = 'block';
-                    loadingEl.style.display = 'none';
-                    return;
-                }
-                
-                allTableEntities = entities;
-                allAggregatedData = aggregateData(entities);
-                
-                loadingEl.style.display = 'none';
-                contentEl.style.display = 'block';
-                
-                // Populate week selectors
-                populateTrendWeekSelectors(allAggregatedData.weeks);
-
-                // Initial render
-                renderTrendStats(entities, allAggregatedData);
-                renderStackedBarChart(allAggregatedData);
-                renderTrendLineChart(allAggregatedData);
-                renderDonutChart(allAggregatedData);
-                renderExcludedChart(allAggregatedData);
-                
-                // Wire up week filter events
-                document.getElementById('trendWeekFrom').addEventListener('change', () => refreshTrendCharts());
-                document.getElementById('trendWeekTo').addEventListener('change', () => refreshTrendCharts());
-                document.getElementById('trendResetBtn').addEventListener('click', () => {
-                    populateTrendWeekSelectors(allAggregatedData.weeks);
-                    refreshTrendCharts();
-                });
-
-                trendsLoaded = true;
-                
-            } catch (error) {
-                console.error('Trends error:', error);
-                loadingEl.style.display = 'none';
-                errorEl.innerHTML = `<h3>⚠️ Error loading trends</h3><p>${error.message}</p><p style="margin-top:10px;font-size:0.9rem;">Check browser console for details</p>`;
-                errorEl.style.display = 'block';
-            }
-        }
-
-        // ============================================================
-        // Initialize
-        // ============================================================
-        async function init() {
-            try {
-                allReports = await fetchReports();
-                renderReports(allReports);
-                updateStats(allReports);
-                populateWeekFilter(allReports);
-                
-                document.getElementById('searchInput').addEventListener('input', () => applyFilters());
-                
-                document.querySelectorAll('.filter-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
-                        btn.classList.add('active');
-                        activeTimeFilter = btn.dataset.filter;
-                        applyFilters();
-                    });
-                });
-
-                document.getElementById('weekFilter').addEventListener('change', (e) => {
-                    activeWeekFilter = e.target.value;
-                    applyFilters();
-                });
-            } catch (error) {
-                document.getElementById('reportsContainer').innerHTML = `
-                    <div class="error">
-                        <h3>⚠️ Error loading reports</h3>
-                        <p>${error.message}</p>
-                        <p style="margin-top:10px;font-size:0.9rem;">Check browser console for details</p>
-                    </div>`;
-            }
-        }
-        
-        init();
-    </script>
+  // --- Boot: Reports tab ---
+  try {
+    allReports = await listReports();
+    $('countReports').textContent = allReports.length;
+    renderReportStats();
+    populateWeekFilter();
+    renderReports();
+    $('searchBox').addEventListener('input', renderReports);
+    $('weekFilter').addEventListener('change', (e) => { weekFilter = e.target.value; renderReports(); });
+  } catch (e) {
+    $('reportsContent').innerHTML = '<div class="state error">Failed to list reports: ' + e.message + '</div>';
+  }
+})();
+</script>
 </body>
 </html>

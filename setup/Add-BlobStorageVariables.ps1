@@ -8,8 +8,8 @@
     - Incidents_analyzer_ResultsContainerName: Container for HTML report files
     
     These containers mirror the local development folders:
-    - Local: .\data folder → Azure: data container
-    - Local: .\results folder → Azure: results container
+    - Local: .\data folder maps to Azure data container
+    - Local: .\results folder maps to Azure results container
 
 .NOTES
     Prerequisites:
@@ -21,8 +21,8 @@
 #>
 
 param(
-    [string]$ResourceGroupName = "Incidents-analyzer-rg",
-    [string]$AutomationAccountName = "incident-analyzer-aa",
+    [string]$ResourceGroupName = "OPSW-Ticket-Analyzer",
+    [string]$AutomationAccountName = "OPSW-ProductivityTools-account",
     [string]$DataContainerName = "data",
     [string]$ResultsContainerName = "results"
 )
@@ -36,9 +36,9 @@ try {
     if (-not $azContext) {
         Write-Host "Not authenticated to Azure. Initiating device code authentication..." -ForegroundColor Yellow
         Connect-AzAccount -DeviceCode -ErrorAction Stop
-        Write-Host "✓ Successfully authenticated" -ForegroundColor Green
+        Write-Host "Successfully authenticated" -ForegroundColor Green
     } else {
-        Write-Host "✓ Already authenticated as: $($azContext.Account.Id)" -ForegroundColor Green
+        Write-Host "Already authenticated as: $($azContext.Account.Id)" -ForegroundColor Green
     }
     
     Write-Host ""
@@ -51,7 +51,7 @@ try {
     
     # Verify automation account exists
     $automationAccount = Get-AzAutomationAccount -ResourceGroupName $ResourceGroupName -Name $AutomationAccountName -ErrorAction Stop
-    Write-Host "✓ Found automation account: $($automationAccount.AutomationAccountName)" -ForegroundColor Green
+    Write-Host "Found automation account: $($automationAccount.AutomationAccountName)" -ForegroundColor Green
     Write-Host ""
     
     # Create DataContainerName variable
@@ -70,7 +70,7 @@ try {
                 -Name "Incidents_analyzer_DataContainerName" `
                 -Value $DataContainerName `
                 -Encrypted $false | Out-Null
-            Write-Host "  ✓ Updated Incidents_analyzer_DataContainerName = $DataContainerName" -ForegroundColor Green
+            Write-Host "  Updated Incidents_analyzer_DataContainerName = $DataContainerName" -ForegroundColor Green
         } else {
             Write-Host "  Skipped update" -ForegroundColor Gray
         }
@@ -80,7 +80,7 @@ try {
             -Name "Incidents_analyzer_DataContainerName" `
             -Value $DataContainerName `
             -Encrypted $false | Out-Null
-        Write-Host "  ✓ Created Incidents_analyzer_DataContainerName = $DataContainerName" -ForegroundColor Green
+        Write-Host "  Created Incidents_analyzer_DataContainerName = $DataContainerName" -ForegroundColor Green
     }
     
     # Create ResultsContainerName variable
@@ -99,7 +99,7 @@ try {
                 -Name "Incidents_analyzer_ResultsContainerName" `
                 -Value $ResultsContainerName `
                 -Encrypted $false | Out-Null
-            Write-Host "  ✓ Updated Incidents_analyzer_ResultsContainerName = $ResultsContainerName" -ForegroundColor Green
+            Write-Host "  Updated Incidents_analyzer_ResultsContainerName = $ResultsContainerName" -ForegroundColor Green
         } else {
             Write-Host "  Skipped update" -ForegroundColor Gray
         }
@@ -109,7 +109,7 @@ try {
             -Name "Incidents_analyzer_ResultsContainerName" `
             -Value $ResultsContainerName `
             -Encrypted $false | Out-Null
-        Write-Host "  ✓ Created Incidents_analyzer_ResultsContainerName = $ResultsContainerName" -ForegroundColor Green
+        Write-Host "  Created Incidents_analyzer_ResultsContainerName = $ResultsContainerName" -ForegroundColor Green
     }
     
     Write-Host ""
@@ -122,7 +122,7 @@ try {
     Write-Host "   - Container: $ResultsContainerName (for HTML report files)" -ForegroundColor Gray
     Write-Host ""
     Write-Host "2. Run the following commands to create containers:" -ForegroundColor White
-    Write-Host "   `$storageAccountName = 'incidentsanalyzersa'" -ForegroundColor Gray
+    Write-Host "   `$storageAccountName = 'opswprodtoolsblob'" -ForegroundColor Gray
     Write-Host "   `$resourceGroup = '$ResourceGroupName'" -ForegroundColor Gray
     Write-Host "   `$subscriptionId = (Get-AzSubscription | Out-GridView -Title 'Select Subscription' -PassThru).Id" -ForegroundColor Gray
     Write-Host "   Set-AzContext -SubscriptionId `$subscriptionId" -ForegroundColor Gray

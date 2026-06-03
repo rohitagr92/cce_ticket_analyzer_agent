@@ -1,0 +1,1 @@
+﻿https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=business_service=a1de2ff2db8f50108062531dd3961911^service_offering=fcb18407dbcf50108062531dd39619c4^stateIN6,7^resolved_at>=2026-04-18%2018:30:00^resolved_at<=2026-04-25%2018:29:59&sysparm_display_value=true&sysparm_limit=2000

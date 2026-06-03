@@ -7,10 +7,10 @@ param(
     [string]$RunbookName,
     
     [Parameter()]
-    [string]$ResourceGroupName = 'Incidents-analyzer-rg',
+    [string]$ResourceGroupName = 'OPSW-Ticket-Analyzer',
     
     [Parameter()]
-    [string]$AutomationAccountName = 'incident-analyzer-aa'
+    [string]$AutomationAccountName = 'OPSW-ProductivityTools-account'
 )
 
 # Determine script path
@@ -25,7 +25,7 @@ if (-not [System.IO.Path]::IsPathRooted($SourceFile)) {
 
 # Validate script file exists
 if (-not (Test-Path $ScriptPath)) {
-    Write-Host "✗ Script file not found: $ScriptPath" -ForegroundColor Red
+    Write-Host "Script file not found: $ScriptPath" -ForegroundColor Red
     exit 1
 }
 
@@ -48,12 +48,12 @@ Write-Host "`n=== Checking Azure Modules ===" -ForegroundColor Cyan
 if (-not (Get-Module -ListAvailable -Name Az.Automation)) {
     Write-Host "Az.Automation module not found. Installing..." -ForegroundColor Yellow
     Install-Module -Name Az.Automation -Scope CurrentUser -Force -AllowClobber
-    Write-Host "✓ Az.Automation module installed" -ForegroundColor Green
+    Write-Host "Az.Automation module installed" -ForegroundColor Green
 }
 
 Write-Host "Importing Az.Automation module..." -ForegroundColor Yellow
 Import-Module Az.Automation -Force
-Write-Host "✓ Module imported" -ForegroundColor Green
+Write-Host "Module imported" -ForegroundColor Green
 
 Write-Host "`n=== Publishing Runbook to Azure Automation ===" -ForegroundColor Cyan
 Write-Host "Resource Group: $ResourceGroupName" -ForegroundColor Gray
@@ -81,7 +81,7 @@ try {
                                    -AutomationAccountName $AutomationAccountName `
                                    -Name $RunbookName `
                                    -Force
-        Write-Host "✓ Existing runbook removed" -ForegroundColor Green
+        Write-Host "Existing runbook removed" -ForegroundColor Green
         Write-Host ""
     }
     
@@ -94,7 +94,7 @@ try {
                                -Path $ScriptPath `
                                -Force | Out-Null
     
-    Write-Host "✓ Runbook imported" -ForegroundColor Green
+    Write-Host "Runbook imported" -ForegroundColor Green
     Write-Host ""
     
     # Publish the runbook
@@ -104,13 +104,13 @@ try {
                                 -Name $RunbookName
     
     Write-Host ""
-    Write-Host "✓ Runbook published successfully!" -ForegroundColor Green
+    Write-Host "Runbook published successfully!" -ForegroundColor Green
     Write-Host ""
     Write-Host "You can now run the runbook from Azure Portal or schedule it." -ForegroundColor Cyan
     
 } catch {
     Write-Host ""
-    Write-Host "✗ Failed to publish runbook:" -ForegroundColor Red
+    Write-Host "Failed to publish runbook:" -ForegroundColor Red
     Write-Host $_.Exception.Message -ForegroundColor Red
     Write-Host ""
     Write-Host "Troubleshooting:" -ForegroundColor Yellow

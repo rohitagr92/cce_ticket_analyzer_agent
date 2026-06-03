@@ -24,8 +24,8 @@
 #>
 
 param(
-    [string]$StorageAccountName = "incidentsanalyzersa",
-    [string]$ResourceGroupName = "Incidents-analyzer-rg",
+    [string]$StorageAccountName = "opswprodtoolsblob",
+    [string]$ResourceGroupName = "OPSW-Ticket-Analyzer",
     [string]$TableName = "IncidentsCategoryStats",
     [int]$SasExpiryDays = 365,
     [switch]$ForceRecreate
@@ -54,19 +54,19 @@ Write-Host "Checking for existing table: $TableName..." -ForegroundColor Cyan
 $existingTable = Get-AzStorageTable -Name $TableName -Context $storageContext -ErrorAction SilentlyContinue
 
 if ($existingTable) {
-    Write-Host "! Table '$TableName' already exists." -ForegroundColor Yellow
+    Write-Host "Table '$TableName' already exists." -ForegroundColor Yellow
     
     if ($ForceRecreate) {
         Write-Host "ForceRecreate specified - deleting existing table..." -ForegroundColor Yellow
         Remove-AzStorageTable -Name $TableName -Context $storageContext -Force
-        Write-Host "✓ Table deleted. Waiting 30 seconds for Azure to complete deletion..." -ForegroundColor Yellow
+        Write-Host "Table deleted. Waiting 30 seconds for Azure to complete deletion..." -ForegroundColor Yellow
         Start-Sleep -Seconds 30
     } else {
         $confirm = Read-Host "Do you want to delete and recreate the table with new schema? (y/n)"
         if ($confirm -eq 'y' -or $confirm -eq 'Y') {
             Write-Host "Deleting existing table..." -ForegroundColor Yellow
             Remove-AzStorageTable -Name $TableName -Context $storageContext -Force
-            Write-Host "✓ Table deleted. Waiting 30 seconds for Azure to complete deletion..." -ForegroundColor Yellow
+            Write-Host "Table deleted. Waiting 30 seconds for Azure to complete deletion..." -ForegroundColor Yellow
             Start-Sleep -Seconds 30
         } else {
             Write-Host "Keeping existing table. Exiting..." -ForegroundColor Yellow
@@ -83,7 +83,7 @@ $maxRetries = 5
 while ($retryCount -lt $maxRetries) {
     try {
         $table = New-AzStorageTable -Name $TableName -Context $storageContext -ErrorAction Stop
-        Write-Host "✓ Table created: $TableName" -ForegroundColor Green
+        Write-Host "Table created: $TableName" -ForegroundColor Green
         break
     } catch {
         $retryCount++
@@ -91,7 +91,7 @@ while ($retryCount -lt $maxRetries) {
             Write-Host "Table creation failed (may still be deleting). Waiting 15 seconds... (Attempt $retryCount/$maxRetries)" -ForegroundColor Yellow
             Start-Sleep -Seconds 15
         } else {
-            Write-Host "✗ Failed to create table after $maxRetries attempts: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host "Failed to create table after $maxRetries attempts: $($_.Exception.Message)" -ForegroundColor Red
             exit 1
         }
     }
@@ -104,7 +104,7 @@ Write-Host "Generating SAS token (valid for $SasExpiryDays days)..." -Foreground
 $sasExpiry = (Get-Date).AddDays($SasExpiryDays)
 $sasToken = New-AzStorageTableSASToken -Name $TableName -Context $storageContext -Permission raud -ExpiryTime $sasExpiry
 
-Write-Host "✓ SAS token generated" -ForegroundColor Green
+Write-Host "SAS token generated" -ForegroundColor Green
 
 # Output REST API information
 $baseUrl = "https://$StorageAccountName.table.core.windows.net/$TableName"
@@ -143,13 +143,13 @@ Write-Host ""
 $currentWeek = "{0:D4}-W{1:D2}" -f (Get-Date).Year, [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear((Get-Date), [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
 
 $queries = @{
-    "Get all incidents" = "$baseUrl()$sasToken"
-    "Get incidents for current week ($currentWeek)" = "$baseUrl()?`$filter=PartitionKey%20eq%20'$currentWeek'$sasToken"
-    "Get incidents for specific week (e.g., 2026-W05)" = "$baseUrl()?`$filter=PartitionKey%20eq%20'2026-W05'$sasToken"
-    "Get incidents by category" = "$baseUrl()?`$filter=Category%20eq%20'Hardware%20Issues'$sasToken"
-    "Get incidents for specific date" = "$baseUrl()?`$filter=Date%20eq%20'$((Get-Date).ToString('yyyy-MM-dd'))'$sasToken"
-    "Get specific incident by ID" = "$baseUrl(PartitionKey='$currentWeek',RowKey='INC15285226')$sasToken"
-    "Count incidents per category (client-side aggregation needed)" = "$baseUrl()?`$select=Category$sasToken"
+    "Get all incidents" = "${baseUrl}$sasToken"
+    "Get incidents for current week ($currentWeek)" = "${baseUrl}?`$filter=PartitionKey%20eq%20'$currentWeek'$sasToken"
+    "Get incidents for specific week (e.g., 2026-W05)" = "${baseUrl}?`$filter=PartitionKey%20eq%20'2026-W05'$sasToken"
+    "Get incidents by category" = "${baseUrl}?`$filter=Category%20eq%20'Hardware%20Issues'$sasToken"
+    "Get incidents for specific date" = "${baseUrl}?`$filter=Date%20eq%20'$((Get-Date).ToString('yyyy-MM-dd'))'$sasToken"
+    "Get specific incident by ID" = "${baseUrl}(PartitionKey='$currentWeek',RowKey='INC15285226')$sasToken"
+    "Count incidents per category (client-side aggregation needed)" = "${baseUrl}?`$select=Category$sasToken"
 }
 
 foreach ($query in $queries.GetEnumerator()) {
@@ -163,21 +163,21 @@ Write-Host ""
 
 Write-Host "PowerShell - Get all incidents for a week:" -ForegroundColor Yellow
 Write-Host @"
-  `$response = Invoke-RestMethod -Uri "$baseUrl()?`$filter=PartitionKey%20eq%20'$currentWeek'$sasToken" -Headers @{Accept='application/json'}
+    `$response = Invoke-RestMethod -Uri "${baseUrl}?`$filter=PartitionKey%20eq%20'$currentWeek'$sasToken" -Headers @{Accept='application/json'}
   `$response.value | Format-Table RowKey, Category, Date
 "@ -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "PowerShell - Count by category:" -ForegroundColor Yellow
 Write-Host @"
-  `$response = Invoke-RestMethod -Uri "$baseUrl()$sasToken" -Headers @{Accept='application/json'}
+    `$response = Invoke-RestMethod -Uri "${baseUrl}$sasToken" -Headers @{Accept='application/json'}
   `$response.value | Group-Object Category | Select-Object Name, Count | Sort-Object Count -Descending
 "@ -ForegroundColor Gray
 
 Write-Host ""
 Write-Host "JavaScript/Fetch:" -ForegroundColor Yellow
 Write-Host @"
-  const url = "$baseUrl()?`$filter=PartitionKey eq '$currentWeek'$sasToken";
+    const url = "${baseUrl}?`$filter=PartitionKey eq '$currentWeek'$sasToken";
   fetch(url, { headers: { 'Accept': 'application/json' } })
     .then(r => r.json())
     .then(data => {

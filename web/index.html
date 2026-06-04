@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Incident Insights — IT Support Analytics</title>
+<title>AI-Powered Incident Analyzer for IT</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <style>
   :root {
@@ -123,6 +123,62 @@
   .charts-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
   @media (max-width: 980px) { .charts-row { grid-template-columns: 1fr; } }
 
+  /* === Trends+ tab === */
+  .tp-section-title { color: var(--intel-classic); font-size: 1.05rem; margin: 24px 0 12px 0; font-weight: 600; display:flex; align-items:center; gap:8px; }
+  .tp-grid-products { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+  @media (max-width: 1100px) { .tp-grid-products { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 680px)  { .tp-grid-products { grid-template-columns: 1fr; } }
+  .tp-mini-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
+  .tp-mini-card h4 { margin: 0 0 4px 0; font-size: 0.88rem; color: var(--intel-classic); font-weight: 600; }
+  .tp-mini-card .tp-mini-meta { font-size: 0.75rem; color: var(--muted); margin-bottom: 6px; display:flex; justify-content: space-between; }
+  .tp-mini-card .tp-mini-wrap { position: relative; height: 110px; }
+  .tp-movers { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  @media (max-width: 880px) { .tp-movers { grid-template-columns: 1fr; } }
+  .tp-mover-card { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+  .tp-mover-card h4 { margin: 0 0 8px 0; font-size: 0.95rem; color: var(--intel-classic); }
+  .tp-mover-list { display: flex; flex-direction: column; gap: 6px; }
+  .tp-mover-row { display: flex; align-items: center; justify-content: space-between; font-size: 0.88rem; padding: 6px 4px; border-bottom: 1px solid #f0f4f9; }
+  .tp-mover-row:last-child { border-bottom: none; }
+  .tp-mover-name { color: var(--text); flex:1; padding-right:8px; }
+  .tp-mover-val { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .tp-mover-delta { font-weight: 600; min-width: 70px; text-align:right; font-variant-numeric: tabular-nums; }
+  .tp-up { color: var(--danger); }
+  .tp-down { color: var(--success); }
+  .tp-flat { color: var(--muted); }
+  .tp-heatmap { width: 100%; border-collapse: separate; border-spacing: 2px; font-size: 0.82rem; }
+  .tp-heatmap th { padding: 6px 8px; text-align: center; color: var(--muted); font-weight: 600; }
+  .tp-heatmap th.tp-row-label { text-align: left; min-width: 220px; color: var(--intel-classic); }
+  .tp-heatmap td { text-align: center; padding: 8px 6px; border-radius: 4px; font-variant-numeric: tabular-nums; font-weight: 500; }
+  .tp-heatmap td.tp-row-label { text-align: left; padding: 8px 10px; font-weight: 600; color: var(--text); background: #fafcff; }
+
+  /* Reports+ tab */
+  .rpx-hero { background: linear-gradient(135deg, var(--intel-classic) 0%, var(--intel-blue) 100%); color:#fff; border-radius:12px; padding:22px 26px; margin-bottom:22px; box-shadow:0 4px 14px rgba(0,60,113,0.18); }
+  .rpx-hero .label { color:rgba(255,255,255,0.78); font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; }
+  .rpx-hero .title { font-size:1.4rem; font-weight:700; margin:4px 0 10px 0; }
+  .rpx-hero .kpis { display:flex; gap:24px; flex-wrap:wrap; margin:10px 0 16px 0; }
+  .rpx-hero .kpi .n { font-size:1.6rem; font-weight:700; }
+  .rpx-hero .kpi .l { font-size:0.78rem; color:rgba(255,255,255,0.82); }
+  .rpx-hero .actions { display:flex; gap:10px; flex-wrap:wrap; }
+  .rpx-hero .btn-hero { background:#fff; color:var(--intel-classic); padding:9px 16px; border-radius:6px; text-decoration:none; font-weight:600; font-size:0.9rem; border:1px solid #fff; }
+  .rpx-hero .btn-hero:hover { background:#e8f3fb; }
+  .rpx-hero .btn-hero.ghost { background:transparent; color:#fff; border-color:rgba(255,255,255,0.55); }
+  .rpx-hero .btn-hero.ghost:hover { background:rgba(255,255,255,0.12); }
+  .rpx-list { display:grid; gap:10px; margin-bottom:18px; }
+  .rpx-card { background:#fff; border:1px solid var(--border); border-radius:10px; padding:14px 18px; display:flex; align-items:center; gap:14px; box-shadow:0 1px 3px rgba(0,0,0,0.03); }
+  .rpx-card:hover { border-color:var(--intel-blue); cursor:pointer; }
+  .rpx-card .ww { font-weight:700; color:var(--intel-classic); min-width:88px; }
+  .rpx-card .meta { flex:1; min-width:0; }
+  .rpx-card .name { font-size:0.82rem; color:var(--muted); font-family:Consolas,Monaco,monospace; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .rpx-card .badges { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+  .rpx-pill { display:inline-flex; align-items:center; gap:4px; padding:2px 9px; border-radius:999px; font-size:0.74rem; font-weight:600; background:#eef5fb; color:var(--intel-classic); }
+  .rpx-pill.up { background:#fde6e6; color:var(--danger); }
+  .rpx-pill.down { background:#e1f3eb; color:var(--success); }
+  .rpx-pill.flat { background:#eef0f4; color:var(--muted); }
+  .rpx-pill.warn { background:#fff2cc; color:#8a6d00; }
+  .rpx-pill.new { background:#ede2fa; color:#5a2ea3; }
+  .rpx-card .when { color:var(--muted); font-size:0.78rem; white-space:nowrap; }
+  .rpx-card .open { color:var(--intel-blue); font-weight:600; font-size:0.85rem; text-decoration:none; padding:6px 12px; border:1px solid var(--border); border-radius:6px; }
+  .rpx-card .open:hover { background:#eef5fb; border-color:var(--intel-blue); }
   footer { margin-top: 40px; padding: 16px 32px; text-align: center; color: var(--muted); font-size: 0.8rem; border-top: 1px solid var(--border); }
 
   .loading { text-align: center; padding: 60px 24px; color: var(--muted); }
@@ -150,7 +206,7 @@
   <div class="header-inner">
     <div class="user-bar">
       <div>
-        <h1>IT Support &mdash; Incident Insights</h1>
+        <h1>AI-Powered Incident Analyzer for IT</h1>
         <p class="subtitle">AI-powered incident analysis and categorization reports</p>
       </div>
       <div>
@@ -162,11 +218,23 @@
       <button class="tab active" role="tab" data-tab="reports">
         <span class="icon">&#128202;</span> Reports <span class="count" id="countReports">0</span>
       </button>
+      <button class="tab" role="tab" data-tab="reportsplus">
+        <span class="icon">&#128240;</span> Reports+
+      </button>
       <button class="tab" role="tab" data-tab="trends">
         <span class="icon">&#128200;</span> Trends
       </button>
+      <button class="tab" role="tab" data-tab="trendsplus">
+        <span class="icon">&#9889;</span> Trends+
+      </button>
+      <button class="tab" role="tab" data-tab="rootcause">
+        <span class="icon">&#129514;</span> Root Cause
+      </button>
       <button class="tab" role="tab" data-tab="ops">
         <span class="icon">&#128203;</span> Ops Report
+      </button>
+      <button class="tab" role="tab" data-tab="opsplus">
+        <span class="icon">&#128296;</span> Ops Report+
       </button>
     </div>
   </div>
@@ -189,6 +257,59 @@
     </div>
 
     <div id="reportsContent"><div class="loading">Loading reports</div></div>
+  </section>
+
+  <!-- REPORTS+ TAB (newsfeed-style; additive, does NOT touch the original Reports tab) -->
+  <section class="tab-pane" id="pane-reportsplus">
+    <div id="rpxLoading" class="loading">Loading reports and incident data</div>
+    <div id="rpxError" class="state error" style="display:none;"></div>
+    <div id="rpxContent" style="display:none;">
+      <div id="rpxHero"></div>
+
+      <div class="toolbar">
+        <input type="search" id="rpxSearch" placeholder="Search by week or filename..." />
+        <select id="rpxKind">
+          <option value="all">All types</option>
+          <option value="report">Weekly only</option>
+          <option value="trend">Trend only</option>
+        </select>
+        <select id="rpxServiceFilter">
+          <option value="all">All services</option>
+        </select>
+        <span class="label-inline">From WW</span>
+        <select id="rpxWeekFrom" style="min-width:130px;"><option value="all">All</option></select>
+        <span class="label-inline">To WW</span>
+        <select id="rpxWeekTo" style="min-width:130px;"><option value="all">All</option></select>
+        <button class="btn-outline" id="rpxResetBtn">Reset</button>
+        <div class="summary" id="rpxSummary"></div>
+      </div>
+
+      <div id="rpxServiceNote" style="display:none;"></div>
+
+      <div id="rpxWeeklySection">
+        <h3 class="tp-section-title"><span>&#128197;</span> Weekly Reports</h3>
+        <div id="rpxWeeklyList"></div>
+      </div>
+
+      <div id="rpxTrendSection">
+        <h3 class="tp-section-title"><span>&#128200;</span> Trend Reports</h3>
+        <div id="rpxTrendList"></div>
+      </div>
+    </div>
+
+    <!-- Inline preview drawer -->
+    <div id="rpxDrawer" style="display:none;position:fixed;top:0;right:0;width:62%;max-width:1100px;height:100vh;background:#fff;box-shadow:-4px 0 18px rgba(0,0,0,0.18);z-index:1000;flex-direction:column;">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:12px 18px;border-bottom:1px solid var(--border);background:#f8fafd;">
+        <div style="font-weight:600;color:var(--intel-classic);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" id="rpxDrawerTitle">Preview</div>
+        <div style="display:flex;gap:8px;flex-shrink:0;">
+          <a id="rpxDrawerOpen" class="btn-outline" target="_blank" rel="noopener" style="text-decoration:none;">Open in new tab</a>
+          <button class="btn-outline" id="rpxDrawerClose">&#10005; Close</button>
+        </div>
+      </div>
+      <div id="rpxDrawerMsg" style="display:none;padding:10px 16px;background:#fff8e1;border-bottom:1px solid #f0e0a0;font-size:0.85rem;color:#8a6d00;"></div>
+      <iframe id="rpxDrawerFrame" referrerpolicy="no-referrer" loading="eager" style="flex:1;border:0;width:100%;height:100%;background:#fff;"></iframe>
+    </div>
+    <div id="rpxBackdrop" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:999;"></div>
   </section>
 
   <!-- TRENDS TAB -->
@@ -235,6 +356,105 @@
     </div>
   </section>
 
+  <!-- TRENDS+ TAB (new readable dashboard, additive) -->
+  <section class="tab-pane" id="pane-trendsplus">
+    <div id="tpLoading" class="loading">Loading trend data from Azure Table</div>
+    <div id="tpError" class="state error" style="display:none;"></div>
+    <div id="tpContent" style="display:none;">
+      <div class="toolbar">
+        <span class="label-inline">Service</span>
+        <select id="tpService">
+          <option value="Productivity Tools">Productivity Tools</option>
+          <option value="Email and Calendaring">Email and Calendaring</option>
+        </select>
+        <span class="label-inline">From</span>
+        <select id="tpWeekFrom"></select>
+        <span class="label-inline">To</span>
+        <select id="tpWeekTo"></select>
+        <button class="btn-outline" id="tpResetBtn">Reset Range</button>
+        <div class="summary" id="tpSummary"></div>
+      </div>
+
+      <div class="stats" id="tpStats"></div>
+
+      <h3 class="tp-section-title"><span>&#128200;</span> Top Movers (current week vs prior week)</h3>
+      <div class="tp-movers">
+        <div class="tp-mover-card"><h4 style="color:var(--danger);">&#x2191; Top Risers</h4><div class="tp-mover-list" id="tpRisers"></div></div>
+        <div class="tp-mover-card"><h4 style="color:var(--success);">&#x2193; Top Fallers</h4><div class="tp-mover-list" id="tpFallers"></div></div>
+      </div>
+
+      <h3 class="tp-section-title"><span>&#128202;</span> Per-Product Weekly Trend</h3>
+      <div class="tp-grid-products" id="tpProductGrid"></div>
+
+      <h3 class="tp-section-title"><span>&#127919;</span> Product &times; Week Heatmap</h3>
+      <div class="chart-card" style="overflow-x:auto;"><div id="tpHeatmap"></div></div>
+
+      <h3 class="tp-section-title"><span>&#128269;</span> Pareto &mdash; Possible Root Causes (current week)</h3>
+      <div class="chart-card"><div class="chart-wrap tall"><canvas id="tpPareto"></canvas></div></div>
+    </div>
+  </section>
+
+  <!-- ROOT CAUSE TAB (Product-wise root-cause analysis, additive) -->
+  <section class="tab-pane" id="pane-rootcause">
+    <div id="rcLoading" class="loading">Loading root-cause data from Azure Table</div>
+    <div id="rcError" class="state error" style="display:none;"></div>
+    <div id="rcContent" style="display:none;">
+      <div class="toolbar">
+        <span class="label-inline">Service</span>
+        <select id="rcService">
+          <option value="Productivity Tools">Productivity Tools</option>
+          <option value="Email and Calendaring">Email and Calendaring</option>
+        </select>
+        <span class="label-inline">From</span>
+        <select id="rcWeekFrom"></select>
+        <span class="label-inline">To</span>
+        <select id="rcWeekTo"></select>
+        <span class="label-inline">Show</span>
+        <select id="rcMode">
+          <option value="count">Count</option>
+          <option value="percent">% Share</option>
+        </select>
+        <span class="label-inline">Top causes</span>
+        <select id="rcTopN">
+          <option value="5">5</option>
+          <option value="6" selected>6</option>
+          <option value="8">8</option>
+          <option value="10">10</option>
+        </select>
+        <button class="btn-outline" id="rcResetBtn">Reset Range</button>
+        <div class="summary" id="rcSummary"></div>
+      </div>
+
+      <div class="stats" id="rcStats"></div>
+
+      <h3 class="tp-section-title"><span>&#129351;</span> Root-Cause Mix per Product</h3>
+      <div class="chart-card">
+        <div class="chart-wrap" id="rcStackedWrap" style="height: 520px;"><canvas id="rcStacked"></canvas></div>
+      </div>
+
+      <h3 class="tp-section-title"><span>&#127919;</span> Products &times; Top Root Causes (Heatmap)</h3>
+      <div class="chart-card" style="overflow-x:auto;"><div id="rcHeatmap"></div></div>
+
+      <h3 class="tp-section-title"><span>&#128269;</span> Drill-down &mdash; Pick a product</h3>
+      <div class="chart-card">
+        <div class="toolbar" style="margin-bottom:14px;">
+          <span class="label-inline">Product</span>
+          <select id="rcDrillProduct" style="min-width:260px;"></select>
+        </div>
+        <div class="charts-row">
+          <div>
+            <h4 style="margin:0 0 8px 0; color:var(--muted); font-size:0.9rem;">Pareto &mdash; root causes (selected range)</h4>
+            <div class="chart-wrap medium"><canvas id="rcDrillPareto"></canvas></div>
+          </div>
+          <div>
+            <h4 style="margin:0 0 8px 0; color:var(--muted); font-size:0.9rem;">Weekly trend (top 5 causes)</h4>
+            <div class="chart-wrap medium"><canvas id="rcDrillTrend"></canvas></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- OPS REPORT TAB -->
   <section class="tab-pane" id="pane-ops">
     <div id="opsLoading" class="loading">Loading incident data</div>
@@ -266,6 +486,51 @@
       <div class="chart-card">
         <h3>&#128203; Matching Incidents</h3>
         <div id="opsTableWrap"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPS REPORT+ TAB (additive triage console, does NOT touch the original Ops Report) -->
+  <section class="tab-pane" id="pane-opsplus">
+    <div id="opxLoading" class="loading">Loading incident data</div>
+    <div id="opxError" class="state error" style="display:none;"></div>
+    <div id="opxContent" style="display:none;">
+      <div class="chart-card" style="margin-bottom:18px;">
+        <h3>&#128269; Triage Filters</h3>
+        <div class="toolbar" style="margin-bottom:10px;">
+          <span class="label-inline">Service</span>
+          <select id="opxService">
+            <option value="Productivity Tools">Productivity Tools</option>
+            <option value="Email and Calendaring">Email and Calendaring</option>
+          </select>
+          <span class="label-inline">Product</span>
+          <select id="opxProduct" style="min-width:260px;"></select>
+          <span class="label-inline">Subcategory (Symptom)</span>
+          <select id="opxSubcategory" style="min-width:240px;"></select>
+          <span class="label-inline">Root Cause</span>
+          <select id="opxRootCause" style="min-width:240px;"></select>
+        </div>
+        <div class="toolbar" style="margin-bottom:0;">
+          <span class="label-inline">From WW</span>
+          <select id="opxWeekFrom" style="min-width:120px;"></select>
+          <span class="label-inline">To WW</span>
+          <select id="opxWeekTo" style="min-width:120px;"></select>
+          <input type="search" id="opxSearch" placeholder="Search incident #, symptom or cause..." style="min-width:240px;flex:1;" />
+          <label style="font-size:0.85rem;color:var(--muted);display:flex;align-items:center;gap:6px;">
+            <input type="checkbox" id="opxOutliersOnly" /> First-time-seen only
+          </label>
+          <button class="btn-outline" id="opxResetBtn">Reset</button>
+          <button class="btn-outline" id="opxCopyIdsBtn" title="Copy all matching incident numbers">&#128203; Copy IDs</button>
+          <button class="btn-primary" id="opxDownloadBtn">&#11015; CSV</button>
+          <div class="summary" id="opxSummary"></div>
+        </div>
+      </div>
+
+      <div class="stats" id="opxStats"></div>
+
+      <div class="chart-card">
+        <h3>&#128737; Triage Table <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; click a row to expand</span></h3>
+        <div id="opxTableWrap"></div>
       </div>
     </div>
   </section>
@@ -327,6 +592,24 @@
   const tableBaseUrl = (cfg.tableBaseUrl || '').replace(/\/$/, '');
   const tableName    = cfg.tableName || 'IncidentsCategoryStats';
   const tableSas     = (cfg.tableSasToken || '').replace(/^\?/, '');
+
+  // Multi-service config. Defaults to single Productivity Tools entry built from the legacy keys.
+  const serviceConfigs = (Array.isArray(cfg.services) && cfg.services.length > 0)
+    ? cfg.services.map(s => ({
+        name: s.name,
+        tableBaseUrl: (s.tableBaseUrl || tableBaseUrl).replace(/\/$/, ''),
+        tableName: s.tableName || tableName,
+        tableSas: (s.tableSasToken || tableSas).replace(/^\?/, ''),
+        reportsContainerBaseUrl: (s.reportsContainerBaseUrl || '').replace(/\/$/, ''),
+        reportsSas: s.reportsSasToken ? (s.reportsSasToken.startsWith('?') ? s.reportsSasToken : '?' + s.reportsSasToken) : ''
+      }))
+    : [{ name: 'Productivity Tools', tableBaseUrl, tableName, tableSas, reportsContainerBaseUrl: blobBaseUrl, reportsSas: blobSas }];
+
+  // Make sure the first service falls back to legacy reports URL for the original Reports tab
+  if (serviceConfigs.length && !serviceConfigs[0].reportsContainerBaseUrl) {
+    serviceConfigs[0].reportsContainerBaseUrl = blobBaseUrl;
+    serviceConfigs[0].reportsSas = blobSas;
+  }
 
   const blobUrl = (name) => blobBaseUrl + '/' + encodeURIComponent(name) + blobSas;
 
@@ -443,8 +726,24 @@
   const chartInstances = {};
 
   async function fetchTableEntities() {
+    const merged = [];
+    for (const svc of serviceConfigs) {
+      try {
+        const rows = await fetchOneTable(svc);
+        // Tag each row with its service (overrides whatever the row carried) so
+        // the Service dropdown filter works consistently across both tables.
+        for (const r of rows) r.Service = svc.name;
+        merged.push(...rows);
+      } catch (e) {
+        console.warn('Failed to load service "' + svc.name + '":', e.message);
+      }
+    }
+    return merged;
+  }
+
+  async function fetchOneTable(svc) {
     const all = [];
-    let url = tableBaseUrl + '/' + tableName + '()?' + tableSas;
+    let url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas;
     while (url) {
       const res = await fetch(url, { headers: { Accept: 'application/json;odata=nometadata' } });
       if (!res.ok) throw new Error('Table HTTP ' + res.status + ': ' + (await res.text()));
@@ -453,7 +752,7 @@
       const nPK = res.headers.get('x-ms-continuation-NextPartitionKey');
       const nRK = res.headers.get('x-ms-continuation-NextRowKey');
       if (nPK) {
-        url = tableBaseUrl + '/' + tableName + '()?' + tableSas +
+        url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas +
               '&NextPartitionKey=' + encodeURIComponent(nPK) +
               (nRK ? '&NextRowKey=' + encodeURIComponent(nRK) : '');
       } else { url = null; }
@@ -906,6 +1205,1233 @@
     }
   }
 
+  // ====================================================================
+  // TRENDS+ TAB (additive; reuses ensureTableLoaded + colorFor + formatWW)
+  // Always excludes Category='Excluded' so phantom Unknowns disappear.
+  // ====================================================================
+  let tpLoaded = false;
+  const tpCharts = {};
+
+  function tpDestroyCharts() {
+    for (const k of Object.keys(tpCharts)) { try { tpCharts[k]?.destroy(); } catch (e) {} tpCharts[k] = null; }
+  }
+
+  function tpFilteredEntities() {
+    const from = $('tpWeekFrom').value, to = $('tpWeekTo').value, svc = $('tpService').value;
+    return allEntities.filter(e => {
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if ((e.Category || '') === 'Excluded') return false;
+      if (svc === 'Productivity Tools') return !e.Service || e.Service === 'Productivity Tools';
+      return e.Service === svc;
+    });
+  }
+
+  function tpAggregateByWeek(entities, field) {
+    const byWeek = {}; const keys = new Set();
+    for (const e of entities) {
+      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
+      const v = (String(e[field] || '')).trim(); if (!v) continue;
+      if (!byWeek[w]) byWeek[w] = {};
+      byWeek[w][v] = (byWeek[w][v] || 0) + 1;
+      keys.add(v);
+    }
+    const weeks = Object.keys(byWeek).sort();
+    return { byWeek, weeks, keys: [...keys] };
+  }
+
+  function tpPopulateWeeks(weeks) {
+    const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
+    $('tpWeekFrom').innerHTML = opts; $('tpWeekTo').innerHTML = opts;
+    $('tpWeekFrom').value = weeks[0]; $('tpWeekTo').value = weeks[weeks.length - 1];
+  }
+
+  function tpRenderKPIs(entities, weeks, byWeek) {
+    const latest = weeks[weeks.length - 1];
+    const prev   = weeks.length >= 2 ? weeks[weeks.length - 2] : null;
+    const sumWeek = (w) => w ? Object.values(byWeek[w] || {}).reduce((a, b) => a + b, 0) : 0;
+    const cur = sumWeek(latest), prv = sumWeek(prev);
+    const diff = cur - prv, pct = prv > 0 ? Math.round((diff / prv) * 100) : 0;
+    const arrow = diff > 0 ? '&#x2191;' : (diff < 0 ? '&#x2193;' : '&#x2192;');
+    const cls = diff > 0 ? 'tp-up' : (diff < 0 ? 'tp-down' : 'tp-flat');
+    const wow = prev
+      ? '<div class="change ' + cls + '">' + arrow + ' ' + Math.abs(diff) + ' (' + Math.abs(pct) + '%) vs ' + formatWW(prev) + '</div>'
+      : '';
+    $('tpStats').innerHTML =
+      '<div class="stat-card"><div class="number">' + entities.length + '</div><div class="label">Incidents in range (excl. Excluded)</div></div>' +
+      '<div class="stat-card"><div class="number">' + weeks.length + '</div><div class="label">Weeks covered</div></div>' +
+      '<div class="stat-card"><div class="number">' + cur + '</div><div class="label">Current week ' + (latest ? formatWW(latest) : '-') + '</div>' + wow + '</div>' +
+      '<div class="stat-card"><div class="number">' + prv + '</div><div class="label">Prior week ' + (prev ? formatWW(prev) : '-') + '</div></div>';
+  }
+
+  function tpRenderMovers(weeks, byWeek) {
+    const latest = weeks[weeks.length - 1];
+    const prev   = weeks.length >= 2 ? weeks[weeks.length - 2] : null;
+    if (!prev) { $('tpRisers').innerHTML = '<div class="tp-flat" style="padding:8px;">Need at least 2 weeks for comparison.</div>'; $('tpFallers').innerHTML = ''; return; }
+    const all = new Set([...Object.keys(byWeek[latest] || {}), ...Object.keys(byWeek[prev] || {})]);
+    const rows = [...all].map(c => {
+      const cur = (byWeek[latest] && byWeek[latest][c]) || 0;
+      const prv = (byWeek[prev]   && byWeek[prev][c])   || 0;
+      const diff = cur - prv, pct = prv > 0 ? Math.round((diff / prv) * 100) : (cur > 0 ? 100 : 0);
+      return { name: c, cur, prv, diff, pct };
+    });
+    const risers  = rows.filter(r => r.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 5);
+    const fallers = rows.filter(r => r.diff < 0).sort((a, b) => a.diff - b.diff).slice(0, 5);
+    const renderList = (arr, sign) => arr.length === 0
+      ? '<div class="tp-flat" style="padding:8px;">None.</div>'
+      : arr.map(r => '<div class="tp-mover-row">' +
+          '<span class="tp-mover-name">' + r.name + '</span>' +
+          '<span class="tp-mover-val">' + r.prv + ' &rarr; ' + r.cur + '</span>' +
+          '<span class="tp-mover-delta ' + sign + '">' + (r.diff > 0 ? '+' : '') + r.diff + ' (' + (r.pct > 0 ? '+' : '') + r.pct + '%)</span>' +
+        '</div>').join('');
+    $('tpRisers').innerHTML  = renderList(risers,  'tp-up');
+    $('tpFallers').innerHTML = renderList(fallers, 'tp-down');
+  }
+
+  function tpRenderProductGrid(weeks, byWeek, keys) {
+    const totals = {};
+    for (const k of keys) totals[k] = weeks.reduce((s, w) => s + ((byWeek[w] && byWeek[w][k]) || 0), 0);
+    const ranked = keys.filter(k => totals[k] > 0).sort((a, b) => totals[b] - totals[a]);
+    const labels = weeks.map(formatWW);
+    const latest = weeks[weeks.length - 1];
+    const prev   = weeks.length >= 2 ? weeks[weeks.length - 2] : null;
+    let html = '';
+    for (const k of ranked) {
+      const cur = (byWeek[latest] && byWeek[latest][k]) || 0;
+      const prv = prev ? ((byWeek[prev] && byWeek[prev][k]) || 0) : 0;
+      const diff = cur - prv;
+      const arrow = diff > 0 ? '&#x2191;' : (diff < 0 ? '&#x2193;' : '&#x2192;');
+      const cls = diff > 0 ? 'tp-up' : (diff < 0 ? 'tp-down' : 'tp-flat');
+      const safeId = 'tpMini_' + k.replace(/[^A-Za-z0-9]+/g, '_');
+      html += '<div class="tp-mini-card">' +
+        '<h4>' + k + '</h4>' +
+        '<div class="tp-mini-meta"><span>Total: ' + totals[k] + '</span><span class="' + cls + '">' + arrow + ' ' + cur + (prev ? ' (was ' + prv + ')' : '') + '</span></div>' +
+        '<div class="tp-mini-wrap"><canvas id="' + safeId + '"></canvas></div>' +
+      '</div>';
+    }
+    $('tpProductGrid').innerHTML = html;
+    // Now create the line charts
+    for (const k of ranked) {
+      const safeId = 'tpMini_' + k.replace(/[^A-Za-z0-9]+/g, '_');
+      const ctx = $(safeId).getContext('2d');
+      const data = weeks.map(w => (byWeek[w] && byWeek[w][k]) || 0);
+      const color = colorFor(k);
+      tpCharts[safeId] = new Chart(ctx, {
+        type: 'line',
+        data: { labels, datasets: [{ data, borderColor: color, backgroundColor: color + '33', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: color, borderWidth: 2 }] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false }, tooltip: { displayColors: false } },
+          scales: {
+            x: { grid: { display: false }, ticks: { font: { size: 10 }, color: '#7a8a9a' } },
+            y: { beginAtZero: true, grid: { color: 'rgba(0,0,0,0.05)' }, ticks: { font: { size: 10 }, color: '#7a8a9a', precision: 0 } }
+          }
+        }
+      });
+    }
+  }
+
+  function tpRenderHeatmap(weeks, byWeek, keys) {
+    const totals = {};
+    for (const k of keys) totals[k] = weeks.reduce((s, w) => s + ((byWeek[w] && byWeek[w][k]) || 0), 0);
+    const ranked = keys.filter(k => totals[k] > 0).sort((a, b) => totals[b] - totals[a]);
+    let maxCell = 0;
+    for (const k of ranked) for (const w of weeks) { const v = (byWeek[w] && byWeek[w][k]) || 0; if (v > maxCell) maxCell = v; }
+    const shade = (v) => {
+      if (v === 0) return 'background:#f6f8fb;color:#bcc6d3;';
+      const t = maxCell > 0 ? v / maxCell : 0;
+      const r = Math.round(0xE3 + (0x00 - 0xE3) * t);
+      const g = Math.round(0xF2 + (0x71 - 0xF2) * t);
+      const b = Math.round(0xFB + (0xC5 - 0xFB) * t);
+      const fg = t > 0.55 ? '#fff' : '#163049';
+      return 'background:rgb(' + r + ',' + g + ',' + b + ');color:' + fg + ';';
+    };
+    let html = '<table class="tp-heatmap"><thead><tr><th class="tp-row-label">Product</th>';
+    for (const w of weeks) html += '<th>' + formatWW(w) + '</th>';
+    html += '<th>Total</th></tr></thead><tbody>';
+    for (const k of ranked) {
+      html += '<tr><td class="tp-row-label">' + k + '</td>';
+      for (const w of weeks) { const v = (byWeek[w] && byWeek[w][k]) || 0; html += '<td style="' + shade(v) + '">' + (v || '') + '</td>'; }
+      html += '<td style="background:#003C71;color:#fff;font-weight:600;">' + totals[k] + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    $('tpHeatmap').innerHTML = html;
+  }
+
+  function tpRenderPareto(entities, weeks) {
+    const ctx = $('tpPareto').getContext('2d');
+    const latest = weeks[weeks.length - 1];
+    const inWeek = entities.filter(e => (e.PartitionKey || e.YearWeek) === latest);
+    const counts = {};
+    for (const e of inWeek) {
+      const r = (String(e.PossibleRootCause || e.RootCause || '')).trim();
+      if (!r || r === 'Unknown') continue;
+      counts[r] = (counts[r] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 12);
+    if (ranked.length === 0) { $('tpPareto').parentElement.innerHTML = '<div class="state">No root cause data for ' + formatWW(latest) + '.</div>'; return; }
+    const total = ranked.reduce((s, e) => s + e[1], 0);
+    let cum = 0; const cumPct = ranked.map(e => { cum += e[1]; return Math.round((cum / total) * 100); });
+    tpCharts.pareto = new Chart(ctx, {
+      data: {
+        labels: ranked.map(e => e[0]),
+        datasets: [
+          { type: 'bar',  label: 'Incidents',     data: ranked.map(e => e[1]), backgroundColor: '#0071C5', borderRadius: 4, yAxisID: 'y' },
+          { type: 'line', label: 'Cumulative %',  data: cumPct, borderColor: '#FEC60D', backgroundColor: '#FEC60D33', borderWidth: 2, tension: 0.25, pointBackgroundColor: '#FEC60D', yAxisID: 'y1' }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: { legend: { position: 'bottom', labels: { usePointStyle: true } }, title: { display: true, text: 'Current week (' + formatWW(latest) + '): ' + total + ' incidents' } },
+        scales: {
+          y:  { ticks: { font: { size: 11 } } },
+          x:  { beginAtZero: true, title: { display: true, text: 'Incidents' } },
+          y1: { display: false }
+        }
+      }
+    });
+  }
+
+  function tpRefresh() {
+    const ents = tpFilteredEntities();
+    tpDestroyCharts();
+    if (ents.length === 0) {
+      $('tpSummary').textContent = '0 incidents in selected range';
+      $('tpStats').innerHTML = ''; $('tpRisers').innerHTML = ''; $('tpFallers').innerHTML = '';
+      $('tpProductGrid').innerHTML = ''; $('tpHeatmap').innerHTML = '';
+      return;
+    }
+    const cat = tpAggregateByWeek(ents, 'Category');
+    tpRenderKPIs(ents, cat.weeks, cat.byWeek);
+    tpRenderMovers(cat.weeks, cat.byWeek);
+    tpRenderProductGrid(cat.weeks, cat.byWeek, cat.keys);
+    tpRenderHeatmap(cat.weeks, cat.byWeek, cat.keys);
+    tpRenderPareto(ents, cat.weeks);
+    $('tpSummary').textContent = ents.length + ' incidents across ' + cat.weeks.length + ' weeks';
+  }
+
+  async function loadTrendsPlus() {
+    const loading = $('tpLoading'), err = $('tpError'), content = $('tpContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No trend data yet</h3><p>Run the analyzer runbook to populate weekly data.</p>';
+        err.style.display = 'block'; tpLoaded = true; return;
+      }
+      tpPopulateWeeks(aggregated.weeks);
+      $('tpService').addEventListener('change', tpRefresh);
+      $('tpWeekFrom').addEventListener('change', tpRefresh);
+      $('tpWeekTo').addEventListener('change', tpRefresh);
+      $('tpResetBtn').addEventListener('click', () => { tpPopulateWeeks(aggregated.weeks); tpRefresh(); });
+      loading.style.display = 'none'; content.style.display = 'block';
+      tpRefresh();
+      tpLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load Trends+</h3><p>' + e.message + '</p>';
+      err.style.display = 'block';
+    }
+  }
+
+  // ====================================================================
+  // ROOT CAUSE TAB (Product-wise root-cause analysis, additive)
+  // Reuses ensureTableLoaded + allEntities + colorFor + formatWW
+  // Excludes Category='Excluded' (phantom Unknowns).
+  // ====================================================================
+  let rcLoaded = false;
+  const rcCharts = {};
+
+  function rcDestroyCharts() {
+    for (const k of Object.keys(rcCharts)) { try { rcCharts[k]?.destroy(); } catch (e) {} rcCharts[k] = null; }
+  }
+
+  function rcFilteredEntities() {
+    const from = $('rcWeekFrom').value, to = $('rcWeekTo').value, svc = $('rcService').value;
+    return allEntities.filter(e => {
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if ((e.Category || '') === 'Excluded') return false;
+      if (svc === 'Productivity Tools') return !e.Service || e.Service === 'Productivity Tools';
+      return e.Service === svc;
+    });
+  }
+
+  function rcRootCauseOf(e) {
+    return (String(e.PossibleRootCause || e.RootCause || 'Unknown')).trim() || 'Unknown';
+  }
+
+  function rcProductOf(e) {
+    return (String(e.Category || 'Unknown')).trim() || 'Unknown';
+  }
+
+  function rcPopulateWeeks(weeks) {
+    const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
+    $('rcWeekFrom').innerHTML = opts; $('rcWeekTo').innerHTML = opts;
+    $('rcWeekFrom').value = weeks[0]; $('rcWeekTo').value = weeks[weeks.length - 1];
+  }
+
+  // Build matrix: products[] x rootCauses[] counts, plus product totals & global rc totals
+  function rcBuildMatrix(entities) {
+    const matrix = {}; const productTotals = {}; const rcTotals = {};
+    for (const e of entities) {
+      const p = rcProductOf(e); const r = rcRootCauseOf(e);
+      if (!matrix[p]) matrix[p] = {};
+      matrix[p][r] = (matrix[p][r] || 0) + 1;
+      productTotals[p] = (productTotals[p] || 0) + 1;
+      rcTotals[r] = (rcTotals[r] || 0) + 1;
+    }
+    const products = Object.keys(productTotals).sort((a, b) => productTotals[b] - productTotals[a]);
+    const allCauses = Object.keys(rcTotals).sort((a, b) => rcTotals[b] - rcTotals[a]);
+    return { matrix, productTotals, rcTotals, products, allCauses };
+  }
+
+  function rcRenderKPIs(entities, mtx) {
+    const total = entities.length;
+    const products = mtx.products.length;
+    const causes = mtx.allCauses.length;
+    const top = mtx.allCauses[0]; const topPct = top ? Math.round((mtx.rcTotals[top] / total) * 100) : 0;
+    $('rcStats').innerHTML =
+      '<div class="stat-card"><div class="number">' + total + '</div><div class="label">Incidents in range</div></div>' +
+      '<div class="stat-card"><div class="number">' + products + '</div><div class="label">Products</div></div>' +
+      '<div class="stat-card"><div class="number">' + causes + '</div><div class="label">Distinct root causes</div></div>' +
+      '<div class="stat-card"><div class="number">' + (top || '-') + '</div><div class="label">Top root cause (' + topPct + '%)</div></div>';
+  }
+
+  function rcRenderStackedBar(mtx) {
+    const ctx = $('rcStacked').getContext('2d');
+    const mode = $('rcMode').value; // count | percent
+    const topN = parseInt($('rcTopN').value, 10) || 6;
+    const topCauses = mtx.allCauses.slice(0, topN);
+    // Datasets: one per top cause + 'Other'
+    const seriesKeys = topCauses.concat(['Other']);
+    const datasets = seriesKeys.map(cause => {
+      const data = mtx.products.map(p => {
+        const row = mtx.matrix[p] || {};
+        let v;
+        if (cause === 'Other') {
+          let other = 0;
+          for (const c of Object.keys(row)) if (!topCauses.includes(c)) other += row[c];
+          v = other;
+        } else {
+          v = row[cause] || 0;
+        }
+        if (mode === 'percent') {
+          const total = mtx.productTotals[p] || 1;
+          return Math.round((v / total) * 1000) / 10; // 1 decimal
+        }
+        return v;
+      });
+      return {
+        label: cause,
+        data,
+        backgroundColor: cause === 'Other' ? '#cfd8e3' : colorFor(cause),
+        borderRadius: 2,
+        stack: 'stack1'
+      };
+    });
+    rcCharts.stacked = new Chart(ctx, {
+      type: 'bar',
+      data: { labels: mtx.products, datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: {
+          legend: { position: 'bottom', labels: { usePointStyle: true, font: { size: 11 } } },
+          tooltip: {
+            callbacks: {
+              label: (ctx) => {
+                const v = ctx.parsed.x;
+                const product = ctx.label;
+                const totalP = mtx.productTotals[product] || 0;
+                if (mode === 'percent') return ctx.dataset.label + ': ' + v + '%';
+                const pct = totalP > 0 ? Math.round((v / totalP) * 100) : 0;
+                return ctx.dataset.label + ': ' + v + ' (' + pct + '%)';
+              },
+              afterTitle: (items) => {
+                const product = items[0].label;
+                return 'Total: ' + (mtx.productTotals[product] || 0) + ' incidents';
+              }
+            }
+          }
+        },
+        scales: {
+          x: { stacked: true, beginAtZero: true,
+               title: { display: true, text: mode === 'percent' ? '% share' : 'Incidents' },
+               ticks: mode === 'percent' ? { callback: (v) => v + '%' } : {} },
+          y: { stacked: true, ticks: { font: { size: 11 } } }
+        }
+      }
+    });
+  }
+
+  function rcRenderHeatmap(mtx) {
+    const topN = parseInt($('rcTopN').value, 10) || 6;
+    const topCauses = mtx.allCauses.slice(0, topN);
+    const products = mtx.products;
+    // max for color scale
+    let maxV = 0;
+    for (const p of products) for (const c of topCauses) maxV = Math.max(maxV, (mtx.matrix[p]?.[c] || 0));
+    if (maxV === 0) maxV = 1;
+    const cellColor = (v) => {
+      if (v === 0) return '#f4f7fb';
+      const t = v / maxV; // 0..1
+      // light blue -> intel blue
+      const r = Math.round(230 - 230 * t);
+      const g = Math.round(243 - 130 * t);
+      const b = Math.round(251 - 54 * t);
+      return 'rgb(' + r + ',' + g + ',' + b + ')';
+    };
+    const txtColor = (v) => v / maxV > 0.55 ? '#fff' : '#1a2433';
+    let html = '<table class="tp-heatmap"><thead><tr><th class="tp-row-label">Product \\ Root Cause</th>';
+    for (const c of topCauses) html += '<th title="' + c + '">' + (c.length > 22 ? c.slice(0, 20) + '…' : c) + '</th>';
+    html += '<th>Total</th></tr></thead><tbody>';
+    for (const p of products) {
+      html += '<tr><td class="tp-row-label">' + p + '</td>';
+      for (const c of topCauses) {
+        const v = mtx.matrix[p]?.[c] || 0;
+        html += '<td style="background:' + cellColor(v) + ';color:' + txtColor(v) + ';">' + (v || '') + '</td>';
+      }
+      html += '<td style="font-weight:700;color:var(--intel-classic);">' + (mtx.productTotals[p] || 0) + '</td>';
+      html += '</tr>';
+    }
+    html += '</tbody></table>';
+    $('rcHeatmap').innerHTML = html;
+  }
+
+  function rcRenderDrill(entities, mtx) {
+    const sel = $('rcDrillProduct');
+    const currentVal = sel.value;
+    const products = mtx.products;
+    if (!products.length) { $('rcDrillProduct').innerHTML = ''; return; }
+    sel.innerHTML = products.map(p => '<option value="' + p + '">' + p + ' (' + mtx.productTotals[p] + ')</option>').join('');
+    if (products.includes(currentVal)) sel.value = currentVal;
+    rcRenderDrillCharts(entities);
+  }
+
+  function rcRenderDrillCharts(entities) {
+    const product = $('rcDrillProduct').value;
+    if (!product) return;
+    const sub = entities.filter(e => rcProductOf(e) === product);
+    // Pareto
+    const rcCount = {};
+    for (const e of sub) { const r = rcRootCauseOf(e); rcCount[r] = (rcCount[r] || 0) + 1; }
+    const sorted = Object.entries(rcCount).sort((a, b) => b[1] - a[1]).slice(0, 10);
+    const labels = sorted.map(x => x[0].length > 28 ? x[0].slice(0, 26) + '…' : x[0]);
+    const fullLabels = sorted.map(x => x[0]);
+    const counts = sorted.map(x => x[1]);
+    const total = counts.reduce((a, b) => a + b, 0) || 1;
+    const cum = []; let running = 0;
+    for (const v of counts) { running += v; cum.push(Math.round((running / total) * 1000) / 10); }
+    try { rcCharts.drillPareto?.destroy(); } catch (e) {}
+    rcCharts.drillPareto = new Chart($('rcDrillPareto').getContext('2d'), {
+      data: {
+        labels,
+        datasets: [
+          { type: 'bar', label: 'Incidents', data: counts, backgroundColor: 'rgba(0,113,197,0.85)', borderRadius: 2, yAxisID: 'y' },
+          { type: 'line', label: 'Cumulative %', data: cum, borderColor: '#d64545', backgroundColor: '#d64545', tension: 0.25, yAxisID: 'y1', pointRadius: 3 }
+        ]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, indexAxis: 'y',
+        plugins: {
+          legend: { position: 'bottom' },
+          title: { display: true, text: product + ' — ' + sub.length + ' incidents' },
+          tooltip: { callbacks: { title: (items) => fullLabels[items[0].dataIndex] || items[0].label } }
+        },
+        scales: {
+          y:  { ticks: { font: { size: 11 } } },
+          x:  { beginAtZero: true, position: 'top', title: { display: true, text: 'Incidents' } },
+          y1: { display: false }
+        }
+      }
+    });
+    // Trend per top-5 root causes for this product
+    const top5 = sorted.slice(0, 5).map(x => x[0]);
+    const byWeek = {}; const weeksSet = new Set();
+    for (const e of sub) {
+      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
+      const r = rcRootCauseOf(e);
+      if (!byWeek[w]) byWeek[w] = {};
+      byWeek[w][r] = (byWeek[w][r] || 0) + 1;
+      weeksSet.add(w);
+    }
+    const weeks = [...weeksSet].sort();
+    const datasets = top5.map(r => ({
+      label: r.length > 26 ? r.slice(0, 24) + '…' : r,
+      data: weeks.map(w => byWeek[w]?.[r] || 0),
+      borderColor: colorFor(r), backgroundColor: colorFor(r),
+      tension: 0.3, pointRadius: 3, fill: false
+    }));
+    try { rcCharts.drillTrend?.destroy(); } catch (e) {}
+    rcCharts.drillTrend = new Chart($('rcDrillTrend').getContext('2d'), {
+      type: 'line',
+      data: { labels: weeks.map(formatWW), datasets },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { position: 'bottom', labels: { font: { size: 10 } } } },
+        scales: { y: { beginAtZero: true, title: { display: true, text: 'Incidents' } } }
+      }
+    });
+  }
+
+  function rcRefresh() {
+    const ents = rcFilteredEntities();
+    rcDestroyCharts();
+    if (ents.length === 0) {
+      $('rcSummary').textContent = '0 incidents in selected range';
+      $('rcStats').innerHTML = ''; $('rcHeatmap').innerHTML = '';
+      $('rcDrillProduct').innerHTML = '';
+      return;
+    }
+    const mtx = rcBuildMatrix(ents);
+    // dynamic height: ~36px per product, min 240, max 720
+    $('rcStackedWrap').style.height = Math.max(240, Math.min(720, mtx.products.length * 36 + 80)) + 'px';
+    rcRenderKPIs(ents, mtx);
+    rcRenderStackedBar(mtx);
+    rcRenderHeatmap(mtx);
+    rcRenderDrill(ents, mtx);
+    $('rcSummary').textContent = ents.length + ' incidents · ' + mtx.products.length + ' products · ' + mtx.allCauses.length + ' root causes';
+  }
+
+  async function loadRootCause() {
+    const loading = $('rcLoading'), err = $('rcError'), content = $('rcContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No data yet</h3><p>Run the analyzer runbook to populate weekly data.</p>';
+        err.style.display = 'block'; rcLoaded = true; return;
+      }
+      rcPopulateWeeks(aggregated.weeks);
+      $('rcService').addEventListener('change', rcRefresh);
+      $('rcWeekFrom').addEventListener('change', rcRefresh);
+      $('rcWeekTo').addEventListener('change', rcRefresh);
+      $('rcMode').addEventListener('change', rcRefresh);
+      $('rcTopN').addEventListener('change', rcRefresh);
+      $('rcResetBtn').addEventListener('click', () => { rcPopulateWeeks(aggregated.weeks); rcRefresh(); });
+      $('rcDrillProduct').addEventListener('change', () => rcRenderDrillCharts(rcFilteredEntities()));
+      loading.style.display = 'none'; content.style.display = 'block';
+      rcRefresh();
+      rcLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load Root Cause tab</h3><p>' + e.message + '</p>';
+      err.style.display = 'block';
+    }
+  }
+
+  // ====================================================================
+  // REPORTS+ TAB (newsfeed-style; reuses listReports + allEntities +
+  // aggregated + blobUrl + fmtDate + formatWW + esc). The original
+  // Reports tab and its data flow are NOT modified.
+  // ====================================================================
+  let rpxLoaded = false;
+  let rpxReports = [];          // {name, lastModified, size, week_label, run_id, kind, service, url}
+  let rpxWeekStats = {};
+  let rpxMedianVolume = 0;
+
+  // Fetch + parse blob list for one service's reports container.
+  async function rpxListServiceReports(svc) {
+    if (!svc.reportsContainerBaseUrl) return [];
+    const url = svc.reportsContainerBaseUrl + '?restype=container&comp=list' + svc.reportsSas.replace('?', '&');
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(svc.name + ': blob list HTTP ' + res.status);
+    const xml = new DOMParser().parseFromString(await res.text(), 'text/xml');
+    const out = [];
+    for (const b of xml.getElementsByTagName('Blob')) {
+      const name = b.getElementsByTagName('Name')[0]?.textContent;
+      const lm   = b.getElementsByTagName('Last-Modified')[0]?.textContent;
+      const size = parseInt(b.getElementsByTagName('Content-Length')[0]?.textContent || '0', 10);
+      if (!name || !name.toLowerCase().endsWith('.html')) continue;
+      // Skip index pages and dashboards that aren't per-week reports
+      if (/^index\.html$/i.test(name)) continue;
+      const wm = name.match(/(\d{4})-W(\d{2})/);
+      out.push({
+        name,
+        lastModified: new Date(lm),
+        size,
+        week_label: wm ? ('WW' + wm[2] + ' ' + wm[1]) : '',
+        run_id: wm ? (wm[1] + '-W' + wm[2]) : '',
+        kind: /Trend_Analysis/i.test(name) ? 'trend' : 'report',
+        service: svc.name,
+        url: svc.reportsContainerBaseUrl + '/' + encodeURIComponent(name) + svc.reportsSas
+      });
+    }
+    return out;
+  }
+
+  async function rpxListAllReports() {
+    const all = [];
+    const errors = [];
+    await Promise.all(serviceConfigs.map(async (svc) => {
+      try {
+        const items = await rpxListServiceReports(svc);
+        all.push(...items);
+      } catch (e) {
+        errors.push(svc.name + ': ' + e.message);
+        console.warn('[Reports+] failed for ' + svc.name, e);
+      }
+    }));
+    all.sort((a, b) => b.lastModified - a.lastModified);
+    return { reports: all, errors };
+  }
+
+  function rpxBuildWeekStats() {
+    // Aggregate per (Service, YearWeek) from allEntities; excludes 'Excluded'
+    const byKey = {}; // "svc||yw" -> entities[]
+    const firstSeenCause = new Map(); // "svc||cat||rc" -> earliest yw
+    for (const e of (allEntities || [])) {
+      if ((e.Category || '') === 'Excluded') continue;
+      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
+      const svc = e.Service || 'Productivity Tools';
+      const key = svc + '||' + w;
+      (byKey[key] = byKey[key] || []).push(e);
+      const ckey = svc + '||' + (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+      const cur = firstSeenCause.get(ckey);
+      if (!cur || w < cur) firstSeenCause.set(ckey, w);
+    }
+    // global median (across all svc+weeks together would skew small services; do per service)
+    const perServiceTotals = {};
+    for (const k of Object.keys(byKey)) {
+      const [svc, w] = k.split('||');
+      (perServiceTotals[svc] = perServiceTotals[svc] || []).push(byKey[k].length);
+    }
+    const medianByService = {};
+    for (const svc of Object.keys(perServiceTotals)) {
+      const arr = perServiceTotals[svc].sort((a, b) => a - b);
+      medianByService[svc] = arr[Math.floor(arr.length / 2)] || 0;
+    }
+    rpxMedianVolume = Object.values(medianByService).reduce((a, b) => a + b, 0) / (Object.keys(medianByService).length || 1);
+    rpxWeekStats = {};
+    for (const k of Object.keys(byKey)) {
+      const [svc, w] = k.split('||');
+      const list = byKey[k];
+      const counts = {};
+      let misrouted = 0;
+      const newCauses = [];
+      for (const e of list) {
+        const tk = (e.Category || '') + '||' + ((e.Subcategory || '').trim()) + '||' + ((e.PossibleRootCause || e.RootCause || '').trim());
+        counts[tk] = (counts[tk] || 0) + 1;
+        if (e.Misrouted === true || e.Misrouted === 'true') misrouted++;
+        const ckey = svc + '||' + (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+        if (firstSeenCause.get(ckey) === w) {
+          const tag = (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+          if (!newCauses.find(x => x.key === tag)) newCauses.push({ key: tag, cat: e.Category || '', rc: e.PossibleRootCause || e.RootCause || '' });
+        }
+      }
+      const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+      const topParts = top ? top[0].split('||') : [];
+      rpxWeekStats[k] = {
+        service: svc,
+        median: medianByService[svc] || 0,
+        total: list.length,
+        topCat: topParts[0] || '',
+        topSub: topParts[1] || '',
+        topRc:  topParts[2] || '',
+        topCount: top ? top[1] : 0,
+        misrouted,
+        newCauses: newCauses.slice(0, 5)
+      };
+    }
+  }
+
+  function rpxStatsFor(r) {
+    if (!r || !r.run_id) return null;
+    return rpxWeekStats[(r.service || 'Productivity Tools') + '||' + r.run_id] || null;
+  }
+
+  function rpxDeltaPills(r) {
+    const s = rpxStatsFor(r); if (!s) return [];
+    // Find previous week within the same service
+    const svc = r.service || 'Productivity Tools';
+    const weeks = Object.keys(rpxWeekStats).filter(k => k.startsWith(svc + '||')).map(k => k.split('||')[1]).sort();
+    const idx = weeks.indexOf(r.run_id);
+    const prevYw = idx > 0 ? weeks[idx - 1] : null;
+    const prev = prevYw ? rpxWeekStats[svc + '||' + prevYw] : null;
+    const pills = [];
+    pills.push({ cls: '', text: s.total + ' incidents' });
+    if (prev) {
+      const diff = s.total - prev.total;
+      const pct  = prev.total > 0 ? Math.round((diff / prev.total) * 100) : 0;
+      if (diff > 0) pills.push({ cls: 'up',   text: '\u2191 ' + diff + ' (' + pct + '%) vs ' + formatWW(prevYw) });
+      else if (diff < 0) pills.push({ cls: 'down', text: '\u2193 ' + Math.abs(diff) + ' (' + Math.abs(pct) + '%) vs ' + formatWW(prevYw) });
+      else pills.push({ cls: 'flat', text: '\u2192 unchanged vs ' + formatWW(prevYw) });
+    }
+    if (s.median > 0) {
+      if (s.total > s.median * 1.2) pills.push({ cls: 'up',   text: 'Spike' });
+      else if (s.total < s.median * 0.8) pills.push({ cls: 'down', text: 'Quiet week' });
+    }
+    if (s.newCauses && s.newCauses.length > 0) {
+      pills.push({ cls: 'new', text: 'New root cause' + (s.newCauses.length > 1 ? 's (' + s.newCauses.length + ')' : '') });
+    }
+    if (s.misrouted > 0 && prev && s.misrouted > prev.misrouted * 1.2) {
+      pills.push({ cls: 'warn', text: 'Misrouted up (' + s.misrouted + ')' });
+    }
+    if (s.topRc) {
+      const label = s.topCat ? (s.topCat.replace(/ Issues$/, '') + ' \u00b7 ' + s.topRc) : s.topRc;
+      pills.push({ cls: '', text: 'Top: ' + label + ' (\u00d7' + s.topCount + ')' });
+    }
+    return pills;
+  }
+
+  function rpxPillsHtml(pills) {
+    return '<div class="badges">' + pills.map(p => '<span class="rpx-pill ' + (p.cls || '') + '">' + esc(p.text) + '</span>').join('') + '</div>';
+  }
+
+  function rpxRenderHero() {
+    // Latest WEEKLY report (kind === 'report')
+    const latest = rpxReports.find(r => r.kind === 'report');
+    if (!latest) { $('rpxHero').innerHTML = ''; return; }
+    const s = rpxStatsFor(latest);
+    const svc = latest.service || 'Productivity Tools';
+    const weeks = Object.keys(rpxWeekStats).filter(k => k.startsWith(svc + '||')).map(k => k.split('||')[1]).sort();
+    const idx = latest.run_id ? weeks.indexOf(latest.run_id) : -1;
+    const prevYw = idx > 0 ? weeks[idx - 1] : null;
+    const prev = prevYw ? rpxWeekStats[svc + '||' + prevYw] : null;
+    let kpis = '';
+    if (s) {
+      const diff = prev ? (s.total - prev.total) : null;
+      const pct  = prev && prev.total > 0 ? Math.round((diff / prev.total) * 100) : null;
+      kpis = '<div class="kpis">' +
+        '<div class="kpi"><div class="n">' + s.total + '</div><div class="l">Incidents</div></div>' +
+        (prev ? '<div class="kpi"><div class="n">' + (diff > 0 ? '+' : '') + diff + '</div><div class="l">vs ' + formatWW(prevYw) + (pct !== null ? ' (' + (pct >= 0 ? '+' : '') + pct + '%)' : '') + '</div></div>' : '') +
+        '<div class="kpi"><div class="n">' + s.misrouted + '</div><div class="l">Misrouted</div></div>' +
+        (s.newCauses && s.newCauses.length ? '<div class="kpi"><div class="n">' + s.newCauses.length + '</div><div class="l">New root cause(s)</div></div>' : '') +
+      '</div>';
+    }
+    const topLine = s && s.topRc
+      ? '<div style="font-size:0.95rem;margin-top:6px;opacity:0.92;">Top driver: <strong>' + esc((s.topCat || '').replace(/ Issues$/, '')) + '</strong> \u00b7 ' + esc(s.topRc) + ' (\u00d7' + s.topCount + ')</div>'
+      : '';
+    const heroUrl = latest.url || blobUrl(latest.name);
+    $('rpxHero').innerHTML =
+      '<div class="rpx-hero">' +
+        '<div class="label">Latest weekly report' + (latest.service ? ' \u00b7 ' + esc(latest.service) : '') + '</div>' +
+        '<div class="title">' + esc(latest.week_label || latest.name) + '</div>' +
+        topLine +
+        kpis +
+        '<div class="actions">' +
+          '<a class="btn-hero" href="' + heroUrl + '" target="_blank" rel="noopener">\u2197 Open in new tab</a>' +
+          '<button class="btn-hero ghost" id="rpxHeroPreview">\u26AC Quick preview</button>' +
+        '</div>' +
+      '</div>';
+    const btn = $('rpxHeroPreview');
+    if (btn) btn.addEventListener('click', () => rpxOpenDrawer(latest));
+  }
+
+  function rpxCardHtml(r) {
+    const s = rpxStatsFor(r);
+    const pills = s ? rpxDeltaPills(r) : [{ cls: 'flat', text: 'No matching incident data' }];
+    const svcPill = r.service ? '<span class="rpx-pill" style="background:#eef3ff;color:#1f4ea1;border-color:#cfd9f1;">' + esc(r.service) + '</span>' : '';
+    return '<div class="rpx-card" data-name="' + esc(r.name) + '" data-svc="' + esc(r.service || '') + '">' +
+      '<div class="ww">' + esc(r.week_label || (r.kind === 'trend' ? 'Trend' : 'Run')) + '</div>' +
+      '<div class="meta">' +
+        (svcPill ? '<div class="badges" style="margin-bottom:4px;">' + svcPill + '</div>' : '') +
+        rpxPillsHtml(pills) +
+        '<div class="name" title="' + esc(r.name) + '">' + esc(r.name) + '</div>' +
+      '</div>' +
+      '<div class="when">' + fmtDate(r.lastModified) + '</div>' +
+      '<a class="open" href="' + (r.url || blobUrl(r.name)) + '" target="_blank" rel="noopener" onclick="event.stopPropagation();">Open</a>' +
+    '</div>';
+  }
+
+  function rpxPopulateWeeks() {
+    const weeks = [...new Set(rpxReports.map(r => r.run_id).filter(Boolean))].sort();
+    const opts = '<option value="all">All</option>' + weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
+    $('rpxWeekFrom').innerHTML = opts; $('rpxWeekTo').innerHTML = opts;
+    $('rpxWeekFrom').value = 'all'; $('rpxWeekTo').value = 'all';
+  }
+
+  function rpxPopulateServices() {
+    const sel = $('rpxServiceFilter');
+    if (!sel) return;
+    const svcs = [...new Set(rpxReports.map(r => r.service).filter(Boolean))].sort();
+    sel.innerHTML = '<option value="all">All services</option>' + svcs.map(s => '<option value="' + esc(s) + '">' + esc(s) + '</option>').join('');
+    sel.value = 'all';
+  }
+
+  function rpxFilter() {
+    const q = ($('rpxSearch').value || '').trim().toLowerCase();
+    const kind = $('rpxKind').value;
+    const from = $('rpxWeekFrom').value, to = $('rpxWeekTo').value;
+    const svcSel = $('rpxServiceFilter');
+    const svc = svcSel ? svcSel.value : 'all';
+    return rpxReports.filter(r => {
+      if (kind !== 'all' && r.kind !== kind) return false;
+      if (svc !== 'all' && (r.service || '') !== svc) return false;
+      if (from !== 'all' && (!r.run_id || r.run_id < from)) return false;
+      if (to   !== 'all' && (!r.run_id || r.run_id > to)) return false;
+      if (!q) return true;
+      return (r.name || '').toLowerCase().includes(q) || (r.week_label || '').toLowerCase().includes(q) || (r.service || '').toLowerCase().includes(q);
+    });
+  }
+
+  function rpxRenderLists() {
+    const items = rpxFilter();
+    const weekly = items.filter(r => r.kind === 'report');
+    const trend  = items.filter(r => r.kind === 'trend');
+    $('rpxWeeklyList').innerHTML = weekly.length
+      ? '<div class="rpx-list">' + weekly.map(rpxCardHtml).join('') + '</div>'
+      : '<div class="state">No weekly reports match.</div>';
+    $('rpxTrendList').innerHTML = trend.length
+      ? '<div class="rpx-list">' + trend.map(rpxCardHtml).join('') + '</div>'
+      : '<div class="state">No trend reports match.</div>';
+    $('rpxWeeklySection').style.display = ($('rpxKind').value === 'trend') ? 'none' : '';
+    $('rpxTrendSection').style.display  = ($('rpxKind').value === 'report') ? 'none' : '';
+    $('rpxSummary').textContent = items.length + ' of ' + rpxReports.length + ' reports';
+    // Wire card clicks for inline preview
+    document.querySelectorAll('#pane-reportsplus .rpx-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const name = card.getAttribute('data-name');
+        const svc  = card.getAttribute('data-svc') || '';
+        const r = rpxReports.find(x => x.name === name && (x.service || '') === svc);
+        if (r) rpxOpenDrawer(r);
+      });
+    });
+  }
+
+  let rpxDrawerLoadTimer = null;
+  function rpxOpenDrawer(r) {
+    const url = r.url || blobUrl(r.name);
+    $('rpxDrawerTitle').textContent = (r.service ? r.service + ' \u00b7 ' : '') + (r.week_label ? (r.week_label + ' \u00b7 ' + r.name) : r.name);
+    $('rpxDrawerOpen').href = url;
+    const frame = $('rpxDrawerFrame');
+    const msg = $('rpxDrawerMsg');
+    msg.innerHTML = 'Loading preview\u2026';
+    msg.style.cssText = 'display:block;padding:8px 16px;background:#eef3ff;border-bottom:1px solid #cfd9f1;font-size:0.85rem;color:#1f4ea1;';
+    // Show drawer first so the iframe has layout (browsers may stall load on hidden frames)
+    $('rpxDrawer').style.display = 'flex';
+    $('rpxBackdrop').style.display = 'block';
+    // Clear any previous handlers / timers
+    if (rpxDrawerLoadTimer) { clearTimeout(rpxDrawerLoadTimer); rpxDrawerLoadTimer = null; }
+    frame.onload = null; frame.onerror = null;
+    let firstLoadSeen = false; // first load fires for about:blank
+    frame.onload = () => {
+      if (!firstLoadSeen) { firstLoadSeen = true; return; }
+      if (rpxDrawerLoadTimer) { clearTimeout(rpxDrawerLoadTimer); rpxDrawerLoadTimer = null; }
+      msg.style.display = 'none'; msg.innerHTML = '';
+    };
+    frame.onerror = () => {
+      if (rpxDrawerLoadTimer) { clearTimeout(rpxDrawerLoadTimer); rpxDrawerLoadTimer = null; }
+      msg.innerHTML = 'Preview could not be loaded. <a href="' + url + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">Open it in a new tab</a> instead.';
+      msg.style.cssText = 'display:block;padding:10px 16px;background:#fff8e1;border-bottom:1px solid #f0e0a0;font-size:0.85rem;color:#8a6d00;';
+    };
+    // Fresh load even when re-opening the same report
+    frame.src = 'about:blank';
+    // Direct assign (no setTimeout): faster handoff to the browser
+    requestAnimationFrame(() => { frame.src = url; });
+    // Safety net: if nothing loads in 15s, show the fallback link but keep the iframe trying
+    rpxDrawerLoadTimer = setTimeout(() => {
+      msg.innerHTML = 'Still loading\u2026 large report. <a href="' + url + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">Open it in a new tab</a> for faster access.';
+      msg.style.cssText = 'display:block;padding:10px 16px;background:#fff8e1;border-bottom:1px solid #f0e0a0;font-size:0.85rem;color:#8a6d00;';
+    }, 15000);
+  }
+  function rpxCloseDrawer() {
+    if (rpxDrawerLoadTimer) { clearTimeout(rpxDrawerLoadTimer); rpxDrawerLoadTimer = null; }
+    $('rpxDrawer').style.display = 'none';
+    $('rpxBackdrop').style.display = 'none';
+    const frame = $('rpxDrawerFrame');
+    frame.onload = null; frame.onerror = null;
+    frame.src = 'about:blank';
+  }
+
+  async function loadReportsPlus() {
+    const loading = $('rpxLoading'), err = $('rpxError'), content = $('rpxContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      // Fetch reports from ALL configured services in parallel
+      const { reports, errors } = await rpxListAllReports();
+      rpxReports = reports;
+      // Surface any per-service errors but don't fail the whole tab
+      const note = $('rpxServiceNote');
+      if (errors.length > 0) {
+        note.innerHTML = '<strong>Note:</strong> some report sources could not be listed &mdash; ' + errors.map(esc).join(' &middot; ');
+        note.style.cssText = 'font-size:0.82rem;color:#8a6d00;background:#fff8e1;border:1px solid #f0e0a0;border-radius:6px;padding:8px 12px;margin-bottom:16px;display:block;';
+      } else {
+        note.style.display = 'none';
+      }
+      try { await ensureTableLoaded(); } catch (e) { /* table optional */ }
+      rpxBuildWeekStats();
+      rpxPopulateServices();
+      rpxPopulateWeeks();
+      rpxRenderHero();
+      rpxRenderLists();
+      $('rpxSearch').addEventListener('input', rpxRenderLists);
+      $('rpxKind').addEventListener('change', rpxRenderLists);
+      $('rpxServiceFilter').addEventListener('change', rpxRenderLists);
+      $('rpxWeekFrom').addEventListener('change', rpxRenderLists);
+      $('rpxWeekTo').addEventListener('change', rpxRenderLists);
+      $('rpxResetBtn').addEventListener('click', () => {
+        $('rpxSearch').value = ''; $('rpxKind').value = 'all'; $('rpxServiceFilter').value = 'all';
+        rpxPopulateWeeks(); rpxRenderLists();
+      });
+      $('rpxDrawerClose').addEventListener('click', rpxCloseDrawer);
+      $('rpxBackdrop').addEventListener('click', rpxCloseDrawer);
+      document.addEventListener('keydown', (e) => { if (e.key === 'Escape') rpxCloseDrawer(); });
+      loading.style.display = 'none'; content.style.display = 'block';
+      rpxLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load Reports+</h3><p>' + esc(e.message) + '</p>';
+      err.style.display = 'block';
+    }
+  }
+
+  // ====================================================================
+  // OPS REPORT+ TAB (additive triage console; reuses ensureTableLoaded +
+  // allEntities + aggregated + formatWW + esc + csvField + PRODUCT_LIST)
+  // ====================================================================
+  let opxLoaded = false;
+  const opxExpanded = new Set();      // RowKeys currently expanded
+  const opxFirstSeenWeek = new Map(); // "Category||PossibleRootCause" -> earliest YearWeek
+  let opxAllInService = [];           // entities filtered by Service only (for outlier computation)
+
+  function opxServiceProducts() {
+    const svc = $('opxService').value;
+    // For PT, use known list; for other services, derive from data
+    if (svc === 'Productivity Tools') return PRODUCT_LIST;
+    const cats = new Set();
+    for (const e of allEntities) {
+      if (e.Service === svc) cats.add((e.Category || '').trim() || 'Unknown');
+    }
+    return ['All Products', ...[...cats].sort()];
+  }
+
+  function populateOpxProducts() {
+    const sel = $('opxProduct');
+    const prev = sel.value;
+    sel.innerHTML = opxServiceProducts()
+      .map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
+  }
+
+  function populateOpxWeeks(weeks) {
+    const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
+    $('opxWeekFrom').innerHTML = opts; $('opxWeekTo').innerHTML = opts;
+    $('opxWeekFrom').value = weeks[0]; $('opxWeekTo').value = weeks[weeks.length - 1];
+  }
+
+  function opxMatchesService(e) {
+    const svc = $('opxService').value;
+    if (svc === 'Productivity Tools') return !e.Service || e.Service === 'Productivity Tools';
+    return e.Service === svc;
+  }
+
+  function opxBaseFiltered() {
+    if (!allEntities) return [];
+    const product = $('opxProduct').value;
+    const from    = $('opxWeekFrom').value;
+    const to      = $('opxWeekTo').value;
+    return allEntities.filter(e => {
+      if (!opxMatchesService(e)) return false;
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || w < from || w > to) return false;
+      if (product && product !== 'All Products' && (e.Category || '') !== product) return false;
+      return true;
+    });
+  }
+
+  function populateOpxSubcategories(preserveValue) {
+    const sel = $('opxSubcategory');
+    const prev = preserveValue ? sel.value : '__all__';
+    const counts = {};
+    for (const e of opxBaseFiltered()) {
+      const s = (e.Subcategory || '').trim();
+      if (s) counts[s] = (counts[s] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    let html = '<option value="__all__">All Subcategories</option>';
+    for (const [s, n] of ranked) html += '<option value="' + esc(s) + '">' + esc(s) + ' (' + n + ')</option>';
+    sel.innerHTML = html;
+    if (preserveValue && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
+
+  function populateOpxRootCauses(preserveValue) {
+    const sel = $('opxRootCause');
+    const prev = preserveValue ? sel.value : '__all__';
+    const counts = {};
+    for (const e of opxBaseFiltered()) {
+      const r = (e.PossibleRootCause || e.RootCause || '').trim();
+      if (r) counts[r] = (counts[r] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    let html = '<option value="__all__">All Root Causes</option>';
+    for (const [r, n] of ranked) html += '<option value="' + esc(r) + '">' + esc(r) + ' (' + n + ')</option>';
+    sel.innerHTML = html;
+    if (preserveValue && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
+
+  // For outlier detection: earliest week per (Category||RC) across THE WHOLE service history
+  function opxRebuildFirstSeen() {
+    opxFirstSeenWeek.clear();
+    opxAllInService = allEntities.filter(opxMatchesService);
+    for (const e of opxAllInService) {
+      const key = (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w) continue;
+      const cur = opxFirstSeenWeek.get(key);
+      if (!cur || w < cur) opxFirstSeenWeek.set(key, w);
+    }
+  }
+
+  function opxGetFiltered() {
+    const subValue = $('opxSubcategory').value;
+    const rcValue  = $('opxRootCause').value;
+    const q        = ($('opxSearch').value || '').trim().toLowerCase();
+    const outliersOnly = $('opxOutliersOnly').checked;
+    const from     = $('opxWeekFrom').value;
+    const base = opxBaseFiltered();
+    return base.filter(e => {
+      if (subValue !== '__all__' && (e.Subcategory || '').trim() !== subValue) return false;
+      if (rcValue  !== '__all__') {
+        const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+        if (rc !== rcValue) return false;
+      }
+      if (q) {
+        const hay = ((e.RowKey || '') + ' ' + (e.Subcategory || '') + ' ' +
+                     (e.PossibleRootCause || e.RootCause || '') + ' ' +
+                     (e.DetailedRootCause || '')).toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      if (outliersOnly) {
+        const key = (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+        const firstSeen = opxFirstSeenWeek.get(key);
+        const w = e.PartitionKey || e.YearWeek;
+        // outlier = first time we've ever seen this (product, root cause) AND it falls in the selected window
+        if (!firstSeen || firstSeen !== w || w < from) return false;
+      }
+      return true;
+    });
+  }
+
+  // Group counts in the CURRENT filtered set for the "× N" similar-incidents badge
+  function opxBuildTripleCounts(filtered) {
+    const m = {};
+    for (const e of filtered) {
+      const k = (e.Category || '') + '||' + ((e.Subcategory || '').trim()) + '||' + ((e.PossibleRootCause || e.RootCause || '').trim());
+      m[k] = (m[k] || 0) + 1;
+    }
+    return m;
+  }
+
+  function opxRenderStats(filtered) {
+    const total = filtered.length;
+    const distinctProducts = new Set(filtered.map(i => i.Category || '')).size;
+    const tripleCounts = opxBuildTripleCounts(filtered);
+    const topTriple = Object.entries(tripleCounts).sort((a, b) => b[1] - a[1])[0];
+    let outliers = 0;
+    for (const e of filtered) {
+      const key = (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+      const firstSeen = opxFirstSeenWeek.get(key);
+      const w = e.PartitionKey || e.YearWeek;
+      if (firstSeen && firstSeen === w) outliers++;
+    }
+    const topLabel = topTriple ? topTriple[0].split('||').filter(Boolean).slice(1).join(' · ') : '-';
+    $('opxStats').innerHTML =
+      '<div class="stat-card"><div class="number">' + total + '</div><div class="label">Incidents matched</div></div>' +
+      '<div class="stat-card"><div class="number">' + distinctProducts + '</div><div class="label">Products</div></div>' +
+      '<div class="stat-card"><div class="number">' + outliers + '</div><div class="label">First-time-seen (outliers)</div></div>' +
+      (topTriple ? '<div class="stat-card"><div class="number">&times; ' + topTriple[1] + '</div><div class="label">' + esc(topLabel) + '</div><div class="change flat">Most repeated pattern</div></div>' : '');
+  }
+
+  function opxBuildSparkline(rowKey, category, sub) {
+    // Mini 6-week sparkline of (Category + Subcategory) occurrences across opxAllInService
+    const weeks = aggregated && aggregated.weeks ? aggregated.weeks.slice(-6) : [];
+    if (weeks.length === 0) return '';
+    const byWeek = {};
+    for (const e of opxAllInService) {
+      if ((e.Category || '') !== category) continue;
+      if ((e.Subcategory || '').trim() !== sub) continue;
+      const w = e.PartitionKey || e.YearWeek;
+      if (weeks.includes(w)) byWeek[w] = (byWeek[w] || 0) + 1;
+    }
+    const vals = weeks.map(w => byWeek[w] || 0);
+    const max = Math.max(1, ...vals);
+    const w = 90, h = 22, pad = 2;
+    const step = (w - pad * 2) / Math.max(1, vals.length - 1);
+    const pts = vals.map((v, i) => (pad + i * step) + ',' + (h - pad - (v / max) * (h - pad * 2))).join(' ');
+    const last = vals[vals.length - 1], prev = vals[vals.length - 2] || 0;
+    const trendCol = last > prev ? 'var(--danger)' : (last < prev ? 'var(--success)' : 'var(--muted)');
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="vertical-align:middle;">' +
+      '<polyline fill="none" stroke="' + trendCol + '" stroke-width="1.5" points="' + pts + '" />' +
+      '</svg>';
+  }
+
+  function opxRenderExpander(inc) {
+    const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(inc.RowKey || '');
+    const detail = (inc.DetailedRootCause || inc.AIAnalysis || '').trim() || '<em style="color:var(--muted);">No detailed analysis stored.</em>';
+    const reportBlob = (inc.ReportBlobName || '').trim();
+    const misrouted = inc.Misrouted === true || inc.Misrouted === 'true';
+    return '<div style="padding:12px 18px;background:#fafcff;border-left:3px solid var(--intel-blue);">' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;font-size:0.85rem;margin-bottom:10px;">' +
+        '<div><span style="color:var(--muted);">Incident:</span> <a href="' + sn + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">' + esc(inc.RowKey || '') + '</a></div>' +
+        '<div><span style="color:var(--muted);">Resolved:</span> ' + esc(inc.Date || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Work Week:</span> ' + formatWW(inc.PartitionKey || '') + '</div>' +
+        '<div><span style="color:var(--muted);">Product:</span> ' + esc(inc.Category || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Subcategory:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Possible Root Cause:</span> ' + esc(inc.PossibleRootCause || inc.RootCause || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Productivity Tools') + '</div>' +
+        '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
+      '</div>' +
+      '<div style="font-size:0.85rem;"><strong style="color:var(--intel-classic);">Detailed Root Cause / AI Analysis</strong><div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + esc(detail) + '</div></div>' +
+      (reportBlob ? '<div style="margin-top:8px;font-size:0.8rem;color:var(--muted);">Weekly report blob: <code>' + esc(reportBlob) + '</code></div>' : '') +
+    '</div>';
+  }
+
+  function opxRenderTable(filtered) {
+    if (filtered.length === 0) {
+      $('opxTableWrap').innerHTML = '<div class="state">No incidents match the selected filters.</div>';
+      return;
+    }
+    const triples = opxBuildTripleCounts(filtered);
+    const th = (t, w) => '<th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--intel-classic);' + (w ? 'width:' + w + ';' : '') + '">' + t + '</th>';
+    const td = (v, extra) => '<td style="padding:8px 12px;border-bottom:1px solid #f0f4f9;' + (extra || '') + '">' + v + '</td>';
+    const rows = filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || '')).map(i => {
+      const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
+      const key = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + ((i.PossibleRootCause || i.RootCause || '').trim());
+      const similar = triples[key] || 1;
+      const okey = (i.Category || '') + '||' + (i.PossibleRootCause || i.RootCause || '');
+      const firstSeen = opxFirstSeenWeek.get(okey);
+      const isOutlier = firstSeen && firstSeen === (i.PartitionKey || i.YearWeek);
+      const isOpen = opxExpanded.has(i.RowKey);
+      const arrow = isOpen ? '&#9662;' : '&#9656;';
+      const similarBadge = '<span style="background:#eef5fb;color:var(--intel-classic);padding:2px 8px;border-radius:999px;font-size:0.75rem;font-weight:600;" title="Incidents in current filter sharing (Product, Subcategory, Root Cause)">&times; ' + similar + '</span>';
+      const outlierBadge = isOutlier ? ' <span style="background:#fff2cc;color:#8a6d00;padding:2px 8px;border-radius:999px;font-size:0.72rem;font-weight:700;" title="First time this (Product + Root Cause) appears in stored history">NEW</span>' : '';
+      const spark = opxBuildSparkline(i.RowKey, i.Category || '', (i.Subcategory || '').trim());
+      const mainRow = '<tr class="opx-row" data-rowkey="' + esc(i.RowKey || '') + '" style="cursor:pointer;">' +
+        td('<span style="color:var(--muted);display:inline-block;width:14px;">' + arrow + '</span> ' +
+           '<a href="' + sn + '" target="_blank" rel="noopener" onclick="event.stopPropagation();" style="color:var(--intel-blue);font-weight:600;">' + esc(i.RowKey || '') + '</a>' + outlierBadge) +
+        td(esc(i.Date || '')) +
+        td('<span style="white-space:nowrap;">' + formatWW(i.PartitionKey || '') + '</span>') +
+        td(esc(i.Category || '')) +
+        td(esc(i.Subcategory || '')) +
+        td(esc(i.PossibleRootCause || i.RootCause || '')) +
+        td(similarBadge) +
+        td(spark) +
+      '</tr>';
+      const detailRow = isOpen
+        ? '<tr class="opx-detail" data-rowkey="' + esc(i.RowKey || '') + '"><td colspan="8" style="padding:0;border-bottom:1px solid #f0f4f9;">' + opxRenderExpander(i) + '</td></tr>'
+        : '';
+      return mainRow + detailRow;
+    }).join('');
+    $('opxTableWrap').innerHTML =
+      '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.88rem;">' +
+      '<thead><tr style="background:#eef5fb;">' +
+      th('Incident', '180px') + th('Resolved On', '110px') + th('WW', '90px') + th('Product') + th('Subcategory (Symptom)') + th('Possible Root Cause') + th('Similar', '90px') + th('6-Wk Trend', '110px') +
+      '</tr></thead><tbody>' + rows + '</tbody></table></div>';
+    // Wire row clicks
+    $('opxTableWrap').querySelectorAll('tr.opx-row').forEach(tr => {
+      tr.addEventListener('click', () => {
+        const k = tr.getAttribute('data-rowkey');
+        if (opxExpanded.has(k)) opxExpanded.delete(k); else opxExpanded.add(k);
+        opxRefresh();
+      });
+    });
+  }
+
+  function opxDownloadCsv() {
+    const filtered = opxGetFiltered();
+    if (filtered.length === 0) { alert('No incidents match the current filters.'); return; }
+    const triples = opxBuildTripleCounts(filtered);
+    const header = ['Incident', 'ServiceNow Link', 'Resolved On', 'WW', 'Product', 'Subcategory (Symptom)', 'Possible Root Cause', 'Detailed Root Cause', 'Similar In Filter', 'First Time Seen'];
+    const lines  = [header.map(csvField).join(',')];
+    for (const i of filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))) {
+      const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
+      const tk = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + ((i.PossibleRootCause || i.RootCause || '').trim());
+      const ok = (i.Category || '') + '||' + (i.PossibleRootCause || i.RootCause || '');
+      const isOutlier = opxFirstSeenWeek.get(ok) === (i.PartitionKey || i.YearWeek);
+      lines.push([
+        csvField(i.RowKey || ''),
+        csvField(sn),
+        csvField(i.Date || ''),
+        csvField(formatWW(i.PartitionKey || '')),
+        csvField(i.Category || ''),
+        csvField(i.Subcategory || ''),
+        csvField(i.PossibleRootCause || i.RootCause || ''),
+        csvField(i.DetailedRootCause || i.AIAnalysis || ''),
+        csvField(triples[tk] || 1),
+        csvField(isOutlier ? 'Yes' : 'No')
+      ].join(','));
+    }
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const prod = ($('opxProduct').value || 'All').replace(/[^A-Za-z0-9]+/g, '-');
+    const fname = 'OpsReportPlus_' + prod + '_' + $('opxWeekFrom').value + '_to_' + $('opxWeekTo').value + '.csv';
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  }
+
+  async function opxCopyIds() {
+    const filtered = opxGetFiltered();
+    if (filtered.length === 0) { alert('No incidents to copy.'); return; }
+    const ids = filtered.map(i => i.RowKey || '').filter(Boolean).join('\n');
+    try {
+      await navigator.clipboard.writeText(ids);
+      const btn = $('opxCopyIdsBtn'); const orig = btn.innerHTML;
+      btn.innerHTML = '&#10003; Copied ' + filtered.length + ' IDs';
+      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+    } catch (e) {
+      alert('Copy failed: ' + e.message);
+    }
+  }
+
+  function opxRefresh() {
+    const filtered = opxGetFiltered();
+    opxRenderStats(filtered);
+    opxRenderTable(filtered);
+    $('opxSummary').textContent = filtered.length + ' incidents';
+  }
+
+  async function loadOpsPlus() {
+    const loading = $('opxLoading'), err = $('opxError'), content = $('opxContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No incident data yet</h3><p>Run the analyzer runbook to populate incidents.</p>';
+        err.style.display = 'block'; opxLoaded = true; return;
+      }
+      opxRebuildFirstSeen();
+      populateOpxProducts();
+      populateOpxWeeks(aggregated.weeks);
+      populateOpxSubcategories(false);
+      populateOpxRootCauses(false);
+      $('opxService').addEventListener('change', () => {
+        opxRebuildFirstSeen(); populateOpxProducts(); populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
+      });
+      $('opxProduct').addEventListener('change', () => { populateOpxSubcategories(false); populateOpxRootCauses(false); opxRefresh(); });
+      $('opxSubcategory').addEventListener('change', opxRefresh);
+      $('opxRootCause').addEventListener('change', opxRefresh);
+      $('opxWeekFrom').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
+      $('opxWeekTo').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
+      $('opxSearch').addEventListener('input', () => opxRefresh());
+      $('opxOutliersOnly').addEventListener('change', opxRefresh);
+      $('opxResetBtn').addEventListener('click', () => {
+        $('opxProduct').value = 'All Products';
+        $('opxSearch').value = '';
+        $('opxOutliersOnly').checked = false;
+        populateOpxWeeks(aggregated.weeks);
+        populateOpxSubcategories(false);
+        populateOpxRootCauses(false);
+        opxExpanded.clear();
+        opxRefresh();
+      });
+      $('opxDownloadBtn').addEventListener('click', opxDownloadCsv);
+      $('opxCopyIdsBtn').addEventListener('click', opxCopyIds);
+      loading.style.display = 'none'; content.style.display = 'block';
+      opxRefresh();
+      opxLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load Ops Report+</h3><p>' + e.message + '</p>';
+      err.style.display = 'block';
+    }
+  }
+
   // --- Tab navigation ---
   document.querySelectorAll('.tab').forEach((btn) => {
     btn.addEventListener('click', () => {
@@ -914,7 +2440,11 @@
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       $('pane-' + tab).classList.add('active');
       if (tab === 'trends' && !trendsLoaded) loadTrends();
+      if (tab === 'trendsplus' && !tpLoaded) loadTrendsPlus();
+      if (tab === 'rootcause' && !rcLoaded) loadRootCause();
+      if (tab === 'reportsplus' && !rpxLoaded) loadReportsPlus();
       if (tab === 'ops' && !opsLoaded) loadOps();
+      if (tab === 'opsplus' && !opxLoaded) loadOpsPlus();
     });
   });
 

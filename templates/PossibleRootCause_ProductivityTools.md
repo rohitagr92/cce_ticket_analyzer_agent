@@ -239,6 +239,25 @@
 
 ---
 
+## 17. Excluded (Out-of-scope tickets)
+
+Use these labels **only** when Category = `Excluded` — i.e. the ticket is not a Productivity Tools product fault and should not be counted against PT root-cause analysis. Pick the closest matching label; if none fit, use `Out-of-scope Service Offering`.
+
+| # | Root Cause Label | When to Apply |
+|---|---|---|
+| 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity). |
+| 17.2 | **SharePoint Online Access Request** | SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT. |
+| 17.3 | **Mailbox / Calendar Enablement** | Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT. |
+| 17.4 | **Cellular / SIM Activation** | Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT. |
+| 17.5 | **Identity / PUID / Account Provisioning** | New-hire/rehire/PUID account provisioning, AGS group membership — owned by Identity, not PT. |
+| 17.6 | **Hardware / Device Issue** | Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT. |
+| 17.7 | **Network / VPN Infrastructure** | Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT. |
+| 17.8 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product fault; should be redirected to self-service docs or training. |
+| 17.9 | **Duplicate / Cancelled Ticket** | Ticket withdrawn, cancelled, duplicate of another INC, or closed without action by the requester. |
+| 17.10 | **Third-Party SaaS Issue** | Non-Microsoft, non-Google SaaS app outside the PT catalog (e.g. vendor portals, custom internal apps). |
+
+---
+
 ## Cross-Cutting Patterns
 
 | Root Cause Label | When to Apply |

@@ -6,6 +6,27 @@ Productivity Tools tickets are about the following in-scope products only: **Mic
 
 ***
 
+### **THE THREE-AXIS MODEL — read carefully**
+
+Every ticket must be described along **three separate axes**. Do not confuse them.
+
+| Axis | Meaning | Where it comes from | Example |
+|------|---------|---------------------|---------|
+| **1. Primary Category (= the PRODUCT)** | The in-scope **product** that owns the failure. Always one of the bold category names below — never a symptom, never a cause. | Identify the affected application/service first. | `Microsoft Excel Issues`, `Microsoft OneDrive Issues`, `Microsoft 365 Copilot Issues` |
+| **2. Sub-symptom (= the SYMPTOM)** | The **observable failure mode** the user reported — what looked broken. Pick one item verbatim from the product's bulleted sub-symptom list. | The visible behaviour in the ticket. | `File not opening`, `Sync failure`, `Copilot license missing` |
+| **3. Possible Root Cause (= short canonical LABEL — strict)** | A **short, fixed label** (typically 2–5 words) picked **verbatim** from the matching product's table in `PossibleRootCause_ProductivityTools.md`. Never a sentence, never a free-form description, never a narrative. Just the label string. | The PRC catalog table for the chosen Primary Category. | `Sync Stall`, `Long File Path Issue`, `F3 License Restriction`, `Copilot License Blackout`, `Out-of-scope Service Offering` |
+
+**Key rules:**
+
+- **Category answers "which product is broken?"** It is NOT the symptom and NOT the cause.
+- **Sub-symptom answers "what did the user see?"** Pick the closest verbatim match from the chosen product's sub-symptom list.
+- **Possible Root Cause is a strict catalog LABEL.** It is one of the bold **Root Cause Label** values in the PRC table for the chosen product. Copy it character-for-character. Do NOT paraphrase, expand into a sentence, add adjectives, or invent a new label. If genuinely no label fits, write `Unknown` — but treat `Unknown` as a failure of categorisation, not the default.
+- **AI Analysis is the place for narrative.** That is where the 2–3 sentence explanation lives — never inflate the PRC to compensate.
+- **Excluded tickets MUST still get a Possible Root Cause label** — use the canonical Excluded label (e.g. `Out-of-scope Service Offering`) defined in the PRC catalog. The *reason it is out of scope* goes in the AI Analysis and in the separate `Exclusion Reason` field.
+- **All four output fields (Primary Category, Sub-symptom, Possible Root Cause, AI Analysis) are mandatory for every ticket, including Excluded ones.**
+
+***
+
 ### **Application & Scope Context**
 
 - **Always identify the affected application/area first** - the category name is anchored on the in-scope product.
@@ -28,9 +49,17 @@ Productivity Tools tickets are about the following in-scope products only: **Mic
 
 ### **How to Categorize**
 
-- **Classify by Product, not symptoms.**
-- **Prioritize evidence in this order:**
-1. *Based on the Products* — Which Product was determined to be the underlying issue (TOP PRIORITY).
+Apply the three-axis model in this order:
+
+1. **Pick the Primary Category (= Product).** Which in-scope product owns the failure? Decision tree below makes this mechanical. Never pick a symptom or a cause here.
+2. **Pick the Sub-symptom (= Symptom).** From the chosen product's bulleted sub-symptom list, pick the single label that best matches what the user reported. Copy it verbatim.
+3. **Pick the Possible Root Cause (= short canonical LABEL).** Go to the chosen product's table in `PossibleRootCause_ProductivityTools.md`, pick the single bold **Root Cause Label** that best fits the evidence, and copy that label **verbatim** (typically 2–5 words, no sentence, no description). For Excluded tickets, use the canonical Excluded label (e.g. `Out-of-scope Service Offering`). Write `Unknown` ONLY when no label in the table can be defended after a careful read — this should be vanishingly rare.
+4. **Write the AI Analysis.** 2–3 full sentences explaining what happened, what fixed it, and any notable evidence. This is the **only** field where narrative belongs. Required for every ticket, including Excluded ones — for Excluded, the AI Analysis must explain *why* the ticket is out of scope and where it belongs.
+
+**Evidence priority when in doubt:**
+1. Which **product** does the resolution actually fix? (TOP PRIORITY — this drives Category)
+2. What did the **user observe**? (drives Sub-symptom)
+3. What technical condition produced that observation? (drives Possible Root Cause)
 
 
 ***
@@ -351,12 +380,15 @@ Each category lists the **sub-symptoms** (the recurring failure modes seen in ti
 
 ## REQUIRED OUTPUT FORMAT
 
-**FOR ALL TICKETS (including Excluded):**
+**Mandatory for every ticket — including Excluded.** Output exactly these four labeled lines, in this order, each on its own line, with no markdown / asterisks / quotation marks around the values:
 
-Primary Category: [Choose only from the 19 product categories above - OUTPUT ONLY THE CATEGORY NAME. "How Do I / User Education" is NOT a valid category - route guidance questions to the relevant product category instead (e.g., Copilot usage guidance → Microsoft 365 Copilot Issues, OneDrive usage guidance → Microsoft OneDrive Issues).]
+1. **Primary Category (= the PRODUCT):** [Choose only from the bold product categories above — OUTPUT ONLY THE CATEGORY NAME. "How Do I / User Education" is NOT a valid category — route guidance questions to the relevant product category instead (e.g., Copilot usage guidance → Microsoft 365 Copilot Issues, OneDrive usage guidance → Microsoft OneDrive Issues).]
+2. **Sub-symptom (= the SYMPTOM):** [Pick the closest matching sub-symptom from the chosen product's bulleted list, e.g. "License activation issue", "Notebook sync failure", "Mapped drive not connecting". For Excluded tickets where no sub-symptom applies, write "Out of scope" — never blank.]
+3. **Possible Root Cause (= short canonical LABEL — strict):** [Pick ONE bold **Root Cause Label** verbatim from the matching product's table in `PossibleRootCause_ProductivityTools.md`. Typically 2–5 words. Examples: `Sync Stall`, `Long File Path Issue`, `F3 License Restriction`, `Copilot License Blackout`, `Out-of-scope Service Offering`. DO NOT write a sentence. DO NOT paraphrase or expand the label. DO NOT invent a new label. If genuinely no catalog label fits after careful review, write `Unknown` — this should be vanishingly rare.]
+4. **AI Analysis (mandatory narrative — 2–3 sentences):** [What happened, what fixed it, and any notable evidence. This is the ONLY field where narrative belongs. For Excluded tickets, explain *why* it is out of scope and what queue/process should own it — never write just "Unknown" or "Excluded". A reader must be able to understand the ticket from this field alone.]
 
 **If using "Excluded" category, also include:**
-Exclusion Reason: [Brief description of why the ticket is out of scope, e.g. "Out of scope — cellular service" or "Out of scope — PC hardware replacement"]
+Exclusion Reason: [Brief description of why the ticket is out of scope, e.g. "Out of scope — cellular service" or "Out of scope — PC hardware replacement". This is in addition to — not a replacement for — Possible Root Cause and AI Analysis.]
 
 **INVALID reasons for using Excluded category (use the appropriate category instead):**
 - ❌ "Copilot license not available" → Microsoft 365 Copilot Issues
@@ -365,9 +397,7 @@ Exclusion Reason: [Brief description of why the ticket is out of scope, e.g. "Ou
 - ❌ "Escalated to L1.5 / engineering / Microsoft" → If resolution is documented, categorize based on what fixed it
 - ❌ "Limited work notes" → Use close_notes / resolution_category for evidence
 
-**FOR ALL TICKETS:**
-
-Sub-symptom: [Pick the closest matching sub-symptom from the chosen category's list, e.g. "License activation issue", "Notebook sync failure", "Mapped drive not connecting". This adds traceability between root cause and category.]
+**FOR ALL TICKETS — additional fields:**
 
 Confidence Level: [High/Medium/Low]
 - High (90%+): Clear root cause with documented resolution and user confirmation
@@ -425,6 +455,8 @@ KB Provided: [Was a KB attached or provided in work notes/comments? If yes, prov
 
 ### **Final Reminders**
 
+- **Three-axis discipline:** Category = the **product**, Sub-symptom = the **symptom** the user saw, Possible Root Cause = a **short canonical label** picked verbatim from `PossibleRootCause_ProductivityTools.md` (typically 2–5 words — never a sentence). Narrative belongs in AI Analysis only.
+- **`Unknown` is a last resort, not a default.** Every ticket — including Excluded — must have a concrete Possible Root Cause label and a 2–3 sentence AI Analysis. For Excluded tickets, the Root Cause label is the canonical Excluded entry (e.g. `Out-of-scope Service Offering`) and the AI Analysis must explain why it is out of scope and where it belongs.
 - **"Excluded" is a category** only for tickets clearly outside Productivity Tools scope. Do not use Excluded for Copilot/Office licensing, rejoin scenarios, shared file permissions, or any documented Productivity Tools resolution.
 - **Single-app vs multi-app:** Failure isolated to one Office app → that app's category. Multi-app or suite-wide (install / update / F3 license / activation loop) → Microsoft 365 Apps for Enterprise Issues.
 - **Copilot always wins** when it is the root cause — never split into Excel / Word / PowerPoint / Teams.

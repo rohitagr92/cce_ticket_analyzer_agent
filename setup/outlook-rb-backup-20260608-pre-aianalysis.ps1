@@ -1,6 +1,32 @@
 # Detect execution environment
 $Script:IsAzureAutomation = $env:AUTOMATION_ASSET_ACCOUNTID -or $PSPrivateMetadata.JobId
 
+function Get-AutomationVariableFallback {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Names,
+        [switch]$Optional
+    )
+
+    foreach ($name in $Names) {
+        try {
+            $value = Get-AutomationVariable -Name $name -ErrorAction Stop
+            if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
+                return $value
+            }
+        } catch {
+            continue
+        }
+    }
+
+    if ($Optional) {
+        return $null
+    }
+
+    throw "Missing required automation variable. Checked: $($Names -join ', ')"
+}
+
  
 if ($Script:IsAzureAutomation) {
     Write-Host "Running in Azure Automation environment" -ForegroundColor Green
@@ -18,14 +44,18 @@ if ($Script:IsAzureAutomation) {
     $Script:EnableBlobLogging = $true
     # Azure Automation - use automation variables
     $Script:BlobConfig = @{
-        StorageAccountName = Get-AutomationVariable -Name "Incidents_analyzer_StorageAccountName"
-        PromptContainerName = Get-AutomationVariable -Name "Incidents_analyzer_PromptTemplateContainerName"
-        ResourceGroupName = Get-AutomationVariable -Name "Incidents_analyzer_ResourceGroupName"
-        DataContainerName = Get-AutomationVariable -Name "Incidents_analyzer_DataContainerName"
-        ResultsContainerName = Get-AutomationVariable -Name "Incidents_analyzer_ResultsContainerName"
-        SubscriptionId = Get-AutomationVariable -Name "Incidents_analyzer_SubscriptionId"
+        StorageAccountName = Get-AutomationVariableFallback -Names @("Incidents_analyzer_StorageAccountName", "PSD_AI_Automations_StorageAccountName")
+        PromptContainerName = Get-AutomationVariableFallback -Names @("Incidents_analyzer_PromptTemplateContainerName", "PSD_AI_Automations_PromptTemplateContainerName", "PSD-AI-Automations_PromptTemplateContainerName")
+        ResourceGroupName = Get-AutomationVariableFallback -Names @("Incidents_analyzer_ResourceGroupName", "PSD_AI_Automations_ResourceGroupName")
+        DataContainerName = Get-AutomationVariableFallback -Names @("Incidents_analyzer_DataContainerName", "PSD_AI_Automations_DataContainerName", "PSD-AI-Automations_DataContainerName") -Optional
+        ResultsContainerName = Get-AutomationVariableFallback -Names @("Incidents_analyzer_ResultsContainerName", "PSD_AI_Automations_ResultsContainerName", "PSD-AI-Automations_ResultsContainerName") -Optional
+        SubscriptionId = Get-AutomationVariableFallback -Names @("Incidents_analyzer_SubscriptionId", "PSD_AI_Automations_SubscriptionId", "PSD-AI-Automations_SubscriptionId") -Optional
         StatisticsTableName = "IncidentsCategoryStats"  # Azure Table for statistics
         }
+
+    if ([string]::IsNullOrWhiteSpace($Script:BlobConfig.DataContainerName)) { $Script:BlobConfig.DataContainerName = "data" }
+    if ([string]::IsNullOrWhiteSpace($Script:BlobConfig.ResultsContainerName)) { $Script:BlobConfig.ResultsContainerName = "results" }
+    Write-Host ("Blob config resolved - Account: {0}, ResourceGroup: {1}, PromptContainer: {2}, DataContainer: {3}, ResultsContainer: {4}" -f $Script:BlobConfig.StorageAccountName, $Script:BlobConfig.ResourceGroupName, $Script:BlobConfig.PromptContainerName, $Script:BlobConfig.DataContainerName, $Script:BlobConfig.ResultsContainerName) -ForegroundColor Cyan
     # Azure Automation - use automation variables
     $Script:Constants = @{
         ServiceNowIncidentsClientID = Get-AutomationVariable -Name "ServiceNowIncidentsClientID"
@@ -51,6 +81,8 @@ if ($Script:IsAzureAutomation) {
         SaveRunArtifacts = Get-AutomationVariable -Name "SaveRunArtifacts" -ErrorAction SilentlyContinue
         GenerateWeeklyMergedReportOnWeekend = Get-AutomationVariable -Name "GenerateWeeklyMergedReportOnWeekend" -ErrorAction SilentlyContinue
         WeeklyMergeLookbackDays = Get-AutomationVariable -Name "WeeklyMergeLookbackDays" -ErrorAction SilentlyContinue
+        WeeklyReportOnlyMode = Get-AutomationVariable -Name "WeeklyReportOnlyMode" -ErrorAction SilentlyContinue
+        WeeklyReportDayOfWeek = Get-AutomationVariable -Name "WeeklyReportDayOfWeek" -ErrorAction SilentlyContinue
     }
 } else {
     Write-Host "Running in local development environment" -ForegroundColor Yellow
@@ -58,23 +90,16 @@ if ($Script:IsAzureAutomation) {
     $Script:LogLevel = "Debug"
     $Script:EnableBlobLogging = $false
 
-    # Local development - load Productivity Tools config + secrets
+    # Local development - load from LocalConfig.psd1
     $Script:ScriptDirectory = $PSScriptRoot
     Set-Location $Script:ScriptDirectory
-    $configPath  = ".\Config\LocalConfig-ProductivityTools.psd1"
-    $secretsPath = ".\Config\LocalSecrets-ProductivityTools.psd1"
+    # $configPath = Join-Path $Script:ScriptDirectory "LocalConfig.psd1"
+    $configPath = ".\LocalConfig.psd1"
     if (Test-Path $configPath) {
-        Write-Host "Loading Productivity Tools configuration from $configPath" -ForegroundColor Green
+        Write-Host "Loading local configuration from $configPath" -ForegroundColor Green
         $Script:LocalConfig = Import-PowerShellDataFile -Path $configPath
     } else {
-        throw "$configPath not found. Please create it for local development."
-    }
-    if (Test-Path $secretsPath) {
-        Write-Host "Merging Productivity Tools secrets from $secretsPath" -ForegroundColor Green
-        $secrets = Import-PowerShellDataFile -Path $secretsPath
-        foreach ($k in $secrets.Keys) { $Script:LocalConfig[$k] = $secrets[$k] }
-    } else {
-        Write-Host "WARNING: $secretsPath not found - ClientSecret / API key will be null" -ForegroundColor Yellow
+        throw "LocalConfig.psd1 not found. Please create it for local development."
     }
     # Local development - use loaded config
     $Script:Constants = @{
@@ -103,6 +128,8 @@ if ($Script:IsAzureAutomation) {
         SaveRunArtifacts = $Script:LocalConfig.SaveRunArtifacts
         GenerateWeeklyMergedReportOnWeekend = $Script:LocalConfig.GenerateWeeklyMergedReportOnWeekend
         WeeklyMergeLookbackDays = $Script:LocalConfig.WeeklyMergeLookbackDays
+        WeeklyReportOnlyMode = $Script:LocalConfig.WeeklyReportOnlyMode
+        WeeklyReportDayOfWeek = $Script:LocalConfig.WeeklyReportDayOfWeek
     }
 }
 
@@ -112,7 +139,7 @@ if ($Script:IsAzureAutomation) {
     
 .DESCRIPTION
     This script retrieves resolved incidents from ServiceNow for the Mobile Device Management team,
-    processes them using AI for strict categorization and summarization, then generates an HTML 
+    processes them using AI for root cause categorization and summarization, then generates an HTML 
     report that is sent via webhook for email delivery.
     
 .NOTES
@@ -285,9 +312,9 @@ function Complete-BlobLogging {
         # Flush final buffer
         Write-LogBufferToBlob
         
-        Write-Host "✓ Log file saved to blob storage: $($Script:LogConfig.CurrentLogFile)" -ForegroundColor Green
-        Write-Host "  Container: $($Script:LogConfig.LogContainerName)" -ForegroundColor Gray
-        Write-Host "  Storage Account: $($Script:BlobConfig.StorageAccountName)" -ForegroundColor Gray
+        Write-Host ("Log file saved to blob storage: {0}" -f $Script:LogConfig.CurrentLogFile) -ForegroundColor Green
+        Write-Host ("  Container: {0}" -f $Script:LogConfig.LogContainerName) -ForegroundColor Gray
+        Write-Host ("  Storage Account: {0}" -f $Script:BlobConfig.StorageAccountName) -ForegroundColor Gray
         
     } catch {
         Write-Host "Failed to complete blob logging: $($_.Exception.Message)" -ForegroundColor Red
@@ -327,6 +354,135 @@ function Get-StorageContext {
     }
 }
 
+function New-ReportBlobReadSasUrl {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $StorageContext,
+
+        [Parameter(Mandatory)]
+        [string]$ContainerName,
+
+        [Parameter(Mandatory)]
+        [string]$BlobName,
+
+        [int]$ExpiryDays = 30
+    )
+
+    $expiry = (Get-Date).ToUniversalTime().AddDays($ExpiryDays)
+    $sasToken = New-AzStorageBlobSASToken `
+        -Container $ContainerName `
+        -Blob $BlobName `
+        -Context $StorageContext `
+        -Permission r `
+        -ExpiryTime $expiry
+
+    if (-not $sasToken.StartsWith('?')) { $sasToken = '?' + $sasToken }
+
+    return "https://$($Script:BlobConfig.StorageAccountName).blob.core.windows.net/$ContainerName/$BlobName$sasToken"
+}
+
+function Get-ReportsManifestObject {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $StorageContext,
+
+        [Parameter(Mandatory)]
+        [string]$ContainerName,
+
+        [string]$ManifestBlobName = "reports-manifest.json"
+    )
+
+    $manifest = [ordered]@{
+        version        = 1
+        generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+        storageAccount = [string]$Script:BlobConfig.StorageAccountName
+        container      = [string]$ContainerName
+        reports        = @()
+    }
+
+    $blob = Get-AzStorageBlob -Container $ContainerName -Blob $ManifestBlobName -Context $StorageContext -ErrorAction SilentlyContinue
+    if (-not $blob) { return $manifest }
+
+    $tempFile = [System.IO.Path]::GetTempFileName()
+    try {
+        Get-AzStorageBlobContent -Container $ContainerName -Blob $ManifestBlobName -Destination $tempFile -Context $StorageContext -Force | Out-Null
+        $raw = Get-Content -Path $tempFile -Raw -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($raw)) { return $manifest }
+
+        $parsed = $raw | ConvertFrom-Json -Depth 20
+        if ($null -ne $parsed) {
+            if ($parsed.PSObject.Properties.Name -contains 'version')        { $manifest.version = [int]$parsed.version }
+            if ($parsed.PSObject.Properties.Name -contains 'generatedAtUtc') { $manifest.generatedAtUtc = [string]$parsed.generatedAtUtc }
+            if ($parsed.PSObject.Properties.Name -contains 'storageAccount') { $manifest.storageAccount = [string]$parsed.storageAccount }
+            if ($parsed.PSObject.Properties.Name -contains 'container')      { $manifest.container = [string]$parsed.container }
+            if ($parsed.PSObject.Properties.Name -contains 'reports' -and $null -ne $parsed.reports) {
+                $manifest.reports = @($parsed.reports)
+            }
+        }
+
+        return $manifest
+    }
+    finally {
+        if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
+    }
+}
+
+function Add-OrUpdate-ReportsManifestEntry {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [hashtable]$Manifest,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Entry
+    )
+
+    $reports = [System.Collections.Generic.List[object]]::new()
+    foreach ($r in @($Manifest.reports)) { [void]$reports.Add($r) }
+
+    for ($i = $reports.Count - 1; $i -ge 0; $i--) {
+        $existingName = [string]$reports[$i].filename
+        if ($existingName -eq [string]$Entry.filename) {
+            $reports.RemoveAt($i)
+        }
+    }
+
+    [void]$reports.Add([pscustomobject]$Entry)
+    $Manifest.reports = @($reports | Sort-Object -Property date -Descending)
+    $Manifest.generatedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
+
+    return $Manifest
+}
+
+function Save-ReportsManifestObject {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $StorageContext,
+
+        [Parameter(Mandatory)]
+        [string]$ContainerName,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Manifest,
+
+        [string]$ManifestBlobName = "reports-manifest.json"
+    )
+
+    $json = $Manifest | ConvertTo-Json -Depth 20
+    $tempFile = [System.IO.Path]::GetTempFileName()
+
+    try {
+        [System.IO.File]::WriteAllText($tempFile, $json, [System.Text.UTF8Encoding]::new($false))
+        Set-AzStorageBlobContent -File $tempFile -Container $ContainerName -Blob $ManifestBlobName -Context $StorageContext -Force | Out-Null
+    }
+    finally {
+        if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
+    }
+}
+
 function Get-BlobMarkdownContent {
     [CmdletBinding()]
     param(
@@ -339,31 +495,38 @@ function Get-BlobMarkdownContent {
             $FileName = "$FileName.md"
         }
         
-        Write-ScriptLog "Retrieving markdown file: $FileName" -Level Info
+        Write-ScriptLog ('Retrieving markdown file: {0}' -f $FileName) -Level Info
 
         if (-not $Script:IsAzureAutomation) {
-            # Local development - use local template files
-            $localPath = ".\Templates\$FileName"
-            if (Test-Path $localPath) {
-                Write-ScriptLog "Loading local template: $localPath" -Level Info
+            # Local development - support custom template folder and legacy/default paths.
+            $templatePaths = [System.Collections.Generic.List[string]]::new()
+            if ($Script:LocalConfig -and $Script:LocalConfig.PromptTemplatesLocalPath) {
+                $templatePaths.Add((Join-Path $Script:LocalConfig.PromptTemplatesLocalPath $FileName))
+            }
+            $templatePaths.Add((Join-Path '.\Templates' $FileName))
+            $templatePaths.Add((Join-Path '.' $FileName))
+
+            $localPath = $templatePaths | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($localPath) {
+                Write-ScriptLog ('Loading local template: {0}' -f $localPath) -Level Info
                 $content = Get-Content $localPath -Raw -Encoding UTF8
                 if ([string]::IsNullOrWhiteSpace($content)) {
-                    throw "Local template file is empty: $localPath"
+                    throw ('Local template file is empty: {0}' -f $localPath)
                 }
-                Write-ScriptLog "Successfully retrieved $FileName ($(($content.Length)) characters)" -Level Success
+                Write-ScriptLog ('Successfully retrieved {0} ({1} characters)' -f $FileName, $content.Length) -Level Success
                 return $content
-            } else {
-                throw "Local template file not found: $localPath"
             }
+
+            throw ('Local template file not found in configured/default paths: {0}' -f ($templatePaths -join '; '))
         }
 
         # Azure Automation - use blob storage
         # Ensure we have a valid Azure context
         $azContext = Get-AzContext
         if (-not $azContext) {
-            Write-ScriptLog "No Azure context found, connecting with managed identity..." -Level Warning
+            Write-ScriptLog 'No Azure context found, connecting with managed identity...' -Level Warning
             Connect-AzAccount -Identity -ErrorAction Stop | Out-Null
-            Write-ScriptLog "Successfully authenticated with managed identity" -Level Success
+            Write-ScriptLog 'Successfully authenticated with managed identity' -Level Success
         }
 
         # Get storage account key for authentication
@@ -375,20 +538,20 @@ function Get-BlobMarkdownContent {
         
         if (-not $blob) {
             # List available blobs for debugging
-            Write-ScriptLog "Blob '$FileName' not found. Available blobs in container '$($Script:BlobConfig.PromptContainerName)':" -Level Warning
+            Write-ScriptLog ('Blob ''{0}'' not found. Available blobs in container ''{1}'':' -f $FileName, $Script:BlobConfig.PromptContainerName) -Level Warning
             $availableBlobs = Get-AzStorageBlob -Container $Script:BlobConfig.PromptContainerName -Context $Context -ErrorAction SilentlyContinue
             if ($availableBlobs) {
                 $availableBlobs | ForEach-Object { Write-ScriptLog "  - $($_.Name)" -Level Debug }
             } else {
                 Write-ScriptLog "  No blobs found or unable to list container contents" -Level Warning
             }
-            throw "Markdown file '$FileName' not found in container '$($Script:BlobConfig.PromptContainerName)'"
+            throw ('Markdown file ''{0}'' not found in container ''{1}''' -f $FileName, $Script:BlobConfig.PromptContainerName)
         }
         
         $tempFile = [System.IO.Path]::GetTempFileName()
         
         try {
-            Write-ScriptLog "Downloading blob to temporary file: $tempFile" -Level Debug
+            Write-ScriptLog ('Downloading blob to temporary file: {0}' -f $tempFile) -Level Debug
             Get-AzStorageBlobContent -Container $Script:BlobConfig.PromptContainerName -Blob $FileName -Destination $tempFile -Context $Context -Force -ErrorAction Stop | Out-Null
             
             if (-not (Test-Path $tempFile)) {
@@ -401,7 +564,7 @@ function Get-BlobMarkdownContent {
                 throw "Downloaded file is empty or contains only whitespace"
             }
             
-            Write-ScriptLog "Successfully retrieved $FileName ($(($content.Length)) characters)" -Level Success
+            Write-ScriptLog ('Successfully retrieved {0} ({1} characters)' -f $FileName, $content.Length) -Level Success
             return $content
             
         } finally {
@@ -411,9 +574,9 @@ function Get-BlobMarkdownContent {
         }
         
     } catch {
-        Write-ScriptLog "Failed to get markdown file '$FileName': $($_.Exception.Message)" -Level Error
-        Write-ScriptLog "Container: $($Script:BlobConfig.PromptContainerName)" -Level Error
-        Write-ScriptLog "Storage Account: $($Script:BlobConfig.StorageAccountName)" -Level Error
+        Write-ScriptLog ('Failed to get markdown file ''{0}'': {1}' -f $FileName, $_.Exception.Message) -Level Error
+        Write-ScriptLog ('Container: {0}' -f $Script:BlobConfig.PromptContainerName) -Level Error
+        Write-ScriptLog ('Storage Account: {0}' -f $Script:BlobConfig.StorageAccountName) -Level Error
         throw
     }
 }
@@ -495,6 +658,52 @@ function Get-AIEndpoint {
     }
 }
 
+function Use-MaxCompletionTokensForAzureOpenAI {
+    [CmdletBinding()]
+    param()
+
+    if ($Script:Constants.UseClaudeModel) {
+        return $false
+    }
+
+    $deploymentName = [string]$Script:Constants.AzureOpenAIDeployment
+    return $deploymentName -match '^(?i:gpt-5|o1|o3|o4)'
+}
+
+function Test-AzureOpenAIDeployment {
+    [CmdletBinding()]
+    param(
+        [int]$TimeoutSeconds = 45
+    )
+
+    if ($Script:Constants.UseClaudeModel) {
+        Write-ScriptLog "Skipping Azure OpenAI preflight check because UseClaudeModel is enabled" -Level Info -Category "Configuration"
+        return
+    }
+
+    $testRequest = @{
+        messages = @(
+            @{ role = 'system'; content = 'Health check.' },
+            @{ role = 'user'; content = 'Respond with OK.' }
+        )
+        model = $Script:Constants.AzureOpenAIDeployment
+        temperature = 0
+    }
+
+    if (Use-MaxCompletionTokensForAzureOpenAI) {
+        $testRequest.max_completion_tokens = 8
+    } else {
+        $testRequest.max_tokens = 8
+    }
+
+    try {
+        $null = Invoke-AuthenticatedApiCall -Url (Get-AIEndpoint) -Method POST -RequestBody $testRequest -ApiKey $Script:Constants.AzureOpenAIApiKey -TimeoutSeconds $TimeoutSeconds
+        Write-ScriptLog "Azure OpenAI deployment preflight check passed" -Level Success -Category "Configuration"
+    } catch {
+        throw "Azure OpenAI preflight failed for deployment '$($Script:Constants.AzureOpenAIDeployment)' with api-version '$($Script:Constants.AzureOpenAIApiVersion)'. $($_.Exception.Message)"
+    }
+}
+
 # Legacy function name for backward compatibility
 function Get-AzureOpenAIEndpoint {
     [CmdletBinding()]
@@ -537,6 +746,28 @@ function Get-AccessToken {
         Write-ScriptLog "OAuth token request failed: $($_.Exception.Message)" -Level Error
         throw
     }
+}
+
+function Add-QueryParamIfMissing {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$Url,
+
+        [Parameter(Mandatory)]
+        [string]$ParamName,
+
+        [Parameter(Mandatory)]
+        [string]$ParamValue
+    )
+
+    $pattern = '(?i)(?:\?|&)' + [regex]::Escape($ParamName) + '='
+    if ($Url -match $pattern) {
+        return $Url
+    }
+
+    $separator = if ($Url.Contains('?')) { '&' } else { '?' }
+    return "{0}{1}{2}={3}" -f $Url, $separator, $ParamName, [System.Uri]::EscapeDataString($ParamValue)
 }
 
 function Invoke-AuthenticatedApiCall {
@@ -612,18 +843,35 @@ function Invoke-AuthenticatedApiCall {
         # Extract HTTP status code and detailed error from response (cross-PS version compatible)
         if ($_.Exception.Response) {
             try {
-                $statusCode = [int]$_.Exception.Response.StatusCode
-                $statusDescription = $_.Exception.Response.StatusDescription
+                $statusCode = $null
+                $statusDescription = ""
+                $responseBody = ""
+                $responseObj = $_.Exception.Response
+
+                if ($responseObj -is [System.Net.Http.HttpResponseMessage]) {
+                    $statusCode = [int]$responseObj.StatusCode
+                    $statusDescription = [string]$responseObj.ReasonPhrase
+                    if ($responseObj.Content) {
+                        $responseBody = $responseObj.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                    }
+                } else {
+                    $statusCode = [int]$responseObj.StatusCode
+                    $statusDescription = $responseObj.StatusDescription
+
+                    if ($responseObj.GetResponseStream) {
+                        $responseStream = $responseObj.GetResponseStream()
+                        $reader = New-Object System.IO.StreamReader($responseStream)
+                        $responseBody = $reader.ReadToEnd()
+                        $reader.Close()
+                        $responseStream.Close()
+                    }
+                }
+
                 Write-ScriptLog "HTTP Status: $statusCode - $statusDescription" -Level Error
-                
-                # Read the response stream to get detailed error message
-                $responseStream = $_.Exception.Response.GetResponseStream()
-                $reader = New-Object System.IO.StreamReader($responseStream)
-                $responseBody = $reader.ReadToEnd()
-                $reader.Close()
-                $responseStream.Close()
-                
-                Write-ScriptLog "API Error Response: $responseBody" -Level Error
+
+                if (-not [string]::IsNullOrWhiteSpace($responseBody)) {
+                    Write-ScriptLog "API Error Response: $responseBody" -Level Error
+                }
                 
                 # Try to parse as JSON for better readability
                 try {
@@ -686,7 +934,7 @@ function New-AiRequestBody {
         }
     } else {
         # Azure OpenAI API format
-        return @{
+        $requestBody = @{
             messages = @(
                 @{
                     role = "system"
@@ -699,12 +947,19 @@ function New-AiRequestBody {
             )
             model = $Script:Constants.AzureOpenAIDeployment
             temperature = $Script:Config.AI.Temperature.$TaskType
-            max_completion_tokens = $Script:Config.AI.MaxTokens
             top_p = $Script:Config.AI.TopP
             frequency_penalty = $Script:Config.AI.FrequencyPenalty
             presence_penalty = $Script:Config.AI.PresencePenalty
             stop = $null
         }
+
+        if (Use-MaxCompletionTokensForAzureOpenAI) {
+            $requestBody.max_completion_tokens = $Script:Config.AI.MaxTokens
+        } else {
+            $requestBody.max_tokens = $Script:Config.AI.MaxTokens
+        }
+
+        return $requestBody
     }
 }
 
@@ -777,34 +1032,51 @@ function Get-IncidentCategory {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory)]
-        [object]$IncidentData
+        [object]$IncidentData,
+
+        [Parameter(Mandatory = $false)]
+        [hashtable]$RuleResult
     )
     
     try {
-        # Build the system prompt with all 4 reference MD files so the AI can ONLY
-        # pick labels from the canonical lists defined by the source-of-truth templates.
-        $systemPrompt = $Script:PromptTemplates.TicketCategorisation + "`n`n" +
-                        $Script:PromptTemplates.EnvironmentContext + "`n`n" +
-                        "## REFERENCE: Subcategory (Sub-Symptom) Labels`n" +
-                        $Script:PromptTemplates.TrendSubCategorisation + "`n`n" +
-                        "## REFERENCE: Possible Root Cause Labels`n" +
-                        $Script:PromptTemplates.PossibleRootCause + "`n`n" +
-                        "## REFERENCE: Detailed Root Cause Entries`n" +
-                        $Script:PromptTemplates.DetailedRootCause + "`n`n" +
-                        @"
-## ADDITIONAL REQUIRED OUTPUT FIELDS
-
-After the existing Primary Category / Sub-symptom / Confidence / Reasoning / Key Evidence / Resolution Summary / How Do I or Error / KB Provided fields, append these two lines:
-
-Possible Root Cause: [Pick exactly ONE label from the 'Root Cause Label' column of the chosen Primary Category's table in the 'Possible Root Cause' reference above. Copy the label verbatim. If no label fits, write "Unknown".]
-
-Detailed Root Cause: [Pick exactly ONE entry heading from the chosen Primary Category's section in the 'Detailed Root Cause' reference above (the '### Heading' lines). Copy verbatim. If no entry fits, write "Unknown".]
-
-STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from the MD reference files. Anything you produce that is not in those files will be rejected and replaced with "Unknown".
-"@
+        $systemPrompt = $Script:PromptTemplates.TicketCategorisation + "`n`n" + $Script:PromptTemplates.IntuneEnvironmentContext
+        # $systemPrompt = $Script:PromptTemplates.TicketCategorisation 
         
         # Convert to JSON with consistent formatting - use Compress to avoid whitespace issues
         $incidentJson = $IncidentData | ConvertTo-Json -Depth 4 -Compress
+
+        # Optional rule-based pre-classification hint for AI (supporting evidence only)
+        $userContent = $incidentJson
+        if ($RuleResult) {
+            $ruleCategory = if ($RuleResult.ContainsKey('Category')) { [string]$RuleResult.Category } else { '' }
+            $ruleConfidence = if ($RuleResult.ContainsKey('Confidence')) { [string]$RuleResult.Confidence } else { '' }
+            $matchedKeywordsRaw = if ($RuleResult.ContainsKey('MatchedKeywords')) { $RuleResult.MatchedKeywords } else { $null }
+
+            $hasRuleCategory = -not [string]::IsNullOrWhiteSpace($ruleCategory)
+            $isEligibleConfidence = $ruleConfidence -in @('High', 'Medium')
+
+            if ($hasRuleCategory -and $isEligibleConfidence) {
+                $matchedKeywordsText = if ($matchedKeywordsRaw -is [System.Collections.IEnumerable] -and -not ($matchedKeywordsRaw -is [string])) {
+                    (($matchedKeywordsRaw | ForEach-Object { [string]$_ }) -join ', ')
+                } elseif (-not [string]::IsNullOrWhiteSpace([string]$matchedKeywordsRaw)) {
+                    [string]$matchedKeywordsRaw
+                } else {
+                    'None'
+                }
+
+                $ruleHintBlock = @(
+                    'A keyword pre-classifier suggests this may be: ' + $ruleCategory + '. Evaluate independently and override if evidence contradicts it.',
+                    '--- Rule-Based Pre-Classification ---',
+                    'Category: ' + $ruleCategory,
+                    'Confidence: ' + $ruleConfidence,
+                    'Matched Keywords: ' + $matchedKeywordsText,
+                    '--- End Pre-Classification ---'
+                ) -join "`n"
+
+                # Place hint before ticket content in user message
+                $userContent = $ruleHintBlock + "`n`n" + $incidentJson
+            }
+        }
         
         # Validate JSON before sending
         try {
@@ -814,7 +1086,7 @@ STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from
             throw "Invalid JSON generated from incident data"
         }
         
-        $requestBody = New-AiRequestBody -SystemPrompt $systemPrompt -UserContent $incidentJson -TaskType 'Category'
+        $requestBody = New-AiRequestBody -SystemPrompt $systemPrompt -UserContent $userContent -TaskType 'Category'
         
         # Validate the complete request body before sending
         try {
@@ -837,8 +1109,11 @@ STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from
         
         $categoryInfo = ConvertFrom-AiCategoryResponse -ResponseText $responseText
         
-        # Log categorization results with reasoning
-        Write-ScriptLog "Category selected for $($IncidentData.IncidentNumber): $($categoryInfo.primary_category) (Confidence: $($categoryInfo.confidence_level))" -Level Info -Category "Categorization"
+            # DEBUG: Log raw AI response to diagnose parsing issues
+            Write-ScriptLog "DEBUG: Raw AI response for $($IncidentData.IncidentNumber):`n$responseText" -Level Info -Category "Categorization"
+
+            # Log categorization results with reasoning
+            Write-ScriptLog "Category selected for $($IncidentData.IncidentNumber): $($categoryInfo.primary_category) (Confidence: $($categoryInfo.confidence_level))" -Level Info -Category "Categorization"
         if ($categoryInfo.reasoning) {
             Write-ScriptLog "AI reasoning for $($IncidentData.IncidentNumber): $($categoryInfo.reasoning)" -Level Info -Category "Categorization"
         }
@@ -857,22 +1132,123 @@ function ConvertFrom-AiCategoryResponse {
     
     $cleanText = $ResponseText.Trim()
     $result = @{}
+
+    function Set-ResultField {
+        param(
+            [string]$TargetName,
+            [object]$Value
+        )
+
+        if ($null -ne $Value) {
+            $textValue = [string]$Value
+            if (-not [string]::IsNullOrWhiteSpace($textValue)) {
+                $result[$TargetName] = $textValue.Trim()
+            }
+        }
+    }
+
+    function Sanitize-PrimaryCategory {
+        param([string]$CategoryValue)
+
+        if ([string]::IsNullOrWhiteSpace($CategoryValue)) {
+            return $CategoryValue
+        }
+
+        $sanitizedValue = $CategoryValue.Trim()
+        if ($sanitizedValue -notmatch '^[\"'':\{]') {
+            return $sanitizedValue
+        }
+
+        $jsonCategoryPatterns = @(
+            '(?is)"(?:Category|Primary Category|primary_category)"\s*:\s*"(?<category>[^"]+)"',
+            "(?is)'(?:Category|Primary Category|primary_category)'\s*:\s*'(?<category>[^']+)'",
+            '(?is)(?:Category|Primary Category|primary_category)\s*[:=]\s*"?(?<category>[^"'',\r\n}]+)'
+        )
+
+        foreach ($pattern in $jsonCategoryPatterns) {
+            $categoryMatch = [regex]::Match($sanitizedValue, $pattern)
+            if ($categoryMatch.Success) {
+                $extractedCategory = $categoryMatch.Groups['category'].Value.Trim()
+                if (-not [string]::IsNullOrWhiteSpace($extractedCategory)) {
+                    return $extractedCategory
+                }
+            }
+        }
+
+        return $sanitizedValue
+    }
+
+    function Map-JsonResponse {
+        param([object]$JsonObject)
+
+        if ($null -eq $JsonObject) { return $false }
+
+        $source = $JsonObject
+        if ($source -is [System.Collections.IEnumerable] -and -not ($source -is [string])) {
+            $source = @($source)[0]
+        }
+
+        if ($null -eq $source) { return $false }
+
+        $propertyNames = @($source.PSObject.Properties.Name)
+        if ($propertyNames.Count -eq 0) { return $false }
+
+        Set-ResultField -TargetName 'primary_category' -Value $source.Category
+        if (-not $result.ContainsKey('primary_category')) { Set-ResultField -TargetName 'primary_category' -Value $source.'Primary Category' }
+        if (-not $result.ContainsKey('primary_category')) { Set-ResultField -TargetName 'primary_category' -Value $source.primary_category }
+
+        Set-ResultField -TargetName 'confidence_level' -Value $source.Confidence
+        if (-not $result.ContainsKey('confidence_level')) { Set-ResultField -TargetName 'confidence_level' -Value $source.'Confidence Level' }
+        if (-not $result.ContainsKey('confidence_level')) { Set-ResultField -TargetName 'confidence_level' -Value $source.confidence_level }
+
+        Set-ResultField -TargetName 'reasoning' -Value $source.Reasoning
+        if (-not $result.ContainsKey('reasoning')) { Set-ResultField -TargetName 'reasoning' -Value $source.reasoning }
+
+        Set-ResultField -TargetName 'key_evidence' -Value $source.Evidence
+        if (-not $result.ContainsKey('key_evidence')) { Set-ResultField -TargetName 'key_evidence' -Value $source.'Key Evidence' }
+        if (-not $result.ContainsKey('key_evidence')) { Set-ResultField -TargetName 'key_evidence' -Value $source.key_evidence }
+
+        Set-ResultField -TargetName 'resolution_summary' -Value $source.ResolutionSummary
+        if (-not $result.ContainsKey('resolution_summary')) { Set-ResultField -TargetName 'resolution_summary' -Value $source.'Resolution Summary' }
+        if (-not $result.ContainsKey('resolution_summary')) { Set-ResultField -TargetName 'resolution_summary' -Value $source.resolution_summary }
+
+        Set-ResultField -TargetName 'how_do_i_or_error' -Value $source.'How Do I or Error'
+        if (-not $result.ContainsKey('how_do_i_or_error')) { Set-ResultField -TargetName 'how_do_i_or_error' -Value $source.how_do_i_or_error }
+
+        Set-ResultField -TargetName 'kb_provided' -Value $source.'KB Provided'
+        if (-not $result.ContainsKey('kb_provided')) { Set-ResultField -TargetName 'kb_provided' -Value $source.kb_provided }
+
+        Set-ResultField -TargetName 'exclusion_reason' -Value $source.'Exclusion Reason'
+        if (-not $result.ContainsKey('exclusion_reason')) { Set-ResultField -TargetName 'exclusion_reason' -Value $source.exclusion_reason }
+
+        return $true
+    }
+
+    # Prefer structured JSON when the model returns it.
+    try {
+        $parsedJson = $cleanText | ConvertFrom-Json -ErrorAction Stop
+        if (Map-JsonResponse -JsonObject $parsedJson) {
+            if ($result.ContainsKey('primary_category')) {
+                $result['primary_category'] = Sanitize-PrimaryCategory -CategoryValue $result['primary_category']
+            }
+            if (-not $result.ContainsKey('primary_category')) { $result['primary_category'] = '' }
+            if (-not $result.ContainsKey('confidence_level')) { $result['confidence_level'] = '' }
+            return [PSCustomObject]$result
+        }
+    } catch {
+        # Fall back to regex parsing below.
+    }
     
     # Patterns handle optional markdown bold formatting (**) around field names
-    # IMPORTANT: every primary_category/exclusion_reason lookahead MUST include
-    # 'Sub-symptom' so the sub-symptom line does not bleed into the category text.
     $patterns = @{
-        'primary_category'     = "(?s)\*{0,2}Primary Category:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Exclusion|\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'exclusion_reason'     = "(?s)\*{0,2}Exclusion Reason:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'sub_symptom'          = "(?s)\*{0,2}Sub-symptom:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'confidence_level'     = "(?s)\*{0,2}Confidence Level:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'reasoning'            = "(?s)\*{0,2}Reasoning:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Key Evidence|\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'key_evidence'         = "(?s)\*{0,2}Key Evidence:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'resolution_summary'   = "(?s)\*{0,2}Resolution Summary:?\*{0,2}\s*(.+?)(?=\n\*{0,2}How Do I|\n\*{0,2}KB Provided|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'how_do_i_or_error'    = "(?s)\*{0,2}How Do I or Error:?\*{0,2}\s*(.+?)(?=\n\*{0,2}KB Provided|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'kb_provided'          = "(?s)\*{0,2}KB Provided:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'possible_root_cause'  = "(?s)\*{0,2}Possible Root Cause:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Detailed Root|\Z)"
-        'detailed_root_cause'  = "(?s)\*{0,2}Detailed Root Cause:?\*{0,2}\s*(.+)"
+        'primary_category' = "(?s)\*{0,2}(?:Primary Category|Category):?\*{0,2}\s*(.+?)(?=\n\*{0,2}Exclusion|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\Z)"
+        'exclusion_reason' = "(?s)\*{0,2}Exclusion Reason:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\Z)"
+        'confidence_level' = "(?s)\*{0,2}(?:Confidence Level|Confidence):?\*{0,2}\s*(.+?)(?=\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\Z)"
+        'reasoning' = "(?s)\*{0,2}Reasoning:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Key Evidence|\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\Z)"
+        'key_evidence' = "(?s)\*{0,2}(?:Key Evidence|Evidence):?\*{0,2}\s*(.+?)(?=\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\Z)"
+        'resolution_summary' = "(?s)\*{0,2}(?:Resolution Summary|Resolution):?\*{0,2}\s*(.+?)(?=\n\*{0,2}How Do I|\n\*{0,2}KB Provided|\Z)"
+        'how_do_i_or_error' = "(?s)\*{0,2}How Do I or Error:?\*{0,2}\s*(.+?)(?=\n\*{0,2}KB Provided|\Z)"
+        'kb_provided' = "(?s)\*{0,2}KB Provided:?\*{0,2}\s*(.+)"
     }
     
     foreach ($key in $patterns.Keys) {
@@ -883,94 +1259,15 @@ function ConvertFrom-AiCategoryResponse {
             $result[$key] = $value.Trim()
         }
     }
+
+    if ($result.ContainsKey('primary_category')) {
+        $result['primary_category'] = Sanitize-PrimaryCategory -CategoryValue $result['primary_category']
+    }
+
+    if (-not $result.ContainsKey('primary_category')) { $result['primary_category'] = '' }
+    if (-not $result.ContainsKey('confidence_level')) { $result['confidence_level'] = '' }
     
     return [PSCustomObject]$result
-}
-
-# === Stage 2 Rescue: narrow re-classifier for PRC/DRC Unknowns ===
-# When the main categorization returns Unknown for PossibleRootCause or DetailedRootCause,
-# this function makes a second, much smaller AI call that sees ONLY the labels valid for
-# the already-confirmed Category. This dramatically reduces ambiguity vs. the giant
-# 4-template prompt used in Get-IncidentCategory.
-function Resolve-RootCauseRescue {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)] [string]$Category,
-        [string]$Subcategory,
-        [Parameter(Mandatory)] [string]$AnalystSummary,
-        [string]$ShortDescription,
-        [string]$WorkNotes,
-        [System.Collections.Generic.List[string]]$PrcAllowlist,
-        [System.Collections.Generic.List[string]]$DrcAllowlist,
-        [bool]$NeedPrc = $true,
-        [bool]$NeedDrc = $true
-    )
-
-    try {
-        $prcLines = if ($PrcAllowlist) { ($PrcAllowlist | ForEach-Object { "- $_" }) -join "`n" } else { '' }
-        $drcLines = if ($DrcAllowlist) { ($DrcAllowlist | ForEach-Object { "- $_" }) -join "`n" } else { '' }
-
-        $askPrc = if ($NeedPrc -and $PrcAllowlist -and $PrcAllowlist.Count -gt 0) { @"
-
-VALID POSSIBLE ROOT CAUSE LABELS for Category '$Category' (pick the BEST matching one):
-$prcLines
-"@ } else { '' }
-
-        $askDrc = if ($NeedDrc -and $DrcAllowlist -and $DrcAllowlist.Count -gt 0) { @"
-
-VALID DETAILED ROOT CAUSE HEADINGS for Category '$Category' (pick the BEST matching one):
-$drcLines
-"@ } else { '' }
-
-        $systemPrompt = @"
-You are a strict classification mapper. The ticket has already been confirmed to belong to the Category below. Your job is to pick the SINGLE BEST matching label from each provided list.
-
-Rules:
-1. You MUST pick a label from the list whenever any reasonable semantic match exists. Partial matches are acceptable - pick the closest one.
-2. Copy the chosen label EXACTLY as written, including capitalization, punctuation, parentheses, and special characters. Do not paraphrase, shorten, or reword.
-3. Only output 'Unknown' if the ticket evidence is genuinely unrelated to every label in the list (extremely rare - the ticket has already been classified into this Category, so at least one label almost always applies).
-4. Tie-breaker priority when multiple labels seem plausible: prefer the most specific label over the most generic one.
-5. Use the analyst summary AND the work notes together. The work notes often contain the smoking-gun keyword.
-
-Category: $Category
-Subcategory: $Subcategory
-$askPrc
-$askDrc
-
-Respond in EXACTLY this format, no preamble, no explanation, no markdown:
-PossibleRootCause: <one label copied verbatim from the PRC list>
-DetailedRootCause: <one heading copied verbatim from the DRC list>
-"@
-
-        $userContent = @"
-Short Description: $ShortDescription
-
-Analyst Summary: $AnalystSummary
-
-Cleaned Work Notes (truncated):
-$($WorkNotes -replace '\s+', ' ' | ForEach-Object { if ($_.Length -gt 2000) { $_.Substring(0,2000) } else { $_ } })
-"@
-
-        $requestBody = New-AiRequestBody -SystemPrompt $systemPrompt -UserContent $userContent -TaskType 'Category'
-        $apiKey = if ($Script:Constants.UseClaudeModel) { $Script:Constants.ClaudeApiKey } else { $Script:Constants.AzureOpenAIApiKey }
-        $aiResponse = Invoke-AuthenticatedApiCall -Url (Get-AIEndpoint) -Method POST -RequestBody $requestBody -ApiKey $apiKey -IsClaudeApi:$Script:Constants.UseClaudeModel
-
-        $responseText = if ($Script:Constants.UseClaudeModel) { $aiResponse.content[0].text } else { $aiResponse.choices[0].message.content }
-        $responseText = [string]$responseText
-
-        $prc = $null; $drc = $null
-        if ($responseText -match '(?im)^\s*PossibleRootCause:\s*(.+?)\s*$') { $prc = $matches[1].Trim() -replace '\*+','' }
-        if ($responseText -match '(?im)^\s*DetailedRootCause:\s*(.+?)\s*$')  { $drc = $matches[1].Trim() -replace '\*+','' }
-
-        return [PSCustomObject]@{
-            PossibleRootCause = $prc
-            DetailedRootCause = $drc
-            RawResponse       = $responseText
-        }
-    } catch {
-        Write-ScriptLog "Resolve-RootCauseRescue failed: $($_.Exception.Message)" -Level Warning -Category "RescueClassifier"
-        return [PSCustomObject]@{ PossibleRootCause = $null; DetailedRootCause = $null; RawResponse = $null }
-    }
 }
 
 #endregion
@@ -1011,7 +1308,7 @@ function Save-IncidentsData {
                     -Force | Out-Null
                 
                 Write-ScriptLog "Raw incident data saved to blob: $fileName (Container: $($Script:BlobConfig.DataContainerName))" -Level Success
-                Write-Host "✓ Raw incident data saved to blob: $fileName" -ForegroundColor Green
+                Write-Host ("Raw incident data saved to blob: {0}" -f $fileName) -ForegroundColor Green
                 
                 return $fileName
                 
@@ -1031,14 +1328,14 @@ function Save-IncidentsData {
             Set-Content -Path $filePath -Value $jsonContent -Encoding UTF8
             
             Write-ScriptLog "Raw incident data saved locally: $filePath" -Level Success
-            Write-Host "✓ Raw incident data saved to: $filePath" -ForegroundColor Green
+            Write-Host ("Raw incident data saved to: {0}" -f $filePath) -ForegroundColor Green
             
             return $filePath
         }
         
     } catch {
         Write-ScriptLog "Failed to save incident data: $($_.Exception.Message)" -Level Error
-        Write-Host "✗ Failed to save incident data: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host ("Failed to save incident data: {0}" -f $_.Exception.Message) -ForegroundColor Red
         throw
     }
 }
@@ -1086,7 +1383,7 @@ function Get-StoredIncidents {
                 $incidents = $jsonContent | ConvertFrom-Json
                 
                 Write-ScriptLog "Successfully loaded $($incidents.Count) incidents from blob: $blobName" -Level Success
-                Write-Host "✓ Loaded $($incidents.Count) incidents from blob: $blobName" -ForegroundColor Green
+                Write-Host ("Loaded {0} incidents from blob: {1}" -f $incidents.Count, $blobName) -ForegroundColor Green
                 
                 return $incidents
                 
@@ -1123,14 +1420,14 @@ function Get-StoredIncidents {
             $incidents = $jsonContent | ConvertFrom-Json
             
             Write-ScriptLog "Successfully loaded $($incidents.Count) incidents from stored data" -Level Success
-            Write-Host "✓ Loaded $($incidents.Count) incidents from: $([System.IO.Path]::GetFileName($filePath))" -ForegroundColor Green
+            Write-Host ("Loaded {0} incidents from: {1}" -f $incidents.Count, [System.IO.Path]::GetFileName($filePath)) -ForegroundColor Green
             
             return $incidents
         }
         
     } catch {
         Write-ScriptLog "Failed to load stored incident data: $($_.Exception.Message)" -Level Error
-        Write-Host "✗ Failed to load stored incident data: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host ("Failed to load stored incident data: {0}" -f $_.Exception.Message) -ForegroundColor Red
         throw
     }
 }
@@ -1151,12 +1448,14 @@ function Get-AvailableIncidentFiles {
             if ($blobs.Count -gt 0) {
                 Write-Host "Available incident files in blob storage:" -ForegroundColor Cyan
                 foreach ($blob in $blobs) {
-                    $fileInfo = "  - $($blob.Name) ($(Get-Date $blob.LastModified -Format 'yyyy-MM-dd HH:mm:ss'), $([math]::Round($blob.Length/1KB, 1)) KB)"
+                    $lastModifiedText = Get-Date $blob.LastModified -Format 'yyyy-MM-dd HH:mm:ss'
+                    $sizeKb = [math]::Round($blob.Length / 1KB, 1)
+                    $fileInfo = '  - {0} ({1}, {2} KB)' -f $blob.Name, $lastModifiedText, $sizeKb
                     Write-Host $fileInfo -ForegroundColor Gray
                 }
                 return $blobs
             } else {
-                Write-Host "No incident files found in blob container: $($Script:BlobConfig.DataContainerName)" -ForegroundColor Yellow
+                Write-Host ('No incident files found in blob container: {0}' -f $Script:BlobConfig.DataContainerName) -ForegroundColor Yellow
                 return @()
             }
         } else {
@@ -1167,16 +1466,18 @@ function Get-AvailableIncidentFiles {
                 if ($incidentFiles.Count -gt 0) {
                     Write-Host "Available incident files:" -ForegroundColor Cyan
                     foreach ($file in $incidentFiles) {
-                        $fileInfo = "  - $($file.Name) ($(Get-Date $file.LastWriteTime -Format 'yyyy-MM-dd HH:mm:ss'), $([math]::Round($file.Length/1KB, 1)) KB)"
+                        $lastWriteText = Get-Date $file.LastWriteTime -Format 'yyyy-MM-dd HH:mm:ss'
+                        $sizeKb = [math]::Round($file.Length / 1KB, 1)
+                        $fileInfo = '  - {0} ({1}, {2} KB)' -f $file.Name, $lastWriteText, $sizeKb
                         Write-Host $fileInfo -ForegroundColor Gray
                     }
                     return $incidentFiles
                 } else {
-                    Write-Host "No incident files found in $dataDir" -ForegroundColor Yellow
+                    Write-Host ('No incident files found in {0}' -f $dataDir) -ForegroundColor Yellow
                     return @()
                 }
             } else {
-                Write-Host "Data directory does not exist: $dataDir" -ForegroundColor Yellow
+                Write-Host ('Data directory does not exist: {0}' -f $dataDir) -ForegroundColor Yellow
                 return @()
             }
         }
@@ -1215,9 +1516,12 @@ function Save-RunProcessingArtifact {
             YearWeek = $artifactYearWeek
             ReportPeriod = $ReportPeriod
             DataSource = $DataSource
+            PromptVersions = @{}
             ProcessedTickets = @($Script:ProcessedTickets)
             DetailedSummaries = @($DetailedSummaries)
         }
+
+        $artifact.PromptVersions = if ($Script:PromptVersions) { [hashtable]$Script:PromptVersions } else { @{} }
 
         $jsonContent = $artifact | ConvertTo-Json -Depth 15 -Compress
 
@@ -1262,15 +1566,7 @@ function Get-MergedWeeklyRunData {
     )
 
     try {
-        # Calculate the current week number to filter artifacts
-        $currentWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-            (Get-Date),
-            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-            [System.DayOfWeek]::Monday
-        )
-        $currentYear = (Get-Date).Year
-        $currentYearWeek = "{0:D4}-W{1:D2}" -f $currentYear, $currentWeekNumber
-        Write-ScriptLog "Merging artifacts for current week: $currentYearWeek" -Level Info
+        Write-ScriptLog "Merging artifacts from the last $LookbackDays day(s)" -Level Info
 
         $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $LookbackDays)
         $artifacts = @()
@@ -1307,12 +1603,6 @@ function Get-MergedWeeklyRunData {
                         $artifactYearWeek = "{0:D4}-W{1:D2}" -f $artifactDate.Year, $artifactWeekNum
                     }
                     
-                    # Filter by week: only include artifacts from the current week
-                    if ($artifactYearWeek -and $artifactYearWeek -ne $currentYearWeek) {
-                        Write-ScriptLog "Skipping artifact $($blob.Name) from week $artifactYearWeek (current week: $currentYearWeek)" -Level Info
-                        continue
-                    }
-                    
                     Write-ScriptLog "Including artifact $($blob.Name) - Week: $artifactYearWeek, Tickets: $($artifact.ProcessedTickets.Count)" -Level Info
                     $artifacts += $artifact
                 } finally {
@@ -1339,12 +1629,6 @@ function Get-MergedWeeklyRunData {
                         $artifactYearWeek = "{0:D4}-W{1:D2}" -f $artifactDate.Year, $artifactWeekNum
                     }
                     
-                    # Filter by week: only include artifacts from the current week
-                    if ($artifactYearWeek -and $artifactYearWeek -ne $currentYearWeek) {
-                        Write-ScriptLog "Skipping artifact $($file.Name) from week $artifactYearWeek (current week: $currentYearWeek)" -Level Info
-                        continue
-                    }
-                    
                     Write-ScriptLog "Including artifact $($file.Name) - Week: $artifactYearWeek, Tickets: $($artifact.ProcessedTickets.Count)" -Level Info
                     $artifacts += $artifact
                 }
@@ -1368,13 +1652,6 @@ function Get-MergedWeeklyRunData {
 
                 $converted = [TicketAnalysis]::new([string]$ticket.Number)
                 $converted.Category = [string]$ticket.Category
-                $converted.SubSymptom = [string]$ticket.SubSymptom
-                # New canonical fields (Phase 1) - copy from cache if present
-                $converted.Subcategory       = [string]$ticket.Subcategory
-                $converted.PossibleRootCause = [string]$ticket.PossibleRootCause
-                $converted.DetailedRootCause = [string]$ticket.DetailedRootCause
-                $converted.Service           = if ([string]::IsNullOrWhiteSpace([string]$ticket.Service)) { 'Productivity Tools' } else { [string]$ticket.Service }
-                $converted.Misrouted         = [bool]($converted.Category -eq 'Excluded')
                 $converted.ExclusionReason = [string]$ticket.ExclusionReason
                 $converted.Confidence = [string]$ticket.Confidence
                 $converted.Reasoning = [string]$ticket.Reasoning
@@ -1383,9 +1660,6 @@ function Get-MergedWeeklyRunData {
                 $converted.Type = [string]$ticket.Type
                 $converted.KnowledgeBase = [string]$ticket.KnowledgeBase
                 $converted.OriginalDescription = [string]$ticket.OriginalDescription
-                # Carry through ResolvedAt so Save-CategoryStatisticsToTable can partition
-                # each row to its true ISO week (not the merged-report week).
-                $converted.ResolvedAt = [string]$ticket.ResolvedAt
 
                 [DateTime]$parsedProcessed = [DateTime]::MinValue
                 if ([DateTime]::TryParse([string]$ticket.Processed, [ref]$parsedProcessed)) {
@@ -1457,13 +1731,127 @@ function Filter-IncidentsByResolvedWindow {
         }
     }
 
-    Write-ScriptLog "Applied resolved_at lookback filter ($LookbackHours hours): $($filtered.Count)/$($Incidents.Count) incidents retained" -Level Info
+    Write-ScriptLog ("Applied resolved_at lookback filter ({0} hours): {1}/{2} incidents retained" -f $LookbackHours, $filtered.Count, $Incidents.Count) -Level Info
     return @($filtered)
 }
 
 #endregion
 
 #region Data Processing Functions
+
+function Invoke-FallbackCategorization {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$ShortDescription,
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$AiCategory = '',
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyString()]
+        [string]$AiConfidence = '',
+
+        [Parameter(Mandatory = $false)]
+        [AllowEmptyCollection()]
+        [array]$CategoryRules = @(),
+
+        [Parameter(Mandatory = $false)]
+        [string]$Reasoning = '',
+
+        [Parameter(Mandatory = $false)]
+        [string]$Evidence = '',
+
+        [Parameter(Mandatory = $false)]
+        [string]$ResolutionSummary = ''
+    )
+
+    $normalizedConfidence = ([string]$AiConfidence).Trim()
+    if ([string]::IsNullOrWhiteSpace($normalizedConfidence)) {
+        $normalizedConfidence = 'Low'
+    }
+
+    $normalizedCategory = ([string]$AiCategory).Trim()
+    if ([string]::IsNullOrWhiteSpace($normalizedCategory)) {
+        $normalizedCategory = 'Other / Miscellaneous'
+    }
+
+    # Keep AI result when confidence is already reliable
+    if ($normalizedConfidence -eq 'High' -or ($normalizedConfidence -eq 'Medium' -and $normalizedCategory -ne 'Other / Miscellaneous')) {
+        return [PSCustomObject]@{
+            Category = $normalizedCategory
+            Confidence = $normalizedConfidence
+            Reasoning = $Reasoning
+            Evidence = $Evidence
+            ResolutionSummary = $ResolutionSummary
+            FallbackUsed = $false
+        }
+    }
+
+    if (-not $CategoryRules -or [string]::IsNullOrWhiteSpace($ShortDescription)) {
+        return [PSCustomObject]@{
+            Category = $normalizedCategory
+            Confidence = $normalizedConfidence
+            Reasoning = $Reasoning
+            Evidence = $Evidence
+            ResolutionSummary = $ResolutionSummary
+            FallbackUsed = $false
+        }
+    }
+
+    $bestRule = $null
+    $bestPriority = [int]::MinValue
+    $bestMatchedKeywords = @()
+
+    foreach ($rule in $CategoryRules) {
+        if (-not $rule -or -not $rule.Name -or -not $rule.Keywords) {
+            continue
+        }
+
+        $matchedKeywords = @()
+        foreach ($keyword in $rule.Keywords) {
+            $kw = [string]$keyword
+            if ([string]::IsNullOrWhiteSpace($kw)) {
+                continue
+            }
+
+            if ($ShortDescription.IndexOf($kw, [System.StringComparison]::OrdinalIgnoreCase) -ge 0) {
+                $matchedKeywords += $kw
+            }
+        }
+
+        if ($matchedKeywords.Count -gt 0) {
+            $priority = if ($null -ne $rule.Priority) { [int]$rule.Priority } else { 0 }
+
+            if (-not $bestRule -or $priority -gt $bestPriority -or ($priority -eq $bestPriority -and $matchedKeywords.Count -gt $bestMatchedKeywords.Count)) {
+                $bestRule = $rule
+                $bestPriority = $priority
+                $bestMatchedKeywords = $matchedKeywords
+            }
+        }
+    }
+
+    if ($bestRule) {
+        return [PSCustomObject]@{
+            Category = [string]$bestRule.Name
+            Confidence = 'Low'
+            Reasoning = "Fallback: AI returned ${normalizedCategory}/${normalizedConfidence}. Keyword rule matched: $($bestRule.Name)"
+            Evidence = ($bestMatchedKeywords -join ', ')
+            ResolutionSummary = $ResolutionSummary
+            FallbackUsed = $true
+        }
+    }
+
+    return [PSCustomObject]@{
+        Category = $normalizedCategory
+        Confidence = $normalizedConfidence
+        Reasoning = $Reasoning
+        Evidence = $Evidence
+        ResolutionSummary = $ResolutionSummary
+        FallbackUsed = $false
+    }
+}
 
 function Invoke-TicketProcessing {
     [CmdletBinding()]
@@ -1492,11 +1880,31 @@ function Invoke-TicketProcessing {
             "AI Summary" = $summary
         }
         $categoryInfo = Get-IncidentCategory -IncidentData $incidentData
+
+        # Optional fallback: if AI returns low confidence or Other/Misc, try keyword rules
+        $fallbackCategoryRules = @()
+        $categoryRulesVar = Get-Variable -Name CategoryRules -Scope Script -ErrorAction SilentlyContinue
+        if ($categoryRulesVar -and $categoryRulesVar.Value) {
+            $fallbackCategoryRules = @($categoryRulesVar.Value)
+        }
+
+        $fallbackCategoryInfo = Invoke-FallbackCategorization `
+            -ShortDescription ([string]$Incident.short_description) `
+            -AiCategory ([string]$categoryInfo.primary_category) `
+            -AiConfidence ([string]$categoryInfo.confidence_level) `
+            -CategoryRules $fallbackCategoryRules `
+            -Reasoning ([string]$categoryInfo.reasoning) `
+            -Evidence ([string]$categoryInfo.key_evidence) `
+            -ResolutionSummary ([string]$categoryInfo.resolution_summary)
+
+        if ($fallbackCategoryInfo.FallbackUsed) {
+            Write-ScriptLog "Fallback categorization used for $($Incident.number): $($fallbackCategoryInfo.Category) (Evidence: $($fallbackCategoryInfo.Evidence))" -Level Warning -Category "Categorization"
+        }
         
         $ticket = [TicketAnalysis]::new($Incident.number)
         
         # Clean up category - should be a short category name, not a long AI response
-        $rawCategory = $categoryInfo.primary_category
+        $rawCategory = $fallbackCategoryInfo.Category
         if ($rawCategory -and $rawCategory.Length -gt 100) {
             # Category is too long - likely parsing failed, extract first line only
             $rawCategory = ($rawCategory -split "`n")[0].Trim()
@@ -1504,80 +1912,15 @@ function Invoke-TicketProcessing {
         # Remove any markdown formatting from category
         $rawCategory = $rawCategory -replace '\*+', ''
         
-        # STRICT MD ALLOWLIST: coerce category to a canonical label from TicketCategorisation.md
-        $canonicalCategory = Get-CanonicalLabel -Raw $rawCategory -Allowlist $Script:CanonicalLabels.Categories -Fallback 'Other / Miscellaneous'
-        if ($canonicalCategory -ne $rawCategory) {
-            Write-ScriptLog "Coerced category '$rawCategory' -> '$canonicalCategory' (MD allowlist)" -Level Info -Category "Categorization"
-        }
-        $ticket.Category = $canonicalCategory
-
-        # Clean sub-symptom: strip bold markers and keep only the first line if AI emitted extras
-        $rawSubSymptom = [string]$categoryInfo.sub_symptom
-        if ($rawSubSymptom) {
-            $rawSubSymptom = ($rawSubSymptom -split "`n")[0].Trim()
-            $rawSubSymptom = $rawSubSymptom -replace '\*+', ''
-        }
-        $ticket.SubSymptom = $rawSubSymptom
-
-        # Canonical subcategory (per-product allowlist from TrendSubCategorisation.md)
-        $subAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.Subcategories -Product $canonicalCategory
-        $ticket.Subcategory = Get-CanonicalLabel -Raw $rawSubSymptom -Allowlist $subAllowlist -Fallback ''
-
-        # Canonical Possible Root Cause (per-product allowlist from PossibleRootCause.md)
-        $prcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.PossibleRootCauses -Product $canonicalCategory
-        $rawPrc = [string]$categoryInfo.possible_root_cause
-        $ticket.PossibleRootCause = Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback 'Unknown'
-
-        # Canonical Detailed Root Cause (per-product allowlist from DetailedRootCause.md)
-        $drcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.DetailedRootCauses -Product $canonicalCategory
-        $ticket.DetailedRootCause = Get-CanonicalLabel -Raw ([string]$categoryInfo.detailed_root_cause) -Allowlist $drcAllowlist -Fallback 'Unknown'
-
-        # Stage 2 rescue: if either PRC or DRC came back Unknown, ask the AI to map again
-        # using ONLY the narrow per-category allowlists. This trades 1 extra small AI call
-        # for a much lower Unknown rate without touching the source-of-truth MD files.
-        $needPrcRescue = ($ticket.PossibleRootCause -eq 'Unknown' -and $prcAllowlist -and $prcAllowlist.Count -gt 0)
-        $needDrcRescue = ($ticket.DetailedRootCause -eq 'Unknown' -and $drcAllowlist -and $drcAllowlist.Count -gt 0)
-        if ($Script:Config.Rescue.Enabled -and ($needPrcRescue -or $needDrcRescue)) {
-            Write-ScriptLog "RESCUE [$($Incident.number)] invoking narrow re-classifier (needPrc=$needPrcRescue needDrc=$needDrcRescue)" -Level Info -Category "RescueClassifier"
-            $rescue = Resolve-RootCauseRescue `
-                -Category          $canonicalCategory `
-                -Subcategory       $ticket.Subcategory `
-                -AnalystSummary    ([string]$summary) `
-                -ShortDescription  ([string]$Incident.short_description) `
-                -WorkNotes         ([string]$cleanedNotes) `
-                -PrcAllowlist      $prcAllowlist `
-                -DrcAllowlist      $drcAllowlist `
-                -NeedPrc           $needPrcRescue `
-                -NeedDrc           $needDrcRescue
-            if ($needPrcRescue -and $rescue.PossibleRootCause) {
-                $coerced = Get-CanonicalLabel -Raw $rescue.PossibleRootCause -Allowlist $prcAllowlist -Fallback 'Unknown'
-                if ($coerced -ne 'Unknown') {
-                    Write-ScriptLog "RESCUE [$($Incident.number)] PRC '$($ticket.PossibleRootCause)' -> '$coerced' (raw='$($rescue.PossibleRootCause)')" -Level Info -Category "RescueClassifier"
-                    $ticket.PossibleRootCause = $coerced
-                }
-            }
-            if ($needDrcRescue -and $rescue.DetailedRootCause) {
-                $coerced = Get-CanonicalLabel -Raw $rescue.DetailedRootCause -Allowlist $drcAllowlist -Fallback 'Unknown'
-                if ($coerced -ne 'Unknown') {
-                    Write-ScriptLog "RESCUE [$($Incident.number)] DRC '$($ticket.DetailedRootCause)' -> '$coerced' (raw='$($rescue.DetailedRootCause)')" -Level Info -Category "RescueClassifier"
-                    $ticket.DetailedRootCause = $coerced
-                }
-            }
-        }
-
-        # Service is hardcoded for this runbook (separate runbook will handle Email and Calendaring)
-        $ticket.Service   = 'Productivity Tools'
-        $ticket.Misrouted = ($ticket.Category -eq 'Excluded')
-
+        $ticket.Category = $rawCategory
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
-        $ticket.Confidence = $categoryInfo.confidence_level
-        $ticket.Reasoning = $categoryInfo.reasoning
-        $ticket.Evidence = $categoryInfo.key_evidence
-        $ticket.Resolution = $categoryInfo.resolution_summary
+        $ticket.Confidence = $fallbackCategoryInfo.Confidence
+        $ticket.Reasoning = $fallbackCategoryInfo.Reasoning
+        $ticket.Evidence = $fallbackCategoryInfo.Evidence
+        $ticket.Resolution = $fallbackCategoryInfo.ResolutionSummary
         $ticket.Type = $categoryInfo.how_do_i_or_error
         $ticket.KnowledgeBase = $categoryInfo.kb_provided
         $ticket.OriginalDescription = $Incident.short_description
-        $ticket.ResolvedAt = [string]$Incident.resolved_at
         
         $Script:ProcessedTickets.Add($ticket)
         
@@ -1651,7 +1994,7 @@ function Initialize-StatisticsTable {
         if (-not $table) {
             Write-ScriptLog "ERROR: Statistics table '$tableName' does not exist!" -Level Error
             Write-ScriptLog "Please run Setup-StatisticsTable.ps1 to create the table before running the analyzer." -Level Error
-            Write-Host "✗ Statistics table '$tableName' not found. Run Setup-StatisticsTable.ps1 first." -ForegroundColor Red
+            Write-Host ("Statistics table '{0}' not found. Run Setup-StatisticsTable.ps1 first." -f $tableName) -ForegroundColor Red
             return $null
         }
         
@@ -1660,6 +2003,122 @@ function Initialize-StatisticsTable {
     } catch {
         Write-ScriptLog "Failed to access statistics table: $($_.Exception.Message)" -Level Error
         return $null
+    }
+}
+
+function Test-CloudTableEntityExists {
+    <#
+    .SYNOPSIS
+        Checks whether a specific entity exists in an Azure CloudTable.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $Table,
+
+        [Parameter(Mandatory)]
+        [string]$PartitionKey,
+
+        [Parameter(Mandatory)]
+        [string]$RowKey
+    )
+
+    $partitionFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition(
+        'PartitionKey',
+        [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,
+        $PartitionKey
+    )
+    $rowFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::GenerateFilterCondition(
+        'RowKey',
+        [Microsoft.Azure.Cosmos.Table.QueryComparisons]::Equal,
+        $RowKey
+    )
+
+    $combinedFilter = [Microsoft.Azure.Cosmos.Table.TableQuery]::CombineFilters(
+        $partitionFilter,
+        [Microsoft.Azure.Cosmos.Table.TableOperators]::And,
+        $rowFilter
+    )
+
+    $query = [Microsoft.Azure.Cosmos.Table.TableQuery]::new()
+    $query.FilterString = $combinedFilter
+    $query.TakeCount = 1
+
+    return ($null -ne ($Table.ExecuteQuery($query) | Select-Object -First 1))
+}
+
+function Set-CloudTableEntity {
+    <#
+    .SYNOPSIS
+        Inserts or replaces an entity in an Azure CloudTable without AzTable helper cmdlets.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        $Table,
+
+        [Parameter(Mandatory)]
+        [string]$PartitionKey,
+
+        [Parameter(Mandatory)]
+        [string]$RowKey,
+
+        [Parameter(Mandatory)]
+        [hashtable]$Properties
+    )
+
+    $entity = [Microsoft.Azure.Cosmos.Table.DynamicTableEntity]::new($PartitionKey, $RowKey)
+
+    foreach ($propertyName in $Properties.Keys) {
+        if ($propertyName -in @('Year', 'WeekNumber') -and $Properties[$propertyName] -match '^\d+$') {
+            $entity.Properties[$propertyName] = [Microsoft.Azure.Cosmos.Table.EntityProperty]::new([int]$Properties[$propertyName])
+        } else {
+            $entity.Properties[$propertyName] = [Microsoft.Azure.Cosmos.Table.EntityProperty]::new([string]$Properties[$propertyName])
+        }
+    }
+
+    $operation = [Microsoft.Azure.Cosmos.Table.TableOperation]::InsertOrReplace($entity)
+    $Table.Execute($operation) | Out-Null
+}
+
+function Test-TicketAlreadyProcessedThisWeek {
+    <#
+    .SYNOPSIS
+        Checks whether a ticket already exists in Azure Table Storage for the current YearWeek partition.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string]$TicketNumber
+    )
+
+    if (-not $Script:IsAzureAutomation) {
+        return $false
+    }
+
+    if ([string]::IsNullOrWhiteSpace($TicketNumber)) {
+        return $false
+    }
+
+    try {
+        $cloudTable = Initialize-StatisticsTable
+        if (-not $cloudTable) {
+            return $false
+        }
+
+        $currentDate = Get-Date
+        $weekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
+            $currentDate,
+            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
+            [System.DayOfWeek]::Monday
+        )
+        $yearWeekString = "{0:D4}-W{1:D2}" -f $currentDate.Year, $weekNumber
+
+        Write-ScriptLog "Dedup check running for each ticket: $TicketNumber (Partition: $yearWeekString)" -Level Info -Category "Processing"
+        return (Test-CloudTableEntityExists -Table $cloudTable -PartitionKey $yearWeekString -RowKey $TicketNumber)
+    } catch {
+        Write-ScriptLog "Failed dedup lookup for ${TicketNumber}: $($_.Exception.Message)" -Level Warning -Category "Configuration"
+        return $false
     }
 }
 
@@ -1710,80 +2169,43 @@ function Save-CategoryStatisticsToTable {
             return
         }
         
-        # Fallback date components (used only if a ticket has no parseable resolved_at)
-        $fallbackDateString = $ReportDate.ToString("yyyy-MM-dd")
-        $fallbackYear = $ReportDate.Year
-        $fallbackWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
+        # Calculate date components for partitioning
+        $dateString = $ReportDate.ToString("yyyy-MM-dd")
+        $year = $ReportDate.Year
+        $weekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
             $ReportDate, 
             [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, 
             [System.DayOfWeek]::Monday
         )
-        $fallbackYearWeek = "{0:D4}-W{1:D2}" -f $fallbackYear, $fallbackWeekNumber
+        $yearWeekString = "{0:D4}-W{1:D2}" -f $year, $weekNumber
         
-        Write-ScriptLog "Saving $($Script:ProcessedTickets.Count) incident records to Azure Table (per-ticket week partition; fallback Week=$fallbackYearWeek)" -Level Info
+        Write-ScriptLog "Saving $($Script:ProcessedTickets.Count) incident records to Azure Table - Date: $dateString, Week: $yearWeekString" -Level Info
         
         $savedCount = 0
         $errorCount = 0
         
         foreach ($ticket in $Script:ProcessedTickets) {
             try {
-                # Per-ticket partitioning: use the ticket's own resolved_at so cross-week runs
-                # (e.g. backfills, Monday catch-ups) land in the correct week partition.
-                $resolvedDt = [DateTime]::MinValue
-                $useFallback = $true
-                if (-not [string]::IsNullOrWhiteSpace($ticket.ResolvedAt)) {
-                    if ([DateTime]::TryParse($ticket.ResolvedAt, [ref]$resolvedDt)) {
-                        $useFallback = $false
-                    }
-                }
-                if ($useFallback) {
-                    $dateString     = $fallbackDateString
-                    $year           = $fallbackYear
-                    $weekNumber     = $fallbackWeekNumber
-                    $yearWeekString = $fallbackYearWeek
-                } else {
-                    $dateString     = $resolvedDt.ToString("yyyy-MM-dd")
-                    $year           = $resolvedDt.Year
-                    $weekNumber     = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-                        $resolvedDt,
-                        [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-                        [System.DayOfWeek]::Monday
-                    )
-                    $yearWeekString = "{0:D4}-W{1:D2}" -f $year, $weekNumber
-                }
-                
-                # Create entity properties for individual incident.
-                # Schema source-of-truth: this is what the web app's Trends + Ops Report tabs read.
+                # Create entity properties for individual incident
                 $entityProperties = @{
-                    "Category"          = [string]$ticket.Category
-                    "Subcategory"       = [string]$ticket.Subcategory
-                    "PossibleRootCause" = [string]$ticket.PossibleRootCause
-                    "DetailedRootCause" = [string]$ticket.DetailedRootCause
-                    "Service"           = [string]$ticket.Service
-                    "Misrouted"         = [bool]$ticket.Misrouted
-                    "Date"              = [string]$dateString
-                    "YearWeek"          = [string]$yearWeekString
-                    "Year"              = [int]$year
-                    "WeekNumber"        = [int]$weekNumber
-                    "ReportBlobName"    = [string]$ReportBlobName
-                    # Free-form AI rationale + confidence shown in the web Ops report
-                    # incident-detail modal alongside the canonical DetailedRootCause.
-                    # AIAnalysis is sourced from $ticket.Reasoning (the AI's narrative);
-                    # cap to keep Azure Table single-property size sane (64 KiB hard limit).
-                    "AIAnalysis"        = if ([string]::IsNullOrWhiteSpace([string]$ticket.Reasoning)) { '' } elseif (([string]$ticket.Reasoning).Length -gt 4000) { ([string]$ticket.Reasoning).Substring(0, 4000) + '...' } else { [string]$ticket.Reasoning }
-                    "Confidence"        = [string]$ticket.Confidence
+                    "Category"       = [string]$ticket.Category
+                    "Date"           = [string]$dateString
+                    "YearWeek"       = [string]$yearWeekString
+                    "Year"           = [int]$year
+                    "WeekNumber"     = [int]$weekNumber
+                    "ReportBlobName" = [string]$ReportBlobName
                 }
                 
                 # Save incident record
-                # PartitionKey = YearWeek (derived from ticket.ResolvedAt; falls back to $ReportDate)
+                # PartitionKey = YearWeek for efficient weekly queries
                 # RowKey = Incident ID (unique)
-                Add-AzTableRow -Table $cloudTable `
+                Set-CloudTableEntity -Table $cloudTable `
                     -PartitionKey $yearWeekString `
                     -RowKey $ticket.Number `
-                    -Property $entityProperties `
-                    -UpdateExisting | Out-Null
+                    -Properties $entityProperties
                 
                 $savedCount++
+                Write-ScriptLog "Table row written successfully for each processed ticket: $($ticket.Number)" -Level Info -Category "Storage"
                 
             } catch {
                 $errorCount++
@@ -1793,16 +2215,16 @@ function Save-CategoryStatisticsToTable {
         
         if ($errorCount -eq 0) {
             Write-ScriptLog "Successfully saved $savedCount incident records to Azure Table" -Level Success
-            Write-Host "✓ Statistics saved: $savedCount incidents to table $($Script:BlobConfig.StatisticsTableName)" -ForegroundColor Green
+            Write-Host ("Statistics saved: {0} incidents to table {1}" -f $savedCount, $Script:BlobConfig.StatisticsTableName) -ForegroundColor Green
         } else {
             Write-ScriptLog "Saved $savedCount incidents with $errorCount errors" -Level Warning
-            Write-Host "! Statistics: $savedCount saved, $errorCount errors" -ForegroundColor Yellow
+            Write-Host ("Statistics: {0} saved, {1} errors" -f $savedCount, $errorCount) -ForegroundColor Yellow
         }
         
     } catch {
         Write-ScriptLog "Failed to save statistics to Azure Table: $($_.Exception.Message)" -Level Error
         Write-ScriptLog "Stack Trace: $($_.ScriptStackTrace)" -Level Error
-        Write-Host "✗ Failed to save statistics: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host ("Failed to save statistics: {0}" -f $_.Exception.Message) -ForegroundColor Red
         # Don't throw - statistics saving shouldn't break the main workflow
     }
 }
@@ -1855,7 +2277,7 @@ function New-HtmlTicketReport {
         [array]$DetailedSummaries = @()
     )
     
-    Write-ScriptLog "Generating HTML report for EUC team with $($CategoryData.Count) categories" -Level Info
+    Write-ScriptLog "Generating HTML report for Outlook team with $($CategoryData.Count) categories" -Level Info
     
     $totalTickets = ($CategoryData | Measure-Object -Property Count -Sum).Sum
     $totalCategories = $CategoryData.Count
@@ -1871,6 +2293,24 @@ function New-HtmlTicketReport {
     $categoryTableHtml = New-CategoryTableHtml -CategoryData $CategoryData
     $incidentDetailsHtml = New-DetailsTableHtml -DetailedSummaries $DetailedSummaries -CategoryLookup $categoryLookup -TicketType 'Incident' -ProcessedTicketsData $Script:ProcessedTickets
     $serviceRequestDetailsHtml = New-DetailsTableHtml -DetailedSummaries $DetailedSummaries -CategoryLookup $categoryLookup -TicketType 'ServiceRequest' -ProcessedTicketsData $Script:ProcessedTickets
+
+    $promptVersionRows = @()
+    if ($Script:PromptVersions -and $Script:PromptVersions.Keys.Count -gt 0) {
+        foreach ($promptKey in ($Script:PromptVersions.Keys | Sort-Object)) {
+            $promptVersionRows += "<tr><td style='font-weight:600;color:#0071c5;'>$promptKey</td><td>$($Script:PromptVersions[$promptKey])</td></tr>"
+        }
+    } else {
+        $promptVersionRows += "<tr><td colspan='2'>Not captured</td></tr>"
+    }
+    $analysisMetadataHtml = @"
+        <div class='section'>
+            <h2>Analysis metadata</h2>
+            <table>
+                <tr><th>Prompt Template</th><th>Version (LastModified UTC)</th></tr>
+                $($promptVersionRows -join "`n")
+            </table>
+        </div>
+"@
     
     $htmlTemplate = @"
 <!DOCTYPE html>
@@ -1878,7 +2318,7 @@ function New-HtmlTicketReport {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>EUC Resolved Tickets AI Categorization Report</title>
+    <title>Outlook Service Health — Weekly Report</title>
     <style>
         body { margin:0; padding:20px; background:#f5f7fa; font-family:'Segoe UI',sans-serif; }
         .container { max-width:1200px; margin:0 auto; background:white; border-radius:8px; box-shadow:0 4px 12px rgba(0,0,0,0.1); overflow:hidden; }
@@ -1903,7 +2343,7 @@ function New-HtmlTicketReport {
 <body>
     <div class="container">
         <div class="header">
-            <h1>EUC Resolved Tickets AI Categorization</h1>
+            <h1>Outlook Service Health — Weekly Report</h1>
             <div class="subtitle">Analysis Period: $Script:reportperiod</div>
         </div>
         <div class="stats">
@@ -1913,24 +2353,25 @@ function New-HtmlTicketReport {
             </div>
             <div class="stat">
                 <div class="stat-value">$totalCategories</div>
-                <div class="stat-label">Strict Categories Applied</div>
+                <div class="stat-label">Root Cause Categories Applied</div>
             </div>
         </div>
         <div class="section">
-            <h2 id="category-summary">Strict Category Analysis Summary</h2>
+            <h2 id="category-summary">Root Cause Category Analysis Summary</h2>
             $categoryTableHtml
         </div>
         $incidentDetailsHtml
         $serviceRequestDetailsHtml
+        $analysisMetadataHtml
         <div class="footer">
-            Generated by EUC AI Categorization System • $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
+            Generated by Outlook AI Categorization System - $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')
         </div>
     </div>
 </body>
 </html>
 "@
     
-    Write-ScriptLog "HTML report generated successfully for EUC team ($(($htmlTemplate.Length / 1024).ToString('N1')) KB)" -Level Success
+    Write-ScriptLog ("HTML report generated successfully for Outlook team ({0} KB)" -f (($htmlTemplate.Length / 1024).ToString('N1'))) -Level Success
     return $htmlTemplate
 }
 
@@ -1955,7 +2396,7 @@ function New-CategoryTableHtml {
 <table>
     <thead>
         <tr>
-            <th style="width:35%;">STRICT CATEGORY</th>
+            <th style="width:35%;">ROOT CAUSE CATEGORY</th>
             <th style="width:10%;">COUNT</th>
             <th style="width:55%;">TICKET NUMBERS</th>
         </tr>
@@ -1965,7 +2406,7 @@ function New-CategoryTableHtml {
         <tr class="total-row">
             <td>TOTAL PROCESSED</td>
             <td style="text-align:center;">$totalTickets</td>
-            <td style="font-style:italic;">All resolved EUC tickets categorized</td>
+            <td style="font-style:italic;">All resolved Outlook tickets categorized</td>
         </tr>
     </tbody>
 </table>
@@ -1996,24 +2437,24 @@ function New-DetailsTableHtml {
     if ($filteredSummaries.Count -eq 0) { return "" }
     
     $detailRows = foreach ($summary in $filteredSummaries) {
-        $category = $CategoryLookup[$summary.IncidentNumber] ?? "Unknown"
-        $ticketRecord = if ($ProcessedTicketsData.Count -gt 0) {
-            $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
-        } else { $null }
-
+        $category = $CategoryLookup[$summary.IncidentNumber]
+        if ([string]::IsNullOrWhiteSpace([string]$category)) {
+            $category = "Unknown"
+        }
+        
         # For Excluded tickets, append the exclusion reason below the category in the detail row
-        if ($category -eq 'Excluded' -and $ticketRecord -and $ticketRecord.ExclusionReason) {
-            $category = "Excluded<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>$($ticketRecord.ExclusionReason)</span>"
-        } elseif ($ticketRecord -and $ticketRecord.SubSymptom) {
-            # Show Sub-symptom on a second line beneath the strict category
-            $category = "$category<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>Sub-symptom: $($ticketRecord.SubSymptom)</span>"
+        if ($category -eq 'Excluded' -and $ProcessedTicketsData.Count -gt 0) {
+            $ticketData = $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
+            if ($ticketData -and $ticketData.ExclusionReason) {
+                $category = "Excluded<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>$($ticketData.ExclusionReason)</span>"
+            }
         }
         
         $formattedSummary = $summary.SummarisedNotes -replace "`r`n|`n|`r", "<br>"
         $formattedSummary = $formattedSummary -replace "Key Actions:", "<strong style='color:#0071c5;'>Key Actions:</strong>"
         $formattedSummary = $formattedSummary -replace "Critical Details:", "<strong style='color:#0071c5;'>Critical Details:</strong>"
         $formattedSummary = $formattedSummary -replace "Work Notes:", "<strong style='color:#0071c5;'>Work Notes:</strong>"
-        $formattedSummary = $formattedSummary -replace "•", "&bull;"
+        $formattedSummary = $formattedSummary -replace "â€¢", "&bull;"
         
         if ($formattedSummary -notmatch "^<strong.*?>Problem:</strong>") {
             $formattedSummary = "<strong style='color:#0071c5;'>Problem:</strong> " + $formattedSummary
@@ -2023,7 +2464,10 @@ function New-DetailsTableHtml {
         if ($ProcessedTicketsData.Count -gt 0) {
             $ticketAnalysis = $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
             if ($ticketAnalysis -and $ticketAnalysis.Reasoning) {
-                $confidenceLevel = $ticketAnalysis.Confidence ?? "Unknown"
+                $confidenceLevel = $ticketAnalysis.Confidence
+                if ([string]::IsNullOrWhiteSpace([string]$confidenceLevel)) {
+                    $confidenceLevel = "Unknown"
+                }
                 $reasoning = $ticketAnalysis.Reasoning
                 
                 # Set colors based on confidence level
@@ -2069,9 +2513,9 @@ $reasoning
     
     # Generate section title and headers based on ticket type
     $sectionTitle = if ($TicketType -eq 'Incident') { 
-        "Detailed EUC Incident Analysis" 
+        "Detailed Outlook Incident Analysis" 
     } else { 
-        "Detailed EUC Service Request Analysis" 
+        "Detailed Outlook Service Request Analysis" 
     }
     
     $headerLabel = if ($TicketType -eq 'Incident') { 
@@ -2087,7 +2531,7 @@ $reasoning
                 <thead>
                     <tr>
                         <th style="width:12%;">$headerLabel</th>
-                        <th style="width:18%;">STRICT CATEGORY</th>
+                        <th style="width:18%;">ROOT CAUSE CATEGORY</th>
                         <th style="width:55%;">DETAILED SUMMARY</th>
                         <th style="width:15%;">SERVICENOW LINK</th>
                     </tr>
@@ -2116,7 +2560,7 @@ function Send-ReportWebhook {
         [int]$RetryAttempts = $Script:Config.Webhook.RetryAttempts
     )
     
-    Write-ScriptLog "Sending HTML report to webhook for email delivery ($(($HtmlContent.Length / 1024).ToString('N1')) KB)" -Level Info
+    Write-ScriptLog ("Sending HTML report to webhook for email delivery ({0} KB)" -f (($HtmlContent.Length / 1024).ToString('N1'))) -Level Info
     
     if (-not ($WebhookUrl -match "^https://")) {
         throw "Invalid webhook URL format - must start with https://"
@@ -2171,203 +2615,68 @@ function Send-ReportWebhook {
 
 #region Configuration
 # Load prompt templates with consolidated logging
-# Productivity Tools: blob/file names carry the _ProductivityTools suffix but
-# the hashtable keys are kept short so existing references in this script work.
 $Script:PromptTemplates = @{}
-$templateMap = [ordered]@{
-    WorkNotesCleanup       = "WorkNotesCleanup_ProductivityTools"
-    WorkNotesSummary       = "WorkNotesSummary_ProductivityTools"
-    TicketCategorisation   = "TicketCategorisation_ProductivityTools"
-    EnvironmentContext     = "EnvironmentContext_ProductivityTools"
-    TrendSubCategorisation = "TrendSubCategorisation_ProductivityTools"
-    PossibleRootCause      = "PossibleRootCause_ProductivityTools"
-    DetailedRootCause      = "DetailedRootCause_ProductivityTools"
+$Script:PromptVersions = @{}
+$promptProfileSuffix = ""
+if ($Script:IsAzureAutomation) {
+    $promptProfileSuffix = Get-AutomationVariable -Name "PromptProfileSuffix" -ErrorAction SilentlyContinue
+} elseif ($Script:LocalConfig -and $Script:LocalConfig.PromptProfileSuffix) {
+    $promptProfileSuffix = $Script:LocalConfig.PromptProfileSuffix
 }
+
+$promptProfileSuffix = [string]$promptProfileSuffix
+if ($promptProfileSuffix) {
+    Write-ScriptLog "Prompt profile suffix enabled: '$promptProfileSuffix'" -Level Info -Category "Configuration"
+}
+
+$requiredFiles = @("WorkNotesCleanup", "WorkNotesSummary", "TicketCategorisation", "EnvironmentContext")
 $loadedCount = 0
 $failedFiles = @()
 
-foreach ($key in $templateMap.Keys) {
-    $blobName = $templateMap[$key]
+foreach ($file in 
+$requiredFiles) {
     try {
-        $Script:PromptTemplates[$key] = Get-BlobMarkdownContent -FileName $blobName
+        $resolvedPromptFile = "$file$promptProfileSuffix"
+        $loadedPromptBlobName = $resolvedPromptFile
+        try {
+            $Script:PromptTemplates[$file] = Get-BlobMarkdownContent -FileName $resolvedPromptFile
+        } catch {
+            if ($promptProfileSuffix) {
+                Write-ScriptLog "Falling back to default prompt template '$file'" -Level Warning -Category "Configuration"
+                $Script:PromptTemplates[$file] = Get-BlobMarkdownContent -FileName $file
+                $loadedPromptBlobName = $file
+            } else {
+                throw
+            }
+        }
+
+        # Capture prompt version metadata (LastModified UTC) for reproducibility.
+        if ($Script:IsAzureAutomation) {
+            $storageContext = Get-StorageContext
+            $blobName = if ($loadedPromptBlobName.EndsWith('.md')) { $loadedPromptBlobName } else { "$loadedPromptBlobName.md" }
+            $promptBlob = Get-AzStorageBlob -Container $Script:BlobConfig.PromptContainerName -Blob $blobName -Context $storageContext -ErrorAction Stop
+            $Script:PromptVersions[$file] = $promptBlob.LastModified.UtcDateTime.ToString('o')
+        } else {
+            $Script:PromptVersions[$file] = (Get-Date).ToUniversalTime().ToString('o')
+        }
+
         $loadedCount++
     } catch {
-        $failedFiles += $blobName
-        Write-Host "✗ Failed to load: $blobName - $($_.Exception.Message)" -ForegroundColor Red
+        $failedFiles += $file
+        Write-Host ("Failed to load: {0} - {1}" -f $file, $_.Exception.Message) -ForegroundColor Red
     }
 }
 
-if ($loadedCount -eq $templateMap.Count) {
-    Write-Host "✓ Successfully loaded all $loadedCount Productivity Tools prompt templates" -ForegroundColor Green
+if ($Script:PromptTemplates.EnvironmentContext -and -not $Script:PromptTemplates.IntuneEnvironmentContext) {
+    # Keep compatibility with existing prompt composition code.
+    $Script:PromptTemplates.IntuneEnvironmentContext = $Script:PromptTemplates.EnvironmentContext
+}
+
+if ($loadedCount -eq $requiredFiles.Count) {
+    Write-Host ("Successfully loaded all {0} prompt templates" -f $loadedCount) -ForegroundColor Green
 } else {
-    Write-Host "⚠ Loaded $loadedCount/$($templateMap.Count) prompt templates. Failed: $($failedFiles -join ', ')" -ForegroundColor Yellow
+    Write-Host ("Loaded {0}/{1} prompt templates. Failed: {2}" -f $loadedCount, $requiredFiles.Count, ($failedFiles -join ', ')) -ForegroundColor Yellow
 }
-
-#region Canonical MD Allowlists
-# Parses the 4 reference markdown files into hashtables of canonical labels.
-# This is what enforces "the MD file is the single source of truth" for
-# Category, Subcategory, PossibleRootCause, and DetailedRootCause assignment.
-# AI output is later coerced against these lists; anything not matching is set to "Unknown".
-
-function Get-CanonicalLabelsFromTemplates {
-    [CmdletBinding()]
-    param()
-
-    $result = @{
-        Categories          = New-Object System.Collections.Generic.List[string]
-        Subcategories       = @{}   # product => list of subcategory labels
-        PossibleRootCauses  = @{}   # product => list of root-cause labels
-        DetailedRootCauses  = @{}   # product => list of detailed entry headings
-    }
-
-    # --- Categories: bold-line product headers in TicketCategorisation ("**Microsoft X Issues**") ---
-    $catText = [string]$Script:PromptTemplates.TicketCategorisation
-    foreach ($m in [regex]::Matches($catText, '(?m)^\*\*([^*\n]+? Issues)\*\*\s*$')) {
-        $label = $m.Groups[1].Value.Trim()
-        if (-not $result.Categories.Contains($label)) { $result.Categories.Add($label) }
-    }
-    # Excluded is a valid category even though it's not "...Issues"
-    if (-not $result.Categories.Contains('Excluded'))              { $result.Categories.Add('Excluded') }
-    if (-not $result.Categories.Contains('Other / Miscellaneous')) { $result.Categories.Add('Other / Miscellaneous') }
-
-    # --- Subcategories: "#### Product" sections in TrendSubCategorisation, bullet items inside ---
-    # Product key here lacks the " Issues" suffix (e.g. "Microsoft OneDrive"); the lookup
-    # helper's substring fallback handles "Microsoft OneDrive Issues" -> "Microsoft OneDrive".
-    $subText = [string]$Script:PromptTemplates.TrendSubCategorisation
-    if ($subText) {
-        $sections = [regex]::Split($subText, '(?m)^####\s+') | Where-Object { $_ -match '\S' }
-        foreach ($section in $sections) {
-            $lines = $section -split "`r?`n", 2
-            if ($lines.Count -lt 2) { continue }
-            $product = $lines[0].Trim()
-            $body    = $lines[1]
-            $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\s*[-*]\s+(.+?)\s*$')) {
-                $lbl = $m.Groups[1].Value.Trim()
-                # Skip group-header bold lines and meta lines
-                if ($lbl -match '^\*\*.+\*\*$') { continue }
-                if ($lbl -match '^\*[A-Z]') { continue }   # e.g. "*Sub-symptoms:*"
-                $lbl = $lbl -replace '\s*\(.+?\)\s*$', ''
-                if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
-            }
-            if ($labels.Count -gt 0) { $result.Subcategories[$product] = $labels }
-        }
-    }
-
-    # --- Possible Root Causes: each "## N. Product Issues" section has a markdown table ---
-    # Table rows look like: | 1.1 | **Sync Stall** | description |
-    $prcText = [string]$Script:PromptTemplates.PossibleRootCause
-    if ($prcText) {
-        $sections = [regex]::Split($prcText, '(?m)^##\s+\d+\.\s+') | Where-Object { $_ -match '\S' }
-        foreach ($section in $sections) {
-            $lines = $section -split "`r?`n", 2
-            if ($lines.Count -lt 2) { continue }
-            $product = $lines[0].Trim()
-            $body    = $lines[1]
-            $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\|\s*\d+\.\d+\s*\|\s*\*\*([^|*]+?)\*\*\s*\|')) {
-                $lbl = $m.Groups[1].Value.Trim()
-                if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
-            }
-            if ($labels.Count -gt 0) { $result.PossibleRootCauses[$product] = $labels }
-        }
-    }
-
-    # --- Detailed Root Causes: "### Entry heading" lines under each "## Product" section ---
-    $drcText = [string]$Script:PromptTemplates.DetailedRootCause
-    if ($drcText) {
-        $sections = [regex]::Split($drcText, '(?m)^##\s+') | Where-Object { $_ -match '\S' }
-        foreach ($section in $sections) {
-            $lines = $section -split "`n", 2
-            if ($lines.Count -lt 2) { continue }
-            $product = ($lines[0] -split '\r?\n')[0].Trim()
-            $body    = $lines[1]
-            $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^###\s+(.+?)\s*$')) {
-                $lbl = $m.Groups[1].Value.Trim()
-                if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
-            }
-            if ($labels.Count -gt 0) { $result.DetailedRootCauses[$product] = $labels }
-        }
-    }
-
-    return $result
-}
-
-# Coerces a raw string to a canonical label from an allowlist.
-# Strategy: exact (case-insensitive) -> contains -> "Unknown"
-function Get-CanonicalLabel {
-    [CmdletBinding()]
-    param(
-        [string]$Raw,
-        [System.Collections.Generic.List[string]]$Allowlist,
-        [string]$Fallback = 'Unknown'
-    )
-
-    if (-not $Allowlist -or $Allowlist.Count -eq 0) { return $Fallback }
-    if ([string]::IsNullOrWhiteSpace($Raw))         { return $Fallback }
-
-    $clean = ($Raw.Trim() -replace '\*+', '' -replace '^\["]+|["\]]+$', '').Trim()
-    if ([string]::IsNullOrWhiteSpace($clean)) { return $Fallback }
-
-    # Exact match (case-insensitive)
-    foreach ($lbl in $Allowlist) {
-        if ($lbl -ieq $clean) { return $lbl }
-    }
-    # Substring match either direction
-    foreach ($lbl in $Allowlist) {
-        if ($clean -like "*$lbl*" -or $lbl -like "*$clean*") { return $lbl }
-    }
-    return $Fallback
-}
-
-# Lookup helpers — pick the allowlist for a product, with case-insensitive product key match
-function Get-AllowlistForProduct {
-    [CmdletBinding()]
-    param(
-        [hashtable]$Map,
-        [string]$Product
-    )
-    if (-not $Map -or -not $Product) { return $null }
-    if ($Map.ContainsKey($Product))  { return $Map[$Product] }
-    foreach ($k in $Map.Keys) {
-        if ($k -ieq $Product)               { return $Map[$k] }
-        if ($Product -like "*$k*" -or $k -like "*$Product*") { return $Map[$k] }
-    }
-
-    # Token-overlap fallback. Handles minor category-name drift such as
-    # "Google Issues" (classifier output) -> "Google Workspace Issues" (template key)
-    # or "Shared File Access Issues" -> "Shared File Service (Share Drives) Issues".
-    # We strip the common " Issues" suffix, normalise to lowercase alphanumeric
-    # tokens, drop noise words, and pick the key with the highest shared-token
-    # count (Jaccard-ish), preferring a substring hit on the first token.
-    $stop = @('issues','microsoft','365','for','enterprise','the','and','of','a','an')
-    $tokenize = {
-        param([string]$s)
-        $s = ($s -replace '\s*Issues\s*$','').ToLower()
-        $raw = [regex]::Split($s, '[^a-z0-9]+') | Where-Object { $_ -and $_ -notin $stop }
-        @($raw)
-    }
-    $pTokens = & $tokenize $Product
-    if ($pTokens.Count -eq 0) { return $null }
-    $best = $null; $bestScore = 0
-    foreach ($k in $Map.Keys) {
-        $kTokens = & $tokenize $k
-        if ($kTokens.Count -eq 0) { continue }
-        $shared = @($pTokens | Where-Object { $kTokens -contains $_ }).Count
-        if ($shared -gt $bestScore) { $bestScore = $shared; $best = $k }
-    }
-    if ($best -and $bestScore -gt 0) { return $Map[$best] }
-    return $null
-}
-
-$Script:CanonicalLabels = Get-CanonicalLabelsFromTemplates
-$catCount = $Script:CanonicalLabels.Categories.Count
-$subCount = $Script:CanonicalLabels.Subcategories.Count
-$prcCount = $Script:CanonicalLabels.PossibleRootCauses.Count
-$drcCount = $Script:CanonicalLabels.DetailedRootCauses.Count
-Write-Host "[OK] Canonical labels loaded: $catCount categories, $subCount subcategory groups, $prcCount root-cause groups, $drcCount detailed-cause groups" -ForegroundColor Green
-#endregion
 
 $Script:Config = @{
     AI = @{
@@ -2382,17 +2691,11 @@ $Script:Config = @{
         FrequencyPenalty = 0
         PresencePenalty = 0
     }
-
-    # Stage 2 rescue classifier — second narrow AI call when PRC/DRC come back Unknown.
-    # Tradeoff: ~1 extra small AI call per Unknown ticket. Set to $false to disable.
-    Rescue = @{
-        Enabled = $true
-    }
     
     Webhook = @{
         TimeoutSeconds = 300
         RetryAttempts = 3
-        DefaultSubject = "EUC Resolved Ticket AI Strict Categorization Report"
+        DefaultSubject = "EUC Resolved Ticket AI Root Cause Categorization Report"
     }
     
     Logging = @{
@@ -2405,12 +2708,6 @@ class TicketAnalysis {
     [string]$Number
     [string]$TicketType
     [string]$Category
-    [string]$SubSymptom
-    [string]$Subcategory          # Canonical (MD-validated) sub-symptom label
-    [string]$PossibleRootCause    # Canonical PossibleRootCause label from MD
-    [string]$DetailedRootCause    # Canonical DetailedRootCause entry from MD
-    [string]$Service              # Service offering ("Productivity Tools" / "Email and Calendaring")
-    [bool]$Misrouted              # True if Category = "Excluded"
     [string]$ExclusionReason
     [string]$Confidence
     [string]$Reasoning
@@ -2419,7 +2716,6 @@ class TicketAnalysis {
     [string]$Type
     [string]$KnowledgeBase
     [string]$OriginalDescription
-    [string]$ResolvedAt          # Raw ServiceNow resolved_at string (used for week partitioning)
     [datetime]$Processed = (Get-Date)
     
     TicketAnalysis([string]$ticketNumber) {
@@ -2452,21 +2748,16 @@ if (-not $Script:PromptTemplates) {
 }
 
 Write-ScriptLog "ServiceNow EUC Ticket Categorization System v1.2" -Level Info
-$aiModel = if ($Script:Constants.UseClaudeModel) { "Claude Sonnet 4.5 ($($Script:Constants.ClaudeDeployment))" } else { "Azure OpenAI ($($Script:Constants.AzureOpenAIDeployment))" }
+$aiModel = if ($Script:Constants.UseClaudeModel) { "Claude Sonnet 4.5 ({0})" -f $Script:Constants.ClaudeDeployment } else { "Azure OpenAI ({0})" -f $Script:Constants.AzureOpenAIDeployment }
 Write-ScriptLog "AI Model: $aiModel" -Level Info
 Write-ScriptLog "All functions loaded successfully - EUC system ready for execution" -Level Success
-
-# Load-only guard: allows local test harnesses to dot-source this runbook and
-# call individual functions (e.g. Resolve-RootCauseRescue) without running the
-# full ServiceNow -> AI -> Storage workflow. Azure Automation never sets this.
-if ($env:RUNBOOK_LOAD_ONLY -eq '1') {
-    Write-Host "RUNBOOK_LOAD_ONLY=1 detected; skipping orchestration." -ForegroundColor Yellow
-    return
-}
 
 try {
     # Initialize enhanced logging
     Initialize-BlobLogging
+
+    # Fail fast if Azure OpenAI deployment/version are misconfigured.
+    Test-AzureOpenAIDeployment
     
     Write-ScriptLog "=== STARTING EUC Ticket PROCESSING WORKFLOW ===" -Level Info
     
@@ -2480,8 +2771,10 @@ try {
         # Load stored incidents
         $incidents = Get-StoredIncidents -FileName $Script:Constants.StoredDataFileName
         
+        $lookbackHours = if ($null -ne $Script:Constants.DailyLookbackHours) { [int]$Script:Constants.DailyLookbackHours } else { 26 }
+
         # Set report period based on stored data or current date
-        $yesterday = (Get-Date).AddDays(-1)
+        $yesterday = (Get-Date).AddHours(-1 * $lookbackHours)
         $today = Get-Date
         $Script:reportperiod = "Stored Data Analysis - $($yesterday.ToString('yyyy-MM-dd HH:mm')) to $($today.ToString('yyyy-MM-dd HH:mm'))"
         
@@ -2492,15 +2785,42 @@ try {
         
         # ServiceNow Incidents API Call
         Write-ScriptLog "=== SERVICENOW INCIDENT DATA RETRIEVAL ===" -Level Info
-        $yesterday = (Get-Date).AddDays(-1)
+        $lookbackHours = if ($null -ne $Script:Constants.DailyLookbackHours) { [int]$Script:Constants.DailyLookbackHours } else { 26 }
+        $yesterday = (Get-Date).AddHours(-1 * $lookbackHours)
         $today = Get-Date
         $Script:reportperiod = "$($yesterday.ToString('yyyy-MM-dd HH:mm'))" + " to " + "$($today.ToString('yyyy-MM-dd HH:mm'))"
 
-        $incidentsResponse = Invoke-AuthenticatedApiCall -Url $Script:Constants.ServicenowIncidentsURL -AccessToken $serviceNowToken -Method GET
-        $incidents = $incidentsResponse.result
+        $maxIncidentsPerRun = 500
+        if ($Script:Constants.PSObject.Properties.Name -contains 'MaxIncidentsPerRun') {
+            try {
+                $configuredLimit = [int]$Script:Constants.MaxIncidentsPerRun
+                if ($configuredLimit -gt 0) { $maxIncidentsPerRun = $configuredLimit }
+            } catch {
+                Write-ScriptLog "Invalid MaxIncidentsPerRun configured; using default 500" -Level Warning -Category "Configuration"
+            }
+        }
 
-        $lookbackHours = [int]($Script:Constants.DailyLookbackHours ?? 26)
+        $requiredFields = 'number,description,short_description,work_notes,close_notes,calendar_duration,close_code,opened_at,resolved_at'
+        $incidentsUrl = [string]$Script:Constants.ServicenowIncidentsURL
+        $incidentsUrl = Add-QueryParamIfMissing -Url $incidentsUrl -ParamName 'sysparm_limit' -ParamValue ([string]$maxIncidentsPerRun)
+        $incidentsUrl = Add-QueryParamIfMissing -Url $incidentsUrl -ParamName 'sysparm_fields' -ParamValue $requiredFields
+        $incidentsUrl = Add-QueryParamIfMissing -Url $incidentsUrl -ParamName 'sysparm_exclude_reference_link' -ParamValue 'true'
+
+        Write-ScriptLog "ServiceNow request optimization applied (limit=$maxIncidentsPerRun, reduced field set enabled)" -Level Info -Category "Configuration"
+
+        $incidentsResponse = Invoke-AuthenticatedApiCall -Url $incidentsUrl -AccessToken $serviceNowToken -Method GET
+        $incidents = $incidentsResponse.result
+        if (-not $incidents -or $incidents.Count -eq 0) {
+            Write-Output "No incidents returned from ServiceNow API. Nothing to process for this run."
+            Write-Output "Query URL: $ServiceNowIncidentsURL"
+            Write-Output "Lookback hours: $DailyLookbackHours"
+            return
+        }
         $incidents = Filter-IncidentsByResolvedWindow -Incidents $incidents -LookbackHours $lookbackHours
+
+        if ($incidentsResponse.result.Count -ge $maxIncidentsPerRun) {
+            Write-ScriptLog "Incident API response reached configured limit ($maxIncidentsPerRun). Narrow ServiceNow query or increase MaxIncidentsPerRun only if memory permits." -Level Warning -Category "Configuration"
+        }
         
         Write-ScriptLog "Retrieved $($incidents.Count) resolved incidents for processing" -Level Success
         
@@ -2539,6 +2859,11 @@ try {
 # Process incidents first
 Write-ScriptLog "Processing $totalIncidents incidents..." -Level Info
 foreach ($incident in $incidents) {
+    if (Test-TicketAlreadyProcessedThisWeek -TicketNumber ([string]$incident.number)) {
+        Write-ScriptLog "Skipping already-processed incident $($incident.number) (exists in current week table partition)" -Level Info -Category "Processing"
+        continue
+    }
+
     $maxRetries = 3
     $retryCount = 0
     $success = $false
@@ -2554,7 +2879,7 @@ foreach ($incident in $incidents) {
             if ($totalIncidents -gt 0) {
                 $percentComplete = [math]::Round(($processedIncidentCount / $totalIncidents) * 100)
                 if ($percentComplete -in @(25, 50, 75) -or $processedIncidentCount -eq $totalIncidents) {
-                    Write-ScriptLog "Incident processing progress: $processedIncidentCount/$totalIncidents incidents ($percentComplete%)" -Level Info
+                    Write-ScriptLog ("Incident processing progress: {0}/{1} incidents ({2}%)" -f $processedIncidentCount, $totalIncidents, $percentComplete) -Level Info
                 }
             }
             
@@ -2638,41 +2963,49 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     
     $dataSource = if ($Script:Constants.UseStoredIncidents -and -not $Script:IsAzureAutomation) { "Stored Data" } else { "Live API" }
 
-    # Backfill mode: if BackfillYearWeek Automation Variable is set (e.g. "2026-W17"),
-    # skip artifact save + weekly merge so historical week runs don't pollute or merge
-    # with current-week data. Daily runs leave this variable empty/unset.
-    $backfillYearWeek = $null
-    try {
-        $bfVar = Get-AutomationVariable -Name 'BackfillYearWeek' -ErrorAction SilentlyContinue
-        if ($bfVar -and $bfVar -match '^\d{4}-W\d{2}$') { $backfillYearWeek = $bfVar }
-    } catch { }
-    if ($backfillYearWeek) {
-        Write-ScriptLog "BACKFILL MODE active for $backfillYearWeek - skipping artifact save and weekly merge" -Level Info
-    }
-
-    # Save per-run artifact for weekly merge (skipped in backfill mode)
-    if (-not $backfillYearWeek -and (($Script:Constants.SaveRunArtifacts ?? $true) -eq $true)) {
+    # Save per-run artifact for weekly merge
+    $saveRunArtifacts = if ($null -ne $Script:Constants.SaveRunArtifacts) { [bool]$Script:Constants.SaveRunArtifacts } else { $true }
+    if ($saveRunArtifacts -eq $true) {
         Save-RunProcessingArtifact -DetailedSummaries $allsummarisednotes -ReportPeriod $Script:reportperiod -DataSource $dataSource | Out-Null
     }
 
-    # Always merge all current week's artifacts to build cumulative weekly report
-    # Each daily run adds its artifact, then the full week is merged and the report is overwritten
-    # (skipped in backfill mode so historical runs use only the current cohort)
-    $lookbackDays = [int]($Script:Constants.WeeklyMergeLookbackDays ?? 7)
-    $mergedData = if ($backfillYearWeek) { @{ ProcessedTickets = @(); DetailedSummaries = @(); YearWeek = $backfillYearWeek } } else { Get-MergedWeeklyRunData -LookbackDays $lookbackDays }
-    if ($mergedData.ProcessedTickets.Count -gt 0) {
-        $Script:ProcessedTickets = $mergedData.ProcessedTickets
-        $allsummarisednotes = [System.Collections.Generic.List[PSCustomObject]]::new()
-        foreach ($summary in $mergedData.DetailedSummaries) {
-            $allsummarisednotes.Add([PSCustomObject]@{
-                IncidentNumber = $summary.IncidentNumber
-                SummarisedNotes = $summary.SummarisedNotes
-            })
+    $weeklyReportOnlyMode = if ($null -ne $Script:Constants.WeeklyReportOnlyMode) { [bool]$Script:Constants.WeeklyReportOnlyMode } else { $false }
+    $weeklyReportDayOfWeek = if ([string]::IsNullOrWhiteSpace([string]$Script:Constants.WeeklyReportDayOfWeek)) { "Sunday" } else { [string]$Script:Constants.WeeklyReportDayOfWeek }
+    $validDays = @('Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday')
+    if ($weeklyReportDayOfWeek -notin $validDays) {
+        Write-ScriptLog ("Invalid WeeklyReportDayOfWeek '{0}' configured; defaulting to Sunday" -f $weeklyReportDayOfWeek) -Level Warning -Category "Configuration"
+        $weeklyReportDayOfWeek = "Sunday"
+    }
+    $isWeeklyReportDay = (Get-Date).DayOfWeek.ToString() -eq $weeklyReportDayOfWeek
+
+    # Weekly merge mode runs on configured weekly report day.
+    $mergedData = $null
+    $generateWeeklyMergedSetting = if ($null -ne $Script:Constants.GenerateWeeklyMergedReportOnWeekend) { [bool]$Script:Constants.GenerateWeeklyMergedReportOnWeekend } else { $false }
+    $generateWeeklyMerged = (($generateWeeklyMergedSetting -eq $true) -or ($weeklyReportOnlyMode -eq $true)) -and $isWeeklyReportDay
+    if ($generateWeeklyMerged) {
+        $lookbackDays = if ($null -ne $Script:Constants.WeeklyMergeLookbackDays) { [int]$Script:Constants.WeeklyMergeLookbackDays } else { 7 }
+        $mergedData = Get-MergedWeeklyRunData -LookbackDays $lookbackDays
+        if ($mergedData.ProcessedTickets.Count -gt 0) {
+            $Script:ProcessedTickets = $mergedData.ProcessedTickets
+            $allsummarisednotes = [System.Collections.Generic.List[PSCustomObject]]::new()
+            foreach ($summary in $mergedData.DetailedSummaries) {
+                $allsummarisednotes.Add([PSCustomObject]@{
+                    IncidentNumber = $summary.IncidentNumber
+                    SummarisedNotes = $summary.SummarisedNotes
+                })
+            }
+            $dataSource = "Merged Weekly ({0} incidents)" -f $Script:ProcessedTickets.Count
+            Write-ScriptLog ("Weekly merge completed - {0} unique incidents from last {1} days" -f $Script:ProcessedTickets.Count, $lookbackDays) -Level Success
+        } else {
+            Write-ScriptLog "Weekly merge mode enabled but no prior run artifacts found - using current run data only" -Level Warning
         }
-        $dataSource = "Merged Weekly ($($Script:ProcessedTickets.Count) incidents)"
-        Write-ScriptLog "Weekly merge completed - $($Script:ProcessedTickets.Count) unique incidents from last $lookbackDays days" -Level Success
-    } else {
-        Write-ScriptLog "No prior run artifacts found - using current run data only" -Level Warning
+    }
+
+    if ($weeklyReportOnlyMode -eq $true -and -not $isWeeklyReportDay) {
+        Save-CategoryStatisticsToTable -CategoryData (Get-CategoryStatistics) -ReportDate (Get-Date) -ReportBlobName ""
+        Write-ScriptLog ("WeeklyReportOnlyMode is enabled. Skipping report generation today ({0}); artifacts saved for weekly report on {1}." -f (Get-Date).DayOfWeek, $weeklyReportDayOfWeek) -Level Info -Category "Configuration"
+        Complete-BlobLogging -FinalMessage ("Execution completed - artifacts saved; report generation day is {0}" -f $weeklyReportDayOfWeek)
+        return
     }
 
     # Generate and send report
@@ -2701,7 +3034,7 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
         )
         $reportYearWeek = "{0:D4}-W{1:D2}" -f $reportYear, $reportWeekNumber
     }
-    $reportBlobName = "EUC_Weekly_Report_$reportYearWeek.html"
+    $reportBlobName = "Outlook_Weekly_Report_$reportYearWeek.html"
     $dynamicSubject = "EUC AI Weekly Report $reportYearWeek - $totalProcessedTickets Incidents, $($CategoryData.Count) Categories"
     $Script:reportperiod = "Weekly cumulative report $reportYearWeek (updated $(Get-Date -Format 'dd MMM yyyy'))"
     
@@ -2733,7 +3066,18 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     # Always save report to blob/local storage (needed for static web app viewer)
     if ($Script:IsAzureAutomation) {
         try {
+            if ([string]::IsNullOrWhiteSpace($Script:BlobConfig.ResultsContainerName)) {
+                throw "ResultsContainerName is empty after configuration resolution"
+            }
+
             $storageContext = Get-StorageContext
+            Write-ScriptLog "Uploading report to Azure Blob - Account: $($Script:BlobConfig.StorageAccountName), Container: $($Script:BlobConfig.ResultsContainerName), Blob: $reportBlobName" -Level Info -Category "Storage"
+
+            $targetContainer = Get-AzStorageContainer -Name $Script:BlobConfig.ResultsContainerName -Context $storageContext -ErrorAction SilentlyContinue
+            if (-not $targetContainer) {
+                throw "Results container '$($Script:BlobConfig.ResultsContainerName)' does not exist or is not accessible in storage account '$($Script:BlobConfig.StorageAccountName)'"
+            }
+
             $tempFile = [System.IO.Path]::GetTempFileName()
             try {
                 Set-Content -Path $tempFile -Value $htmlcontent -Encoding UTF8
@@ -2742,14 +3086,54 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
                     -Blob $reportBlobName `
                     -Context $storageContext `
                     -Force | Out-Null
+
+                $savedBlob = Get-AzStorageBlob -Container $Script:BlobConfig.ResultsContainerName -Blob $reportBlobName -Context $storageContext -ErrorAction SilentlyContinue
+                if (-not $savedBlob) {
+                    throw "Blob upload verification failed for '$reportBlobName' in container '$($Script:BlobConfig.ResultsContainerName)'"
+                }
+
+                # Best-effort manifest update (non-critical path)
+                try {
+                    $reportSasUrl = New-ReportBlobReadSasUrl `
+                        -StorageContext $storageContext `
+                        -ContainerName $Script:BlobConfig.ResultsContainerName `
+                        -BlobName $reportBlobName `
+                        -ExpiryDays 30
+
+                    $manifest = Get-ReportsManifestObject `
+                        -StorageContext $storageContext `
+                        -ContainerName $Script:BlobConfig.ResultsContainerName `
+                        -ManifestBlobName "reports-manifest.json"
+
+                    $entry = [ordered]@{
+                        filename = [string]$reportBlobName
+                        date     = (Get-Date).ToUniversalTime().ToString("o")
+                        type     = "Weekly"
+                        sasUrl   = [string]$reportSasUrl
+                    }
+
+                    $manifest = Add-OrUpdate-ReportsManifestEntry -Manifest $manifest -Entry $entry
+
+                    Save-ReportsManifestObject `
+                        -StorageContext $storageContext `
+                        -ContainerName $Script:BlobConfig.ResultsContainerName `
+                        -Manifest $manifest `
+                        -ManifestBlobName "reports-manifest.json"
+
+                    Write-ScriptLog "reports-manifest.json updated for weekly report: $reportBlobName" -Level Info -Category "Storage"
+                } catch {
+                    Write-ScriptLog "Manifest update warning (weekly report): $($_.Exception.Message)" -Level Warning -Category "Storage"
+                }
+
                 Write-ScriptLog "Report saved to blob: $reportBlobName (Container: $($Script:BlobConfig.ResultsContainerName))" -Level Success
-                Write-Host "✓ HTML report saved to blob: $reportBlobName" -ForegroundColor Green
+                Write-Host ("HTML report saved to blob: {0}" -f $reportBlobName) -ForegroundColor Green
             } finally {
                 if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
             }
         } catch {
             Write-ScriptLog "Failed to save report to blob storage: $($_.Exception.Message)" -Level Error
-            Write-Host "✗ Failed to save HTML report to blob: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ("Failed to save HTML report to blob: {0}" -f $_.Exception.Message) -ForegroundColor Red
+            throw
         }
     } else {
         # Local development - save to results directory
@@ -2762,23 +3146,25 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
         try {
             Set-Content -Path $filePath -Value $htmlcontent -Encoding UTF8
             Write-ScriptLog "Report saved locally: $filePath" -Level Success
-            Write-Host "✓ HTML report saved to: $filePath" -ForegroundColor Green
+            Write-Host ("HTML report saved to: {0}" -f $filePath) -ForegroundColor Green
         } catch {
             Write-ScriptLog "Failed to save report locally: $($_.Exception.Message)" -Level Error
-            Write-Host "✗ Failed to save HTML report: $($_.Exception.Message)" -ForegroundColor Red
+            Write-Host ("Failed to save HTML report: {0}" -f $_.Exception.Message) -ForegroundColor Red
         }
     }
 
-    # COMMENTED OUT - Email webhook delivery (not currently used)
-    # $webhookUrl = $Script:Constants.LogicAppSendAIEmailWebHookURL
-    # if ($webhookUrl) {
-    #     Write-ScriptLog "Sending report with $totalProcessedTickets processed incidents via webhook..." -Level Info
-    #     $result = Send-ReportWebhook -WebhookUrl $webhookUrl -HtmlContent $htmlcontent -Subject $dynamicSubject
-    #     Write-ScriptLog "Report sent successfully: $totalProcessedTickets incidents across $($CategoryData.Count) categories" -Level Success
-    # }
+    # Email webhook delivery (enabled when a Logic App webhook URL is configured)
+    $webhookUrl = $Script:Constants.LogicAppSendAIEmailWebHookURL
+    if ($webhookUrl) {
+        Write-ScriptLog "Sending report with $totalProcessedTickets processed incidents via webhook..." -Level Info
+        $result = Send-ReportWebhook -WebhookUrl $webhookUrl -HtmlContent $htmlcontent -Subject $dynamicSubject
+        Write-ScriptLog "Report sent successfully: $totalProcessedTickets incidents across $($CategoryData.Count) categories" -Level Success
+    } else {
+        Write-ScriptLog "No Logic App webhook URL configured; skipping email delivery" -Level Warning
+    }
     
     # Complete logging with success message
-    Complete-BlobLogging -FinalMessage "Execution completed successfully - $totalProcessedTickets incidents processed ($dataSource)"
+    Complete-BlobLogging -FinalMessage ("Execution completed successfully - {0} incidents processed ({1})" -f $totalProcessedTickets, $dataSource)
     
 } catch {
     Write-ScriptLog "EUC workflow execution failed: $($_.Exception.Message)" -Level Error
@@ -2800,7 +3186,7 @@ SERVICENOW EUC INCIDENT CATEGORIZATION SYSTEM v1.2
 
 PURPOSE:
 This system provides automated categorization and reporting for resolved Mobile 
-Device Management incidents from ServiceNow using AI-powered analysis with strict 
+Device Management incidents from ServiceNow using AI-powered analysis with root cause 
 categorization rules.
 
 NEW IN v1.2:
@@ -2865,7 +3251,7 @@ The system is built using a modular, pipeline-based architecture with enhanced l
    - Enhanced AI processing with detailed logging at each step
    - Work notes cleanup with before/after logging
    - Incident summarization with result logging
-   - Strict categorization with reasoning capture
+    - Root cause categorization with reasoning capture
    - Structured response parsing with AI explanation extraction
 
 5. DATA PROCESSING LAYER
@@ -2884,8 +3270,8 @@ The system is built using a modular, pipeline-based architecture with enhanced l
    - Detailed execution tracking and summary statistics
 
 WORKFLOW:
-ServiceNow Authentication → Incident Retrieval → Enhanced AI Processing → 
-Strict Categorization with Reasoning → Report Generation → Email Delivery
+ServiceNow Authentication â†’ Incident Retrieval â†’ Enhanced AI Processing â†’ 
+Root Cause Categorization with Reasoning â†’ Report Generation â†’ Email Delivery
 
 TROUBLESHOOTING:
 - Check execution logs in Azure Blob Storage for detailed ticket processing information
@@ -2896,3 +3282,6 @@ TROUBLESHOOTING:
 
 ===================================================================================
 #>
+
+
+

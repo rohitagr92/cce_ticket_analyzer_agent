@@ -36,9 +36,10 @@ try {
         Write-Host "Connected as: $($context.Account.Id)" -ForegroundColor Green
     }
     
-    # Get storage context using Azure AD token (no key required — needs Storage Blob Data Contributor role)
-    Write-Host "`nCreating storage context via Azure AD..." -ForegroundColor Yellow
-    $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -UseConnectedAccount
+    # Get storage context using the account key (works for users with Reader+Contributor but no Storage Blob Data Contributor role)
+    Write-Host "`nCreating storage context via account key..." -ForegroundColor Yellow
+    $saKey = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction Stop)[0].Value
+    $storageContext = New-AzStorageContext -StorageAccountName $StorageAccountName -StorageAccountKey $saKey
     Write-Host "Storage context created" -ForegroundColor Green
     
     # Check if container exists, create if not
@@ -83,20 +84,22 @@ try {
         
         try {
             Write-Host "Uploading: $blobName..." -ForegroundColor Yellow
-            
-            # Upload file to blob storage (without .md extension in blob name)
+
+            # Upload file to blob storage (without .md extension in blob name).
+            # -ErrorAction Stop is critical — otherwise 403s only print to stderr and the script lies about success.
             Set-AzStorageBlobContent -File $filePath `
                                      -Container $ContainerName `
                                      -Blob $blobName `
                                      -Context $storageContext `
-                                     -Force | Out-Null
-            
+                                     -Force `
+                                     -ErrorAction Stop | Out-Null
+
             # Get file size for display
             $fileSize = [math]::Round((Get-Item $filePath).Length / 1KB, 1)
-            
+
             Write-Host "  Uploaded: $blobName ($fileSize KB)" -ForegroundColor Green
             $uploadedCount++
-            
+
         } catch {
             Write-Host "  Failed to upload $blobName : $($_.Exception.Message)" -ForegroundColor Red
             $failedFiles += $blobName

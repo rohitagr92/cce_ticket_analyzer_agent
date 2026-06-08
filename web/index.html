@@ -679,6 +679,9 @@
       <!-- Story-mode headline — auto-generated plain-English briefing -->
       <div id="opxHeadline" style="background:#fff;border:1px solid var(--border);border-left:4px solid var(--intel-blue);border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:0.95rem;line-height:1.55;color:#2a3850;"></div>
 
+      <!-- Flag quick-filter chips (also act as a legend) -->
+      <div id="opxFlagBar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;"></div>
+
       <div class="chart-card">
         <h3 id="opxTableTitle">&#128737; Patterns <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; click a row to expand into matching incidents</span></h3>
         <div id="opxTableWrap"></div>
@@ -2246,6 +2249,19 @@
   const opxExpanded = new Set();      // expanded keys — RowKey in incidents view, pattern-key in patterns view
   const opxFirstSeenWeek = new Map(); // "Category||PossibleRootCause" -> earliest YearWeek (full history)
   let opxAllInService = [];           // entities filtered by Service only (for outlier + pattern history)
+  const opxActiveFlags = new Set();   // active flag quick-filters: 'new' | 'spike' | 'repeat' | 'misrouted' | 'lowconf'
+  // Per-view sort state. dir: 1 = ascending, -1 = descending.
+  const opxSort = {
+    incidents: { col: 'date', dir: -1 },   // default newest first
+    patterns:  { col: 'count', dir: -1 }   // default most tickets first
+  };
+  const OPX_FLAG_DEFS = [
+    { id: 'new',       label: 'NEW',       icon: '&#127381;', bg: '#fff2cc', fg: '#8a6d00' },
+    { id: 'spike',     label: 'SPIKE',     icon: '&#128293;', bg: '#fde7e7', fg: '#a51c1c' },
+    { id: 'repeat',    label: 'REPEAT',    icon: '&#9851;',   bg: '#e9e1ff', fg: '#542aaa' },
+    { id: 'misrouted', label: 'MISROUTED', icon: '&#9888;',   bg: '#ffe2cc', fg: '#9a4a00' },
+    { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' }
+  ];
 
   function opxServiceProducts() {
     const svc = $('opxService').value;
@@ -2453,6 +2469,136 @@
     return out.join(' ');
   }
 
+  // Set of flag ids ('new','spike','repeat','misrouted','lowconf') an incident carries.
+  function opxIncidentFlagSet(inc, pStats) {
+    const s = new Set();
+    const ps = pStats[opxPatternKey(inc)];
+    const okey = (inc.Category || '') + '||' + (inc.PossibleRootCause || inc.RootCause || '');
+    const firstSeen = opxFirstSeenWeek.get(okey);
+    const w = inc.PartitionKey || inc.YearWeek;
+    if (firstSeen && firstSeen === w) s.add('new');
+    if (ps && ps.spike)  s.add('spike');
+    if (ps && ps.repeat) s.add('repeat');
+    if (opxIsMisrouted(inc)) s.add('misrouted');
+    if (opxConfLevel(inc) === 'low') s.add('lowconf');
+    return s;
+  }
+
+  // Narrow a list to incidents matching ANY active flag (OR within flags).
+  function opxApplyFlagFilter(list, pStats) {
+    if (opxActiveFlags.size === 0) return list;
+    return list.filter(inc => {
+      const fs = opxIncidentFlagSet(inc, pStats);
+      for (const f of opxActiveFlags) if (fs.has(f)) return true;
+      return false;
+    });
+  }
+
+  // Render the flag quick-filter chips (also doubles as a legend).
+  function opxRenderFlagBar(base, pStats) {
+    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, lowconf: 0 };
+    for (const inc of base) opxIncidentFlagSet(inc, pStats).forEach(f => counts[f]++);
+
+    const allActive = opxActiveFlags.size === 0;
+    const allChip = '<button type="button" class="opx-flag-chip" data-flag="__all__" style="' +
+      'border:1px solid ' + (allActive ? 'var(--intel-blue)' : 'var(--border)') + ';' +
+      'background:' + (allActive ? 'var(--intel-blue)' : '#fff') + ';color:' + (allActive ? '#fff' : 'var(--intel-classic)') + ';' +
+      'padding:5px 12px;border-radius:999px;font-size:0.8rem;font-weight:600;cursor:pointer;">All</button>';
+
+    const chips = OPX_FLAG_DEFS.map(def => {
+      const n = counts[def.id];
+      const active = opxActiveFlags.has(def.id);
+      const dim = n === 0 && !active;
+      return '<button type="button" class="opx-flag-chip" data-flag="' + def.id + '"' + (dim ? ' disabled' : '') + ' style="' +
+        'display:inline-flex;align-items:center;gap:6px;border:1px solid ' + (active ? def.fg : 'var(--border)') + ';' +
+        'background:' + (active ? def.bg : '#fff') + ';color:' + (active ? def.fg : 'var(--muted)') + ';' +
+        'padding:5px 11px;border-radius:999px;font-size:0.78rem;font-weight:700;cursor:' + (dim ? 'default' : 'pointer') + ';' +
+        'opacity:' + (dim ? '0.4' : '1') + ';">' +
+        def.icon + ' ' + def.label +
+        '<span style="background:' + (active ? 'rgba(0,0,0,0.12)' : '#eef2f7') + ';color:' + (active ? def.fg : 'var(--muted)') + ';padding:1px 7px;border-radius:999px;font-size:0.72rem;">' + n + '</span>' +
+      '</button>';
+    }).join('');
+
+    $('opxFlagBar').innerHTML =
+      '<span style="font-size:0.78rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.4px;margin-right:2px;">Flags</span>' +
+      allChip + chips;
+
+    $('opxFlagBar').querySelectorAll('.opx-flag-chip').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const f = btn.getAttribute('data-flag');
+        if (f === '__all__') { opxActiveFlags.clear(); }
+        else if (opxActiveFlags.has(f)) { opxActiveFlags.delete(f); }
+        else { opxActiveFlags.add(f); }
+        opxExpanded.clear();
+        opxRefresh();
+      });
+    });
+  }
+
+  // Sortable-header cell. view = 'incidents' | 'patterns'.
+  function opxSortTh(view, col, label, width, align) {
+    const st = opxSort[view];
+    const active = st.col === col;
+    const ind = active ? (st.dir === 1 ? ' &#9650;' : ' &#9660;') : ' <span style="color:var(--border);">&#8693;</span>';
+    return '<th data-view="' + view + '" data-col="' + col + '" class="opx-sort-th" style="cursor:pointer;text-align:' + (align || 'left') + ';padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--intel-classic);' + (width ? 'width:' + width + ';' : '') + (active ? 'background:#dceaf7;' : '') + '" title="Sort by ' + label + '">' + label + ind + '</th>';
+  }
+
+  function opxWireSortHeaders() {
+    $('opxTableWrap').querySelectorAll('th.opx-sort-th').forEach(th => {
+      th.addEventListener('click', () => {
+        const view = th.getAttribute('data-view'), col = th.getAttribute('data-col');
+        const st = opxSort[view];
+        if (st.col === col) { st.dir *= -1; }
+        else {
+          st.col = col;
+          // sensible initial direction: text asc, numeric/date desc
+          st.dir = (col === 'product' || col === 'subcategory' || col === 'rootcause') ? 1 : -1;
+        }
+        opxRefresh();
+      });
+    });
+  }
+
+  function opxSortIncidents(list) {
+    const { col, dir } = opxSort.incidents;
+    const triples = opxBuildTripleCounts(list);
+    const val = (i) => {
+      switch (col) {
+        case 'ww':          return i.PartitionKey || i.YearWeek || '';
+        case 'product':     return (i.Category || '').toLowerCase();
+        case 'subcategory': return (i.Subcategory || '').toLowerCase();
+        case 'rootcause':   return (i.PossibleRootCause || i.RootCause || '').toLowerCase();
+        case 'similar':     return triples[opxPatternKey(i)] || 1;
+        case 'date':
+        default:            return i.Date || '';
+      }
+    };
+    return list.slice().sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return  1 * dir;
+      return 0;
+    });
+  }
+
+  function opxSortPatterns(pats) {
+    const { col, dir } = opxSort.patterns;
+    const val = (p) => {
+      switch (col) {
+        case 'product':   return opxParseKey(p.key).product.toLowerCase();
+        case 'firstseen': return p.firstSeen || '';
+        case 'count':
+        default:          return p.count;
+      }
+    };
+    return pats.slice().sort((a, b) => {
+      const va = val(a), vb = val(b);
+      if (va < vb) return -1 * dir;
+      if (va > vb) return  1 * dir;
+      return 0;
+    });
+  }
+
   // Status bar — one-liner above the filters card describing the current slice.
   function opxRenderStatusBar(filtered, pStats) {
     const svc      = $('opxService').value;
@@ -2592,7 +2738,7 @@
     const triples = opxBuildTripleCounts(filtered);
     const th = (t, w) => '<th style="text-align:left;padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--intel-classic);' + (w ? 'width:' + w + ';' : '') + '">' + t + '</th>';
     const td = (v, extra) => '<td style="padding:8px 12px;border-bottom:1px solid #f0f4f9;' + (extra || '') + '">' + v + '</td>';
-    const rows = filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || '')).map(i => {
+    const rows = opxSortIncidents(filtered).map(i => {
       const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
       const key = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + ((i.PossibleRootCause || i.RootCause || '').trim());
       const similar = triples[key] || 1;
@@ -2621,7 +2767,14 @@
     $('opxTableWrap').innerHTML =
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.88rem;">' +
       '<thead><tr style="background:#eef5fb;">' +
-      th('Incident', '180px') + th('Flags', '160px') + th('Resolved', '100px') + th('WW', '90px') + th('Product') + th('Subcategory (Symptom)') + th('Possible Root Cause') + th('Similar', '80px') + th('6-Wk', '90px') +
+      th('Incident', '180px') + th('Flags', '160px') +
+      opxSortTh('incidents', 'date', 'Resolved', '100px') +
+      opxSortTh('incidents', 'ww', 'WW', '90px') +
+      opxSortTh('incidents', 'product', 'Product') +
+      opxSortTh('incidents', 'subcategory', 'Subcategory (Symptom)') +
+      opxSortTh('incidents', 'rootcause', 'Possible Root Cause') +
+      opxSortTh('incidents', 'similar', 'Similar', '80px', 'center') +
+      th('6-Wk', '90px') +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
     // Wire row clicks
     $('opxTableWrap').querySelectorAll('tr.opx-row').forEach(tr => {
@@ -2631,6 +2784,7 @@
         opxRefresh();
       });
     });
+    opxWireSortHeaders();
   }
 
   // Pattern view — collapses incidents into one row per (Product || Subcategory || Root Cause).
@@ -2647,7 +2801,7 @@
     const membersByKey = {};
     for (const e of filtered) (membersByKey[opxPatternKey(e)] = membersByKey[opxPatternKey(e)] || []).push(e);
 
-    const sortedPats = Object.values(pStats).sort((a, b) => b.count - a.count);
+    const sortedPats = opxSortPatterns(Object.values(pStats));
 
     const th = (t, w, align) => '<th style="text-align:' + (align || 'left') + ';padding:9px 12px;border-bottom:1px solid var(--border);white-space:nowrap;color:var(--intel-classic);' + (w ? 'width:' + w + ';' : '') + '">' + t + '</th>';
     const td = (v, extra) => '<td style="padding:10px 12px;border-bottom:1px solid #f0f4f9;' + (extra || '') + '">' + v + '</td>';
@@ -2713,10 +2867,10 @@
     $('opxTableWrap').innerHTML =
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.9rem;">' +
       '<thead><tr style="background:#eef5fb;">' +
-      th('Pattern (Product &middot; Symptom &middot; Root Cause)') +
-      th('Tickets', '90px', 'center') +
+      opxSortTh('patterns', 'product', 'Pattern (Product &middot; Symptom &middot; Root Cause)') +
+      opxSortTh('patterns', 'count', 'Tickets', '90px', 'center') +
       th('Last 6 WWs', '110px', 'center') +
-      th('First seen', '110px') +
+      opxSortTh('patterns', 'firstseen', 'First seen', '110px') +
       th('Flags', '220px') +
       '</tr></thead><tbody>' + rows + '</tbody></table></div>';
 
@@ -2736,10 +2890,11 @@
         opxRefresh();
       });
     });
+    opxWireSortHeaders();
   }
 
   function opxDownloadCsv() {
-    const filtered = opxGetFiltered();
+    const filtered = opxGetDisplayed();
     if (filtered.length === 0) { alert('No incidents match the current filters.'); return; }
     const triples = opxBuildTripleCounts(filtered);
     const header = ['Incident', 'ServiceNow Link', 'Resolved On', 'WW', 'Product', 'Subcategory (Symptom)', 'Possible Root Cause', 'Detailed Root Cause', 'Similar In Filter', 'First Time Seen'];
@@ -2773,7 +2928,7 @@
   }
 
   async function opxCopyIds() {
-    const filtered = opxGetFiltered();
+    const filtered = opxGetDisplayed();
     if (filtered.length === 0) { alert('No incidents to copy.'); return; }
     const ids = filtered.map(i => i.RowKey || '').filter(Boolean).join('\n');
     try {
@@ -2788,7 +2943,7 @@
 
   // Build a plain-text briefing block ready to paste into Outlook or Teams.
   async function opxCopyEmailSummary() {
-    const filtered = opxGetFiltered();
+    const filtered = opxGetDisplayed();
     if (filtered.length === 0) { alert('No incidents in current filter — nothing to summarise.'); return; }
     const pStats   = opxBuildPatternStats(filtered);
     const svc      = $('opxService').value;
@@ -2839,7 +2994,10 @@
   }
 
   function opxRefresh() {
-    const filtered = opxGetFiltered();
+    const base     = opxGetFiltered();
+    const basePStats = opxBuildPatternStats(base);
+    opxRenderFlagBar(base, basePStats);
+    const filtered = opxApplyFlagFilter(base, basePStats);
     const pStats   = opxBuildPatternStats(filtered);
     opxRenderStatusBar(filtered, pStats);
     opxRenderHeadline(filtered, pStats);
@@ -2850,7 +3008,15 @@
       $('opxTableTitle').innerHTML = '&#128737; Incidents <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; click a row to see AI analysis</span>';
       opxRenderTable(filtered, pStats);
     }
-    $('opxSummary').textContent = filtered.length + ' incidents · ' + Object.keys(pStats).length + ' patterns';
+    const flagNote = opxActiveFlags.size ? ' · flags: ' + [...opxActiveFlags].join(', ') : '';
+    $('opxSummary').textContent = filtered.length + ' incidents · ' + Object.keys(pStats).length + ' patterns' + flagNote;
+  }
+
+  // Dropdown-filtered set narrowed by active flag chips — used by CSV / copy actions.
+  function opxGetDisplayed() {
+    const base = opxGetFiltered();
+    const pStats = opxBuildPatternStats(base);
+    return opxApplyFlagFilter(base, pStats);
   }
 
   async function loadOpsPlus() {
@@ -2893,6 +3059,7 @@
       });
       $('opxResetBtn').addEventListener('click', () => {
         $('opxProduct').value = 'All Products';
+        opxActiveFlags.clear();
         // Default WW range back to the most recent 4 weeks rather than the full history
         const weeks = aggregated.weeks || [];
         const recent = weeks.slice(-4);

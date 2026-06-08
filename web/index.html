@@ -407,6 +407,9 @@
       <button class="tab" role="tab" data-tab="opsplus">
         <span class="icon">&#128296;</span> Ops Report+
       </button>
+      <button class="tab" role="tab" data-tab="airecs">
+        <span class="icon">&#129504;</span> AI Recommendations
+      </button>
     </div>
   </div>
 </header>
@@ -686,6 +689,33 @@
         <h3 id="opxTableTitle">&#128737; Patterns <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; click a row to expand into matching incidents</span></h3>
         <div id="opxTableWrap"></div>
       </div>
+    </div>
+  </section>
+
+  <!-- AI RECOMMENDATIONS TAB — synthesises engineer/AI analysis from the last 6 WWs -->
+  <section class="tab-pane" id="pane-airecs">
+    <div id="airLoading" class="loading">Loading recommendation data</div>
+    <div id="airError" class="state error" style="display:none;"></div>
+    <div id="airContent" style="display:none;">
+      <div class="chart-card" style="margin-bottom:16px;">
+        <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, last 6 work weeks</span></h3>
+        <div class="toolbar" style="margin-bottom:0;">
+          <span class="label-inline">Service</span>
+          <select id="airService">
+            <option value="Productivity Tools">Productivity Tools</option>
+            <option value="Email and Calendaring">Email and Calendaring</option>
+          </select>
+          <span class="label-inline">Product</span>
+          <select id="airProduct" style="min-width:260px;"></select>
+          <span class="label-inline">Symptom</span>
+          <select id="airSymptom" style="min-width:240px;"></select>
+          <button class="btn-outline" id="airResetBtn">Reset</button>
+          <div class="summary" id="airSummary"></div>
+        </div>
+      </div>
+
+      <div id="airWindowNote" style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;"></div>
+      <div id="airCards"></div>
     </div>
   </section>
 </main>
@@ -3086,6 +3116,390 @@
   }
 
   // ====================================================================
+  // AI RECOMMENDATIONS TAB (additive; reuses ensureTableLoaded + allEntities +
+  // aggregated + formatWW + esc). Recommendations are SYNTHESISED CLIENT-SIDE
+  // from the analysis text engineers/AI already wrote on resolved tickets in
+  // the last 6 work weeks — no live LLM call, no extra Azure cost.
+  // ====================================================================
+  let airLoaded = false;
+  const air6Weeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice(-6) : []);
+
+  // Resolution knowledge map — turns descriptive history into CLEAR, IMPERATIVE,
+  // ready-to-action steps. Each entry: a signal regex (matched against the stored
+  // analysis text) and the clean action to show. Order = priority when displayed
+  // (ties broken by how many tickets matched).
+  const AIR_RESOLUTION_MAP = [
+    { id: 'office-repair',   re: /repair launcher|office repair|quick repair|online repair|repair and restart|ran? .*repair|repair the (office|installation)/i,
+      step: 'Run an Office Repair (Quick Repair first, then Online Repair) and restart the app.' },
+    { id: 'reinstall',       re: /reinstall|re-install|fresh install|redeploy|re-deploy/i,
+      step: 'Reinstall the Microsoft 365 Apps from Company Portal.' },
+    { id: 'clear-cache',     re: /clear.{0,15}cache|cache.{0,15}clear|stale.{0,15}cache|corrupt.{0,15}cache|cached (mode|state)|delete.{0,15}cache/i,
+      step: 'Clear the Office/Teams client cache and relaunch the app.' },
+    { id: 'end-process',     re: /end.{0,10}task|ended.{0,10}task|kill.{0,10}process|stuck.{0,10}process|hung|task manager|bad process state/i,
+      step: 'End the stuck app process in Task Manager, then reopen the app.' },
+    { id: 'safe-mode-addin', re: /safe mode|disable.{0,15}add-?in|corrupt.{0,15}add-?in|problematic add-?in|add-?in.{0,15}(fail|issue|disabled)/i,
+      step: 'Start the app in Safe Mode and disable or update the problematic add-in.' },
+    { id: 'addin-config',    re: /office store.{0,15}(disabled|blocked|policy)|it-managed add-?in|add-?in configuration|managed add-?in/i,
+      step: 'Update the IT-managed add-in configuration (Office Store is blocked by policy).' },
+    { id: 'relink-onedrive', re: /re-?link.{0,15}onedrive|re-?linked onedrive|unlink.{0,15}onedrive|reset onedrive|re-?connect onedrive/i,
+      step: 'Re-link (reset) the OneDrive client and let files resync.' },
+    { id: 'path-conflict',   re: /path.{0,15}length|long.{0,10}path|path-?length|shortcut.{0,20}(path|name)|name.{0,10}too long/i,
+      step: 'Remove the long-path SharePoint shortcut that breaks OneDrive sync (shorten the path/name).' },
+    { id: 'resync',          re: /re-?sync|resync|did not sync|not syncing|sync.{0,10}fail|re-?synced/i,
+      step: 'Force a OneDrive/OneNote resync (open the file/notebook in the client to trigger sync).' },
+    { id: 'readd-perms',     re: /re-?add.{0,20}permission|removed and re-?added|refresh.{0,15}sharing|re-?share|owner.{0,20}(re-?add|refresh)|stale.{0,15}(share|permission)/i,
+      step: "Have the file owner remove and re-add the user's sharing permissions." },
+    { id: 'ags-entitlement', re: /ags entitlement|entitlement.{0,20}(change|request|missing|required)|lacked.{0,15}permission|request.{0,15}access|access.{0,15}request/i,
+      step: 'Request the required AGS entitlement / access for the user.' },
+    { id: 'license',         re: /license exception|f3 license|license.{0,15}(assign|approve|provision|missing|required)|assign.{0,15}license|entitlement.{0,15}license/i,
+      step: 'Request/assign the correct license (e.g. F3 License Exception or higher) for the user.' },
+    { id: 'blackout',        re: /blackout|license pool.{0,15}depleted|hidden.{0,15}(during|entitlement)|inventory.{0,15}depleted/i,
+      step: 'Escalate to the licensing/entitlement team — entitlement is in a blackout/depleted pool (no local fix).' },
+    { id: 'remap-drive',     re: /remap|re-?mapp|drive.{0,15}(remap|missing|reconnect)|unc path|drive letter|mapped drive/i,
+      step: 'Remap the network drive using the correct UNC path.' },
+    { id: 'resign-creds',    re: /re-?sign|sign.{0,5}in again|re-?authenticate|reauthenticat|refresh.{0,15}credential|corrupt.{0,15}(identity|profile|credential)|sign out/i,
+      step: 'Sign out and sign back in to refresh the Office identity/credentials.' },
+    { id: 'click2run',       re: /click-?to-?run|30015|c2r|installer.{0,15}(hung|stuck|stalled)/i,
+      step: 'Repair the Click-to-Run install (e.g. error 30015) or reinstall from Company Portal.' },
+    { id: 'reprovision',     re: /re-?provision|provisioning mismatch|puid|identity.{0,15}mismatch|account.{0,15}(mismatch|lifecycle)|rejoin/i,
+      step: 'Raise a backend re-provisioning request to align the account/OneDrive identity (PUID/URL mapping).' },
+    { id: 'former-emp',      re: /former employee|retention window|separation|rehired|formal.{0,15}request|recovery window/i,
+      step: 'Submit a formal data-access request — retention/recovery window rules apply.' },
+    { id: 'update-client',   re: /update.{0,15}(office|client|app)|upgrade.{0,15}client|older.{0,15}client|windows 10 client|out.?of.?date/i,
+      step: 'Update to the current Office/OneNote client version.' },
+    { id: 'escalate-ms',     re: /escalat.{0,15}microsoft|raised? .*microsoft|microsoft support|no (clear )?local fix/i,
+      step: 'Escalate to Microsoft if local troubleshooting does not resolve it.' },
+    { id: 'reopen-app',      re: /reopen|re-?open|relaunch|re-?launch|restart.{0,10}(app|client)|until.{0,15}reopened/i,
+      step: 'Close and reopen the app to reload the feature/session.' }
+  ];
+
+  function airMatchesService(e) {
+    const svc = $('airService').value;
+    if (svc === 'Productivity Tools') return !e.Service || e.Service === 'Productivity Tools';
+    return e.Service === svc;
+  }
+
+  function airServiceProducts() {
+    const svc = $('airService').value;
+    if (svc === 'Productivity Tools') return PRODUCT_LIST;
+    const cats = new Set();
+    for (const e of allEntities) if (e.Service === svc) cats.add((e.Category || '').trim() || 'Unknown');
+    return ['All Products', ...[...cats].sort()];
+  }
+
+  function populateAirProducts() {
+    const sel = $('airProduct');
+    const prev = sel.value;
+    sel.innerHTML = airServiceProducts().map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
+  }
+
+  // Entities in service + last 6 WWs + selected product (before symptom narrowing).
+  function airBaseForSymptoms() {
+    if (!allEntities) return [];
+    const weeks = air6Weeks();
+    const product = $('airProduct').value;
+    return allEntities.filter(e => {
+      if (!airMatchesService(e)) return false;
+      const w = e.PartitionKey || e.YearWeek;
+      if (!w || !weeks.includes(w)) return false;
+      if ((e.Category || '') === 'Excluded') return false;
+      if (product && product !== 'All Products' && (e.Category || '') !== product) return false;
+      return true;
+    });
+  }
+
+  function populateAirSymptoms(preserveValue) {
+    const sel = $('airSymptom');
+    const prev = preserveValue ? sel.value : '__all__';
+    const counts = {};
+    for (const e of airBaseForSymptoms()) {
+      const s = (e.Subcategory || '').trim();
+      if (s) counts[s] = (counts[s] || 0) + 1;
+    }
+    const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+    let html = '<option value="__all__">All Symptoms</option>';
+    for (const [s, n] of ranked) html += '<option value="' + esc(s) + '">' + esc(s) + ' (' + n + ')</option>';
+    sel.innerHTML = html;
+    if (preserveValue && [...sel.options].some(o => o.value === prev)) sel.value = prev;
+  }
+
+  // Final filtered set: service + 6 WWs + product + symptom.
+  function airGetFiltered() {
+    const symptom = $('airSymptom').value;
+    return airBaseForSymptoms().filter(e => symptom === '__all__' || (e.Subcategory || '').trim() === symptom);
+  }
+
+  // ---- Synthesis helpers --------------------------------------------------
+
+  // Top N root causes by ticket volume within the filtered set.
+  function airTopRootCauses(filtered, n) {
+    const groups = {};
+    for (const e of filtered) {
+      const rc = (e.PossibleRootCause || e.RootCause || '').trim() || 'Unspecified';
+      (groups[rc] = groups[rc] || []).push(e);
+    }
+    return Object.entries(groups)
+      .map(([rc, tickets]) => ({ rootCause: rc, tickets, count: tickets.length }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, n);
+  }
+
+  // Pull the richest analysis text a ticket carries.
+  function airAnalysisText(e) {
+    return ((e.AIAnalysis || '').trim()) || ((e.DetailedRootCause || '').trim()) || '';
+  }
+
+  // Distil the most common "what was done" steps across a set of tickets.
+  // Returns clean, imperative, action-ready steps ranked by how many tickets
+  // support each one. Primary path = resolution knowledge map; if the history is
+  // too thin to match, fall back to a cleaned imperative pulled from the text.
+  function airDistilSteps(tickets) {
+    const counts = {}; // step id -> { text, count }
+    for (const t of tickets) {
+      const text = airAnalysisText(t);
+      if (!text) continue;
+      const matched = new Set();
+      for (const rule of AIR_RESOLUTION_MAP) {
+        if (matched.has(rule.id)) continue;
+        if (rule.re.test(text)) {
+          matched.add(rule.id);
+          // preserve map order as a tiebreaker via index weight
+          if (!counts[rule.id]) counts[rule.id] = { text: rule.step, count: 0, order: AIR_RESOLUTION_MAP.indexOf(rule) };
+          counts[rule.id].count++;
+        }
+      }
+    }
+    let steps = Object.values(counts)
+      .sort((a, b) => b.count - a.count || a.order - b.order)
+      .slice(0, 5);
+
+    // Fallback: if the map matched little, salvage a clean imperative from the text.
+    if (steps.length < 2) {
+      const extra = airFallbackSteps(tickets, steps.length);
+      const seen = new Set(steps.map(s => s.text.toLowerCase()));
+      for (const e of extra) {
+        if (steps.length >= 5) break;
+        if (seen.has(e.text.toLowerCase())) continue;
+        steps.push(e); seen.add(e.text.toLowerCase());
+      }
+    }
+    return steps;
+  }
+
+  // Salvage an imperative action from resolution phrasings like "corrected by X",
+  // "resolved by X", "needed to X", "had to X", "until the user X", "required X".
+  function airFallbackSteps(tickets, already) {
+    const RESOLVE_RE = /(?:corrected|resolved|fixed|addressed|cleared)\s+by\s+([^.;]{6,90})|(?:needed to|had to|required (?:the user )?to|until (?:the )?(?:user|support|owner|admin)\s+)([a-z][^.;]{6,90})/i;
+    const buckets = {};
+    for (const t of tickets) {
+      const m = RESOLVE_RE.exec(airAnalysisText(t));
+      if (!m) continue;
+      let clause = (m[1] || m[2] || '').trim();
+      if (!clause) continue;
+      // turn gerund/awkward start into a clean imperative
+      clause = clause.replace(/^(running|re-?running)\b/i, 'Run')
+                     .replace(/^(removing)\b/i, 'Remove')
+                     .replace(/^(re-?adding|adding)\b/i, 'Re-add')
+                     .replace(/^(resetting)\b/i, 'Reset')
+                     .replace(/^(re-?installing|installing)\b/i, 'Reinstall')
+                     .replace(/^(clearing)\b/i, 'Clear')
+                     .replace(/^(remapping|re-?mapping)\b/i, 'Remap')
+                     .replace(/^(updating)\b/i, 'Update')
+                     .replace(/^(restarting)\b/i, 'Restart');
+      clause = clause.charAt(0).toUpperCase() + clause.slice(1);
+      if (!/[.!?]$/.test(clause)) clause += '.';
+      const key = clause.toLowerCase().replace(/[^a-z0-9 ]+/g, '').slice(0, 60);
+      if (!buckets[key]) buckets[key] = { text: clause, count: 0, order: 99 };
+      buckets[key].count++;
+    }
+    return Object.values(buckets).sort((a, b) => b.count - a.count).slice(0, 5 - already);
+  }
+
+  // Confidence mix across a set of tickets.
+  function airConfidenceMix(tickets) {
+    const mix = { High: 0, Medium: 0, Low: 0, Unknown: 0 };
+    for (const t of tickets) {
+      const c = (t.Confidence || '').toString().trim().toLowerCase();
+      if (c === 'high') mix.High++;
+      else if (c === 'medium') mix.Medium++;
+      else if (c === 'low') mix.Low++;
+      else mix.Unknown++;
+    }
+    return mix;
+  }
+
+  // Representative excerpts — prefer High-confidence, longest (most detailed) analyses.
+  function airExcerpts(tickets, n) {
+    return tickets
+      .map(t => ({ t, text: airAnalysisText(t), conf: (t.Confidence || '').toString().trim().toLowerCase() }))
+      .filter(x => x.text.length >= 30)
+      .sort((a, b) => {
+        const rank = c => (c === 'high' ? 0 : c === 'medium' ? 1 : 2);
+        return rank(a.conf) - rank(b.conf) || b.text.length - a.text.length;
+      })
+      .slice(0, n);
+  }
+
+  // Most common Detailed Root Cause label — used for the prevention/KB line.
+  function airTopDetailed(tickets) {
+    const counts = {};
+    for (const t of tickets) {
+      const d = (t.DetailedRootCause || '').trim();
+      if (d) counts[d] = (counts[d] || 0) + 1;
+    }
+    const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+    return top ? top[0] : '';
+  }
+
+  // 6-week sparkline of a root cause within the current product/symptom scope.
+  function airSparkline(rootCause) {
+    const weeks = air6Weeks();
+    if (weeks.length === 0) return '';
+    const base = airGetFiltered();
+    const byWeek = {};
+    for (const e of base) {
+      if (((e.PossibleRootCause || e.RootCause || '').trim() || 'Unspecified') !== rootCause) continue;
+      const w = e.PartitionKey || e.YearWeek;
+      if (weeks.includes(w)) byWeek[w] = (byWeek[w] || 0) + 1;
+    }
+    const vals = weeks.map(w => byWeek[w] || 0);
+    const max = Math.max(1, ...vals);
+    const w = 120, h = 28, pad = 2;
+    const step = (w - pad * 2) / Math.max(1, vals.length - 1);
+    const pts = vals.map((v, i) => (pad + i * step) + ',' + (h - pad - (v / max) * (h - pad * 2))).join(' ');
+    const last = vals[vals.length - 1], prev = vals[vals.length - 2] || 0;
+    const col = last > prev ? 'var(--danger)' : (last < prev ? 'var(--success)' : 'var(--muted)');
+    return '<svg width="' + w + '" height="' + h + '" viewBox="0 0 ' + w + ' ' + h + '" style="vertical-align:middle;">' +
+      '<polyline fill="none" stroke="' + col + '" stroke-width="1.6" points="' + pts + '" /></svg>';
+  }
+
+  // ---- Card rendering -----------------------------------------------------
+
+  function airRenderCard(rank, group) {
+    const sn = (rk) => 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(rk || '');
+    const steps    = airDistilSteps(group.tickets);
+    const mix      = airConfidenceMix(group.tickets);
+    const excerpts = airExcerpts(group.tickets, 3);
+    const detailed = airTopDetailed(group.tickets);
+    const total    = group.tickets.length;
+
+    // Confidence mix bar
+    const segs = [['High', mix.High, 'var(--success)'], ['Medium', mix.Medium, '#d97706'], ['Low', mix.Low, 'var(--danger)'], ['Unknown', mix.Unknown, 'var(--muted)']];
+    const confBar = '<div style="display:flex;height:10px;border-radius:6px;overflow:hidden;border:1px solid var(--border);">' +
+      segs.filter(s => s[1] > 0).map(s => '<div title="' + s[0] + ': ' + s[1] + '" style="width:' + ((s[1] / total) * 100).toFixed(1) + '%;background:' + s[2] + ';"></div>').join('') +
+      '</div>' +
+      '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:5px;font-size:0.74rem;color:var(--muted);">' +
+      segs.filter(s => s[1] > 0).map(s => '<span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:' + s[2] + ';margin-right:4px;"></span>' + s[0] + ' ' + s[1] + '</span>').join('') +
+      '</div>';
+
+    const stepsHtml = steps.length
+      ? '<div style="font-size:0.72rem;color:var(--muted);margin:2px 0 6px 0;">Try in this order — most-used fix first</div>' +
+        '<div>' + steps.map((s, i) =>
+          '<div style="display:flex;gap:10px;align-items:flex-start;padding:8px 10px;margin-bottom:6px;background:#f6fbf8;border:1px solid #d7ecdf;border-radius:7px;">' +
+            '<div style="flex-shrink:0;width:22px;height:22px;border-radius:50%;background:#1f7a4d;color:#fff;font-size:0.78rem;font-weight:700;display:flex;align-items:center;justify-content:center;">' + (i + 1) + '</div>' +
+            '<div style="flex:1;font-size:0.88rem;line-height:1.45;">' + esc(s.text) +
+              '<div style="color:var(--muted);font-size:0.72rem;margin-top:2px;">Supported by ' + s.count + ' of ' + total + ' ticket' + (total === 1 ? '' : 's') + '</div>' +
+            '</div>' +
+          '</div>'
+        ).join('') + '</div>'
+      : '<div style="color:var(--muted);font-size:0.84rem;">The stored analysis for this root cause is mostly descriptive (cause only). Open the sample tickets on the right for the exact fix engineers applied.</div>';
+
+    const excerptHtml = excerpts.length
+      ? excerpts.map(x => {
+          const txt = x.text.length > 320 ? x.text.slice(0, 320) + '…' : x.text;
+          const confTag = x.conf ? '<span style="text-transform:capitalize;color:var(--muted);">· ' + esc(x.conf) + ' confidence</span>' : '';
+          return '<div style="background:#fafcff;border:1px solid var(--border);border-left:3px solid var(--intel-blue);border-radius:6px;padding:8px 10px;margin-bottom:6px;font-size:0.82rem;line-height:1.5;">' +
+            '<div style="margin-bottom:4px;">' +
+              '<a href="' + sn(x.t.RowKey) + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">' + esc(x.t.RowKey || '') + '</a> ' +
+              '<span style="color:var(--muted);">' + formatWW(x.t.PartitionKey || '') + '</span> ' + confTag +
+            '</div>' + esc(txt) +
+          '</div>';
+        }).join('')
+      : '';
+
+    const prevention = detailed
+      ? '<div style="margin-top:10px;background:#eef9f2;border:1px solid #cdeede;border-radius:6px;padding:8px 12px;font-size:0.84rem;"><strong style="color:#1f7a4d;">&#128161; Prevention / KB:</strong> Most tickets trace to <em>' + esc(detailed) + '</em>. Consider a KB article or proactive fix targeting this.</div>'
+      : '';
+
+    return '<div class="chart-card" style="margin-bottom:16px;">' +
+      '<div style="display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap;">' +
+        '<div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--intel-classic),var(--intel-blue));color:#fff;font-weight:700;flex-shrink:0;">' + rank + '</div>' +
+        '<div style="flex:1;min-width:220px;">' +
+          '<div style="font-size:1.05rem;font-weight:700;color:var(--intel-classic);">' + esc(group.rootCause) + '</div>' +
+          '<div style="color:var(--muted);font-size:0.82rem;margin-top:2px;">' + total + ' ticket' + (total === 1 ? '' : 's') + ' in the last 6 WWs</div>' +
+        '</div>' +
+        '<div style="text-align:right;">' +
+          '<div style="font-size:0.72rem;color:var(--muted);margin-bottom:2px;">6-week trend</div>' + airSparkline(group.rootCause) +
+        '</div>' +
+      '</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:14px;">' +
+        '<div>' +
+          '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--intel-classic);font-weight:700;">&#9989; Recommended action steps</div>' +
+          stepsHtml +
+          '<div style="margin-top:12px;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--intel-classic);font-weight:700;">Confidence mix</div>' +
+          '<div style="margin-top:6px;">' + confBar + '</div>' +
+        '</div>' +
+        '<div>' +
+          '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--intel-classic);font-weight:700;margin-bottom:6px;">&#128221; Engineer / AI analysis from history</div>' +
+          (excerptHtml || '<div style="color:var(--muted);font-size:0.84rem;">No detailed analysis stored.</div>') +
+        '</div>' +
+      '</div>' +
+      prevention +
+    '</div>';
+  }
+
+  function airRefresh() {
+    const filtered = airGetFiltered();
+    const product  = $('airProduct').value;
+    const symptom  = $('airSymptom').value;
+    const weeks    = air6Weeks();
+    const wkLabel  = weeks.length ? (formatWW(weeks[0]) + ' → ' + formatWW(weeks[weeks.length - 1])) : '—';
+    $('airWindowNote').innerHTML = 'Window: <strong>' + wkLabel + '</strong> · synthesised from <strong>' + filtered.length + '</strong> resolved ticket' + (filtered.length === 1 ? '' : 's') +
+      (symptom !== '__all__' ? ' · symptom <strong>' + esc(symptom) + '</strong>' : '') +
+      ' · recommendations are distilled from analysis engineers/AI already recorded — no live model call.';
+
+    if (filtered.length === 0) {
+      $('airCards').innerHTML = '<div class="state">No resolved tickets in the last 6 work weeks for this selection. Try <em>All Products</em> / <em>All Symptoms</em> or click Reset.</div>';
+      $('airSummary').textContent = '0 tickets';
+      return;
+    }
+    const top5 = airTopRootCauses(filtered, 5);
+    $('airCards').innerHTML = top5.map((g, i) => airRenderCard(i + 1, g)).join('');
+    $('airSummary').textContent = filtered.length + ' tickets · top ' + top5.length + ' root causes';
+  }
+
+  async function loadAirecs() {
+    const loading = $('airLoading'), err = $('airError'), content = $('airContent');
+    try {
+      loading.style.display = 'block'; err.style.display = 'none'; content.style.display = 'none';
+      const entities = await ensureTableLoaded();
+      if (!entities || entities.length === 0) {
+        loading.style.display = 'none';
+        err.innerHTML = '<h3>No incident data yet</h3><p>Run the analyzer runbook to populate incidents.</p>';
+        err.style.display = 'block'; airLoaded = true; return;
+      }
+      populateAirProducts();
+      populateAirSymptoms(false);
+      $('airService').addEventListener('change', () => { populateAirProducts(); populateAirSymptoms(false); airRefresh(); });
+      $('airProduct').addEventListener('change', () => { populateAirSymptoms(false); airRefresh(); });
+      $('airSymptom').addEventListener('change', airRefresh);
+      $('airResetBtn').addEventListener('click', () => {
+        $('airProduct').value = 'All Products';
+        populateAirSymptoms(false);
+        airRefresh();
+      });
+      loading.style.display = 'none'; content.style.display = 'block';
+      airRefresh();
+      airLoaded = true;
+    } catch (e) {
+      loading.style.display = 'none';
+      err.innerHTML = '<h3>Failed to load AI Recommendations</h3><p>' + esc(e.message) + '</p>';
+      err.style.display = 'block';
+    }
+  }
+
+  // ====================================================================
   // SUMMARY TAB (management overview — default)
   // ====================================================================
   let smLoaded = false;
@@ -4421,6 +4835,7 @@
       if (tab === 'rootcause' && !rcLoaded) loadRootCause();
       if (tab === 'reportsplus' && !rpxLoaded) loadReportsPlus();
       if (tab === 'opsplus' && !opxLoaded) loadOpsPlus();
+      if (tab === 'airecs' && !airLoaded) loadAirecs();
     });
   });
 

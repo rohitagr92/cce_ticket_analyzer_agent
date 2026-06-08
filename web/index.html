@@ -698,7 +698,7 @@
     <div id="airError" class="state error" style="display:none;"></div>
     <div id="airContent" style="display:none;">
       <div class="chart-card" style="margin-bottom:16px;">
-        <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, last 6 work weeks</span></h3>
+        <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, across the selected work-week window</span></h3>
         <div class="toolbar" style="margin-bottom:0;">
           <span class="label-inline">Service</span>
           <select id="airService">
@@ -709,6 +709,10 @@
           <select id="airProduct" style="min-width:260px;"></select>
           <span class="label-inline">Symptom</span>
           <select id="airSymptom" style="min-width:240px;"></select>
+          <span class="label-inline">From WW</span>
+          <select id="airWeekFrom"></select>
+          <span class="label-inline">To WW</span>
+          <select id="airWeekTo"></select>
           <button class="btn-outline" id="airResetBtn">Reset</button>
           <div class="summary" id="airSummary"></div>
         </div>
@@ -3118,11 +3122,42 @@
   // ====================================================================
   // AI RECOMMENDATIONS TAB (additive; reuses ensureTableLoaded + allEntities +
   // aggregated + formatWW + esc). Recommendations are SYNTHESISED CLIENT-SIDE
-  // from the analysis text engineers/AI already wrote on resolved tickets in
-  // the last 6 work weeks — no live LLM call, no extra Azure cost.
+  // from the analysis text engineers/AI already wrote on resolved tickets across
+  // the selected work-week window (default = last 7 WWs) — no live LLM call,
+  // no extra Azure cost.
   // ====================================================================
   let airLoaded = false;
-  const air6Weeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice(-6) : []);
+
+  // All known work weeks (ascending).
+  const airAllWeeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice() : []);
+
+  // The work-week window the user has selected (From/To dropdowns).
+  // Defaults to the most recent 7 weeks until the dropdowns are populated.
+  function airWeekWindow() {
+    const all = airAllWeeks();
+    if (all.length === 0) return [];
+    const fromEl = $('airWeekFrom'), toEl = $('airWeekTo');
+    const from = fromEl && fromEl.value ? fromEl.value : null;
+    const to   = toEl && toEl.value ? toEl.value : null;
+    if (!from || !to) return all.slice(-7);
+    let iFrom = all.indexOf(from), iTo = all.indexOf(to);
+    if (iFrom === -1) iFrom = Math.max(0, all.length - 7);
+    if (iTo === -1) iTo = all.length - 1;
+    if (iFrom > iTo) { const t = iFrom; iFrom = iTo; iTo = t; }
+    return all.slice(iFrom, iTo + 1);
+  }
+
+  // Populate the From/To week dropdowns; default to the most recent 7 weeks.
+  function populateAirWeeks() {
+    const all = airAllWeeks();
+    const fromEl = $('airWeekFrom'), toEl = $('airWeekTo');
+    if (!fromEl || !toEl) return;
+    const opts = all.map(w => '<option value="' + esc(w) + '">' + esc(formatWW(w)) + '</option>').join('');
+    fromEl.innerHTML = opts; toEl.innerHTML = opts;
+    const def = all.slice(-7);
+    fromEl.value = def.length ? def[0] : (all[0] || '');
+    toEl.value   = all.length ? all[all.length - 1] : '';
+  }
 
   // Resolution knowledge map — turns descriptive history into CLEAR, IMPERATIVE,
   // ready-to-action steps. Each entry: a signal regex (matched against the stored
@@ -3197,7 +3232,7 @@
   // Entities in service + last 6 WWs + selected product (before symptom narrowing).
   function airBaseForSymptoms() {
     if (!allEntities) return [];
-    const weeks = air6Weeks();
+    const weeks = airWeekWindow();
     const product = $('airProduct').value;
     return allEntities.filter(e => {
       if (!airMatchesService(e)) return false;
@@ -3354,7 +3389,7 @@
 
   // 6-week sparkline of a root cause within the current product/symptom scope.
   function airSparkline(rootCause) {
-    const weeks = air6Weeks();
+    const weeks = airWeekWindow();
     if (weeks.length === 0) return '';
     const base = airGetFiltered();
     const byWeek = {};
@@ -3374,6 +3409,52 @@
       '<polyline fill="none" stroke="' + col + '" stroke-width="1.6" points="' + pts + '" /></svg>';
   }
 
+  // ---- Resolution coverage / escalation / trend signals -------------------
+
+  // Did this ticket end with a documented fix (map signal or resolve phrasing)?
+  function airTicketResolved(t) {
+    const text = airAnalysisText(t);
+    if (!text) return false;
+    if (AIR_RESOLUTION_MAP.some(r => r.re.test(text))) return true;
+    return /(?:corrected|resolved|fixed|addressed|cleared)\s+by\s+|needed to|had to|required (?:the user )?to|until (?:the )?(?:user|support|owner|admin)\s+/i.test(text);
+  }
+
+  // How many tickets in a set carry a documented fix vs a knowledge gap.
+  function airCoverage(tickets) {
+    let matched = 0;
+    for (const t of tickets) if (airTicketResolved(t)) matched++;
+    return { matched, total: tickets.length, gap: tickets.length - matched };
+  }
+
+  // How many tickets ended in escalation / no local fix.
+  function airEscalation(tickets) {
+    const ESC_RE = /escalat\w*\s+(?:to\s+|with\s+)?microsoft|raised?\s+(?:to|with)\s+microsoft|microsoft\s+support|no\s+(?:clear\s+)?local\s+(?:fix|resolution)|without\s+a\s+(?:clear\s+)?local\s+fix|beyond\s+local|product\s+(?:bug|defect)|backend\s+(?:team|fix)/i;
+    let n = 0;
+    for (const t of tickets) if (ESC_RE.test(airAnalysisText(t))) n++;
+    return { count: n, total: tickets.length, rate: tickets.length ? n / tickets.length : 0 };
+  }
+
+  // Rising / Stable / Fading verdict over the selected week window.
+  function airTrendVerdict(rootCause) {
+    const weeks = airWeekWindow();
+    if (weeks.length < 2) return null;
+    const base = airGetFiltered();
+    const byWeek = {};
+    for (const e of base) {
+      if (((e.PossibleRootCause || e.RootCause || '').trim() || 'Unspecified') !== rootCause) continue;
+      const w = e.PartitionKey || e.YearWeek;
+      if (weeks.includes(w)) byWeek[w] = (byWeek[w] || 0) + 1;
+    }
+    const vals = weeks.map(w => byWeek[w] || 0);
+    const half = Math.floor(vals.length / 2);
+    const mean = a => a.length ? a.reduce((s, v) => s + v, 0) / a.length : 0;
+    const firstAvg = mean(vals.slice(0, half || 1));
+    const lastAvg  = mean(vals.slice(half));
+    if (lastAvg > firstAvg * 1.25 && lastAvg - firstAvg >= 0.5) return { label: 'Rising', icon: '&#9650;', color: 'var(--danger)' };
+    if (lastAvg < firstAvg * 0.75 && firstAvg - lastAvg >= 0.5) return { label: 'Fading', icon: '&#9660;', color: 'var(--success)' };
+    return { label: 'Stable', icon: '&#9644;', color: 'var(--muted)' };
+  }
+
   // ---- Card rendering -----------------------------------------------------
 
   function airRenderCard(rank, group) {
@@ -3383,6 +3464,27 @@
     const excerpts = airExcerpts(group.tickets, 3);
     const detailed = airTopDetailed(group.tickets);
     const total    = group.tickets.length;
+
+    // Operational signals.
+    const coverage      = airCoverage(group.tickets);
+    const escal         = airEscalation(group.tickets);
+    const trend         = airTrendVerdict(group.rootCause);
+    const dominantShare = steps.length ? steps[0].count / Math.max(1, coverage.matched) : 0;
+    const isKbCandidate = total >= 5 && steps.length && steps[0].count >= 3 && dominantShare >= 0.5;
+    const isEscalated   = escal.rate >= 0.4 && escal.count >= 2;
+
+    const chip = (txt, bg, fg, bd) => '<span style="display:inline-flex;align-items:center;gap:4px;font-size:0.72rem;font-weight:600;padding:2px 9px;border-radius:11px;background:' + bg + ';color:' + fg + ';border:1px solid ' + bd + ';">' + txt + '</span>';
+    const badges = [];
+    if (trend)         badges.push(chip(trend.icon + ' ' + trend.label, '#f3f6fb', trend.color, 'var(--border)'));
+    if (isEscalated)   badges.push(chip('&#11014; Mostly escalated &middot; needs KB / process', '#fdecec', 'var(--danger)', '#f3c6c6'));
+    if (isKbCandidate) badges.push(chip('&#11088; KB / automation candidate', '#eef9f2', '#1f7a4d', '#cdeede'));
+    const badgesHtml = badges.length ? '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:7px;">' + badges.join('') + '</div>' : '';
+
+    const coverageLine = '<div style="font-size:0.76rem;color:var(--muted);margin-top:8px;padding-top:7px;border-top:1px dashed var(--border);">' +
+      '&#128202; Resolution coverage: <strong style="color:' + (coverage.gap > coverage.matched ? 'var(--danger)' : 'var(--intel-classic)') + ';">' + coverage.matched + ' of ' + total + '</strong> ticket' + (total === 1 ? '' : 's') + ' matched a known fix' +
+      (coverage.gap > 0 ? ' &middot; <strong>' + coverage.gap + '</strong> had no documented resolution (KB / training gap)' : ' &middot; full coverage') +
+      (escal.count > 0 ? ' &middot; <strong>' + escal.count + '</strong> escalated to Microsoft / no local fix' : '') +
+      '</div>';
 
     // Confidence mix bar
     const segs = [['High', mix.High, 'var(--success)'], ['Medium', mix.Medium, '#d97706'], ['Low', mix.Low, 'var(--danger)'], ['Unknown', mix.Unknown, 'var(--muted)']];
@@ -3427,16 +3529,19 @@
         '<div style="display:flex;align-items:center;justify-content:center;width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,var(--intel-classic),var(--intel-blue));color:#fff;font-weight:700;flex-shrink:0;">' + rank + '</div>' +
         '<div style="flex:1;min-width:220px;">' +
           '<div style="font-size:1.05rem;font-weight:700;color:var(--intel-classic);">' + esc(group.rootCause) + '</div>' +
-          '<div style="color:var(--muted);font-size:0.82rem;margin-top:2px;">' + total + ' ticket' + (total === 1 ? '' : 's') + ' in the last 6 WWs</div>' +
+          '<div style="color:var(--muted);font-size:0.82rem;margin-top:2px;">' + total + ' ticket' + (total === 1 ? '' : 's') + ' in the selected window</div>' +
+          badgesHtml +
         '</div>' +
         '<div style="text-align:right;">' +
-          '<div style="font-size:0.72rem;color:var(--muted);margin-bottom:2px;">6-week trend</div>' + airSparkline(group.rootCause) +
+          '<div style="font-size:0.72rem;color:var(--muted);margin-bottom:2px;">Trend over window</div>' + airSparkline(group.rootCause) +
+          (trend ? '<div style="font-size:0.82rem;font-weight:700;color:' + trend.color + ';margin-top:2px;">' + trend.icon + ' ' + trend.label + '</div>' : '') +
         '</div>' +
       '</div>' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:16px;margin-top:14px;">' +
         '<div>' +
           '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--intel-classic);font-weight:700;">&#9989; Recommended action steps</div>' +
           stepsHtml +
+          coverageLine +
           '<div style="margin-top:12px;font-size:0.78rem;text-transform:uppercase;letter-spacing:0.4px;color:var(--intel-classic);font-weight:700;">Confidence mix</div>' +
           '<div style="margin-top:6px;">' + confBar + '</div>' +
         '</div>' +
@@ -3453,14 +3558,16 @@
     const filtered = airGetFiltered();
     const product  = $('airProduct').value;
     const symptom  = $('airSymptom').value;
-    const weeks    = air6Weeks();
+    const weeks    = airWeekWindow();
     const wkLabel  = weeks.length ? (formatWW(weeks[0]) + ' → ' + formatWW(weeks[weeks.length - 1])) : '—';
-    $('airWindowNote').innerHTML = 'Window: <strong>' + wkLabel + '</strong> · synthesised from <strong>' + filtered.length + '</strong> resolved ticket' + (filtered.length === 1 ? '' : 's') +
+    const cov      = airCoverage(filtered);
+    $('airWindowNote').innerHTML = 'Window: <strong>' + wkLabel + '</strong> (' + weeks.length + ' WW) · synthesised from <strong>' + filtered.length + '</strong> resolved ticket' + (filtered.length === 1 ? '' : 's') +
       (symptom !== '__all__' ? ' · symptom <strong>' + esc(symptom) + '</strong>' : '') +
+      (filtered.length ? ' · <strong>' + cov.matched + '/' + cov.total + '</strong> have a documented fix' : '') +
       ' · recommendations are distilled from analysis engineers/AI already recorded — no live model call.';
 
     if (filtered.length === 0) {
-      $('airCards').innerHTML = '<div class="state">No resolved tickets in the last 6 work weeks for this selection. Try <em>All Products</em> / <em>All Symptoms</em> or click Reset.</div>';
+      $('airCards').innerHTML = '<div class="state">No resolved tickets in the selected work-week window for this selection. Widen the WW range, try <em>All Products</em> / <em>All Symptoms</em>, or click Reset.</div>';
       $('airSummary').textContent = '0 tickets';
       return;
     }
@@ -3480,12 +3587,16 @@
         err.style.display = 'block'; airLoaded = true; return;
       }
       populateAirProducts();
+      populateAirWeeks();
       populateAirSymptoms(false);
       $('airService').addEventListener('change', () => { populateAirProducts(); populateAirSymptoms(false); airRefresh(); });
       $('airProduct').addEventListener('change', () => { populateAirSymptoms(false); airRefresh(); });
       $('airSymptom').addEventListener('change', airRefresh);
+      $('airWeekFrom').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
+      $('airWeekTo').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
       $('airResetBtn').addEventListener('click', () => {
         $('airProduct').value = 'All Products';
+        populateAirWeeks();
         populateAirSymptoms(false);
         airRefresh();
       });

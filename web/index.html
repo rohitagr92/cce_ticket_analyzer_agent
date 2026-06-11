@@ -3753,6 +3753,8 @@
     const priorAi = priorEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
     const curHi = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
     const priorHi = priorAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
+    const curLow = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'low').length;
+    const curMed = curAi.length - curHi - curLow;  // everything that isn't High or Low
     const curHiPct = curAi.length ? (curHi * 100 / curAi.length) : 0;
     const priorHiPct = priorAi.length ? (priorHi * 100 / priorAi.length) : 0;
 
@@ -3771,7 +3773,7 @@
       clearedNames: cleared, freshNames: fresh,
       curEx, priorEx, curExPct, priorExPct,
       curAiCount: curAi.length, priorAiCount: priorAi.length,
-      curHi, priorHi, curHiPct, priorHiPct,
+      curHi, priorHi, curMed, curLow, curHiPct, priorHiPct,
       curCov, priorCov
     };
   }
@@ -3928,7 +3930,7 @@
     $('smKpis').innerHTML =
       tile('Tickets — latest WW',  m.curTotal,                  wwLabel,                                                          null, h.total,  '#0068b5') +
       tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' rated High · ' + wwLabel,   null, h.hiPct,  '#2ea36b') +
+      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' High · ' + m.curMed + ' Med · ' + m.curLow + ' Low · ' + wwLabel,   null, h.hiPct,  '#2ea36b') +
       topIssueTile();
   }
 

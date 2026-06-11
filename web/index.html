@@ -3906,16 +3906,14 @@
       '</div>';
     };
 
-    const dTotal = smFormatDelta(m.curTotal, m.hasPrior ? m.priorTotal : null, { higherIsWorse: true });
-    const dEx    = smFormatDelta(m.curExPct, m.hasPrior ? m.priorExPct : null, { higherIsWorse: true, percent: true });
-    const dHi    = smFormatDelta(m.curHiPct, m.hasPrior ? m.priorHiPct : null, { higherIsWorse: false, percent: true });
-
     const wwLabel = formatWW(curWk || '');
     const h = history || {};
+    // KPI tiles always reflect the latest WW only — no WoW arrows/deltas (kept the
+    // 8-WW mini-sparkline for context). Only the "Top issue" tile follows the range.
     $('smKpis').innerHTML =
-      tile('Tickets — current WW', m.curTotal,                  wwLabel,                                                          m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
-      tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' rated High · ' + wwLabel,   m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
+      tile('Tickets — latest WW',  m.curTotal,                  wwLabel,                                                          null, h.total,  '#0068b5') +
+      tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         null, h.exPct,  '#d64545') +
+      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' rated High · ' + wwLabel,   null, h.hiPct,  '#2ea36b') +
       topIssueTile();
   }
 
@@ -4907,19 +4905,22 @@
         const rangeLbl = weeksInRange.length === 1
           ? formatWW(curWk)
           : formatWW(fromWk) + ' \u2192 ' + formatWW(toWk) + ' (' + weeksInRange.length + ' WWs)';
+        // KPI tiles are pinned to the latest WW in the data, regardless of the
+        // selected range. Only the "Top issue" tile and the charts follow the range.
+        const latestWk = weeks[weeks.length - 1];
+        const latestEnts = byWeek[latestWk] || [];
         const contextLabel = (svc === 'all' ? 'All services' : svc) +
           ' &middot; range <strong>' + rangeLbl + '</strong>' +
-          ' &middot; KPIs compare <strong>' + formatWW(curWk) + '</strong>' +
-          (priorWk ? ' vs <strong>' + formatWW(priorWk) + '</strong>' : ' (no prior WW in range)') +
+          ' &middot; KPIs show latest WW <strong>' + formatWW(latestWk) + '</strong>' +
           ' &middot; ' + rangeEnts.length + ' tickets in range / ' + filtered.length + ' tracked overall';
         $('smContext').innerHTML = contextLabel;
 
-        // Metrics + 8-WW per-KPI history for the tile sparklines + Top Issue for the range.
-        const metrics = smComputeMetrics(curEnts, priorEnts, priorWk);
-        const history = smBuildHistorySeries(filtered, curWk, 8);
+        // KPI metrics are always for the latest WW; Top Issue + history follow selection.
+        const metrics = smComputeMetrics(latestEnts, [], null);
+        const history = smBuildHistorySeries(filtered, latestWk, 8);
         const topIssue = computeTopIssue(rangeEnts, weeksInRange);
         const topN = parseInt(sankeyTopNSel.value, 10) || 3;
-        smRenderKpis(curWk, priorWk, metrics, history, topIssue);
+        smRenderKpis(latestWk, null, metrics, history, topIssue);
         smRenderMovers(curEnts, priorEnts, priorWk);
         smRenderPareto(rangeEnts, rangeLbl);
         smRenderSankey(rangeEnts, rangeLbl, topN);

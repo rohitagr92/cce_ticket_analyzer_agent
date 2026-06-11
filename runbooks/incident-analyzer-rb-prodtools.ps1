@@ -296,6 +296,76 @@ function Complete-BlobLogging {
 
 #endregion
 
+#region Log Analytics Heartbeat (monitoring)
+
+# Posts a compact JSON heartbeat to a Log Analytics workspace via the HTTP Data
+# Collector API. Used for per-run monitoring (job Started/Completed/Failed).
+# Workspace id/key are read from Automation variables LAWorkspaceId / LAWorkspaceKey.
+function Send-LogAnalyticsHeartbeat {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][ValidateSet('Started','Completed','Failed')][string]$Status,
+        [int]$ProcessedCount = 0,
+        [int]$ErrorCount = 0,
+        [string]$Message = ''
+    )
+
+    try {
+        # Resolve workspace credentials (Automation variables in cloud; LocalConfig locally)
+        if ($Script:IsAzureAutomation) {
+            $workspaceId  = Get-AutomationVariable -Name 'LAWorkspaceId' -ErrorAction SilentlyContinue
+            $workspaceKey = Get-AutomationVariable -Name 'LAWorkspaceKey' -ErrorAction SilentlyContinue
+        } else {
+            $workspaceId  = $Script:LocalConfig.LAWorkspaceId
+            $workspaceKey = $Script:LocalConfig.LAWorkspaceKey
+        }
+
+        if ([string]::IsNullOrWhiteSpace($workspaceId) -or [string]::IsNullOrWhiteSpace($workspaceKey)) {
+            Write-Host 'Heartbeat skipped: LAWorkspaceId/LAWorkspaceKey not configured' -ForegroundColor Yellow
+            return
+        }
+
+        $jobId = if ($PSPrivateMetadata.JobId) { $PSPrivateMetadata.JobId.Guid } else { [string]([guid]::NewGuid()) }
+
+        $body = @{
+            jobId          = $jobId
+            jobName        = 'incident-analyzer-rb-prodtools'
+            status         = $Status
+            processedCount = $ProcessedCount
+            errorCount     = $ErrorCount
+            message        = $Message
+            timestamp      = (Get-Date).ToUniversalTime().ToString('o')
+        } | ConvertTo-Json -Depth 4
+
+        $logType        = 'IncidentAnalyzerHeartbeat'
+        $rfc1123date    = (Get-Date).ToUniversalTime().ToString('r')
+        $contentLength  = [System.Text.Encoding]::UTF8.GetByteCount($body)
+        $stringToHash   = "POST`n$contentLength`napplication/json`nx-ms-date:$rfc1123date`n/api/logs"
+        $bytesToHash    = [System.Text.Encoding]::UTF8.GetBytes($stringToHash)
+        $keyBytes       = [Convert]::FromBase64String($workspaceKey)
+        $hmac           = New-Object System.Security.Cryptography.HMACSHA256
+        $hmac.Key       = $keyBytes
+        $encodedHash    = [Convert]::ToBase64String($hmac.ComputeHash($bytesToHash))
+        $signature      = "SharedKey ${workspaceId}:${encodedHash}"
+        $uri            = "https://$workspaceId.ods.opinsights.azure.com/api/logs?api-version=2016-04-01"
+
+        $headers = @{
+            'Authorization'        = $signature
+            'Log-Type'             = $logType
+            'x-ms-date'            = $rfc1123date
+            'time-generated-field' = 'timestamp'
+        }
+
+        Invoke-RestMethod -Method Post -Uri $uri -Headers $headers -Body $body -ContentType 'application/json' -ErrorAction Stop | Out-Null
+        Write-Host "Heartbeat sent: $Status" -ForegroundColor Cyan
+    } catch {
+        # Monitoring must never break the main workflow
+        Write-Host "Heartbeat failed ($Status): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
+#endregion
+
 #region Core Utility Functions
 
 function Get-StorageContext {
@@ -1570,8 +1640,24 @@ function Invoke-TicketProcessing {
         $ticket.Misrouted = ($ticket.Category -eq 'Excluded')
 
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
-        $ticket.Confidence = $categoryInfo.confidence_level
-        $ticket.Reasoning = $categoryInfo.reasoning
+
+        # Always persist a usable Confidence (High/Medium/Low) so the dashboards
+        # never fall back to "Unknown". When the model gives no parseable level we
+        # derive one from whether both root causes resolved to canonical labels.
+        $rootCausesKnown = ($ticket.PossibleRootCause -ne 'Unknown' -and $ticket.DetailedRootCause -ne 'Unknown')
+        $ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$categoryInfo.confidence_level) -RootCausesKnown $rootCausesKnown
+        if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.confidence_level)) {
+            Write-ScriptLog "Confidence not parsed for $($Incident.number) - defaulted to '$($ticket.Confidence)' (rootCausesKnown=$rootCausesKnown)" -Level Info -Category "Categorization"
+        }
+
+        # Always persist a non-empty reasoning narrative so AIAnalysis (and the AI
+        # Recommendations tab) always has something to show / distil.
+        if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.reasoning)) {
+            $ticket.Reasoning = Get-FallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
+            Write-ScriptLog "Reasoning empty for $($Incident.number) - composed fallback narrative from canonical fields" -Level Info -Category "Categorization"
+        } else {
+            $ticket.Reasoning = [string]$categoryInfo.reasoning
+        }
         $ticket.Evidence = $categoryInfo.key_evidence
         $ticket.Resolution = $categoryInfo.resolution_summary
         $ticket.Type = $categoryInfo.how_do_i_or_error
@@ -2296,6 +2382,42 @@ function Get-CanonicalLabelsFromTemplates {
 
 # Coerces a raw string to a canonical label from an allowlist.
 # Strategy: exact (case-insensitive) -> contains -> "Unknown"
+function Get-NormalizedConfidence {
+    [CmdletBinding()]
+    param(
+        [string]$Raw,
+        [bool]$RootCausesKnown = $true
+    )
+    # Extract a High/Medium/Low level from whatever the model emitted (handles
+    # "**High**", "High - because ...", "Confidence: medium", etc.).
+    if (-not [string]::IsNullOrWhiteSpace($Raw)) {
+        $clean = ($Raw -replace '\*+', '').Trim()
+        if ($clean -imatch '\bhigh\b')                       { return 'High' }
+        if ($clean -imatch '\bmedium\b|\bmoderate\b|\bmed\b') { return 'Medium' }
+        if ($clean -imatch '\blow\b')                        { return 'Low' }
+    }
+    # Could not parse a level — derive a defensible default so the dashboards
+    # never show "Unknown": both root causes resolved to canonical labels means a
+    # solid classification (Medium); otherwise it is weak (Low).
+    if ($RootCausesKnown) { return 'Medium' }
+    return 'Low'
+}
+
+# Build a minimal analysis narrative from canonical fields so AIAnalysis is never
+# blank in the dashboards when the model returned no reasoning text.
+function Get-FallbackReasoning {
+    [CmdletBinding()]
+    param([object]$Ticket, [object]$CategoryInfo)
+    $parts = @()
+    if ($Ticket.Subcategory)                                                    { $parts += "Symptom: $($Ticket.Subcategory)" }
+    if ($Ticket.PossibleRootCause -and $Ticket.PossibleRootCause -ne 'Unknown') { $parts += "Possible root cause: $($Ticket.PossibleRootCause)" }
+    if ($Ticket.DetailedRootCause -and $Ticket.DetailedRootCause -ne 'Unknown') { $parts += "Detailed root cause: $($Ticket.DetailedRootCause)" }
+    $resolution = [string]$CategoryInfo.resolution_summary
+    if (-not [string]::IsNullOrWhiteSpace($resolution))                         { $parts += "Resolution: $resolution" }
+    if ($parts.Count -gt 0) { return ("$($Ticket.Category) :: " + ($parts -join '. ') + '.') }
+    return "$($Ticket.Category): detailed analysis was not captured for this ticket."
+}
+
 function Get-CanonicalLabel {
     [CmdletBinding()]
     param(
@@ -2467,6 +2589,9 @@ if ($env:RUNBOOK_LOAD_ONLY -eq '1') {
 try {
     # Initialize enhanced logging
     Initialize-BlobLogging
+
+    # Monitoring heartbeat: job started
+    Send-LogAnalyticsHeartbeat -Status 'Started' -Message 'EUC ticket processing workflow started'
     
     Write-ScriptLog "=== STARTING EUC Ticket PROCESSING WORKFLOW ===" -Level Info
     
@@ -2777,12 +2902,18 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     #     Write-ScriptLog "Report sent successfully: $totalProcessedTickets incidents across $($CategoryData.Count) categories" -Level Success
     # }
     
+    # Monitoring heartbeat: job completed
+    Send-LogAnalyticsHeartbeat -Status 'Completed' -ProcessedCount $totalProcessedTickets -Message "Execution completed successfully ($dataSource)"
+
     # Complete logging with success message
     Complete-BlobLogging -FinalMessage "Execution completed successfully - $totalProcessedTickets incidents processed ($dataSource)"
     
 } catch {
     Write-ScriptLog "EUC workflow execution failed: $($_.Exception.Message)" -Level Error
     Write-ScriptLog "Stack trace: $($_.ScriptStackTrace)" -Level Debug
+
+    # Monitoring heartbeat: job failed
+    Send-LogAnalyticsHeartbeat -Status 'Failed' -ErrorCount 1 -Message $_.Exception.Message
     
     # Complete logging even on error
     Complete-BlobLogging -FinalMessage "Execution failed with error: $($_.Exception.Message)"

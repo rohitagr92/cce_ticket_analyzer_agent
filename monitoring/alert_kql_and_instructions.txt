@@ -1,0 +1,26 @@
+KQL Alert (Scheduled Query Rule) — failed Automation jobs
+
+Query (use in Scheduled Query Rule or Log Analytics):
+
+AzureDiagnostics
+| where Category == 'JobStreams' or Category == 'Job'
+| where Level == 'Error' or Status_s == 'Failed'
+| where TimeGenerated > ago(15m)
+| summarize FailedJobs = count()
+| where FailedJobs >= 1
+
+Notes:
+- Target data source: the Log Analytics workspace you create and wire Diagnostic Settings to.
+- The scheduled query rule frequency should be 5 minutes and window 15 minutes for timely alerts.
+- Action: ActionGroup that emails the Teams channel address provided.
+
+Action Group guidance:
+- Create an Action Group with a single Email receiver using the address: 7d20a744.intel.onmicrosoft.com@amer.teams.ms
+- Email notifications to a Teams channel require that channel be configured to accept incoming messages via email.
+
+Runbook integration:
+- Add `Send-LogAnalyticsHeartbeat` calls at job start and job end/failure in `runbooks/incident-analyzer-rb-prodtools.ps1`.
+- Store `LAWorkspaceId` and `LAWorkspaceKey` as Automation variables (secure) and reference them in the runbook.
+
+Validation:
+- After deployment, run a test runbook job that deliberately errors and confirm a message is delivered to the Teams channel email.

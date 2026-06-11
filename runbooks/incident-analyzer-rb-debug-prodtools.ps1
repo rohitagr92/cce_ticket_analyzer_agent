@@ -1433,8 +1433,14 @@ function Invoke-TicketProcessing {
         
         $ticket.Category = $rawCategory
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
-        $ticket.Confidence = $categoryInfo.confidence_level
-        $ticket.Reasoning = $categoryInfo.reasoning
+        # Always persist a usable Confidence + non-empty reasoning so dashboards
+        # never show "Unknown" / blank AIAnalysis.
+        $ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$categoryInfo.confidence_level)
+        if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.reasoning)) {
+            $ticket.Reasoning = Get-FallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
+        } else {
+            $ticket.Reasoning = [string]$categoryInfo.reasoning
+        }
         $ticket.Evidence = $categoryInfo.key_evidence
         $ticket.Resolution = $categoryInfo.resolution_summary
         $ticket.Type = $categoryInfo.how_do_i_or_error
@@ -2037,6 +2043,32 @@ $Script:Config = @{
         EnableDebug = $true
         TimestampFormat = "yyyy-MM-dd HH:mm:ss"
     }
+}
+
+# Normalises a raw confidence value to High/Medium/Low so the dashboards never
+# fall back to "Unknown". When the model gives no parseable level, defaults to
+# Medium (no per-product root-cause signal is available in this debug variant).
+function Get-NormalizedConfidence {
+    [CmdletBinding()]
+    param([string]$Raw)
+    if (-not [string]::IsNullOrWhiteSpace($Raw)) {
+        $clean = ($Raw -replace '\*+', '').Trim()
+        if ($clean -imatch '\bhigh\b')                       { return 'High' }
+        if ($clean -imatch '\bmedium\b|\bmoderate\b|\bmed\b') { return 'Medium' }
+        if ($clean -imatch '\blow\b')                        { return 'Low' }
+    }
+    return 'Medium'
+}
+
+# Composes a minimal narrative so AIAnalysis is never blank in the dashboards.
+function Get-FallbackReasoning {
+    [CmdletBinding()]
+    param([object]$Ticket, [object]$CategoryInfo)
+    $parts = @()
+    $resolution = [string]$CategoryInfo.resolution_summary
+    if (-not [string]::IsNullOrWhiteSpace($resolution)) { $parts += "Resolution: $resolution" }
+    if ($parts.Count -gt 0) { return ("$($Ticket.Category) :: " + ($parts -join '. ') + '.') }
+    return "$($Ticket.Category): detailed analysis was not captured for this ticket."
 }
 
 class TicketAnalysis {

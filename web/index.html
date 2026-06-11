@@ -377,6 +377,16 @@
   }
   .btn-primary:hover { background: var(--intel-blue); border-color: var(--intel-blue); }
 </style>
+<!-- Application Insights SDK — initialized lazily from config.json -->
+<script type="text/javascript">
+  !function(T,l,y){var S=T.location,k="script",D="instrumentationKey",C="ingestionendpoint",I="disableExceptionTracking",E="ai.device.",b="toLowerCase",w="crossOriginIsolated",N="XMLHttpRequest",e=window,n=document,r=n.createElement(k),t=n.head||n.getElementsByTagName(k)[0],o={},c,s,i,f;function a(config,i,t){function n(i,t){if(!config[i]){var e=config.initialize;config[i]=new t(e,config,t);if(e)config.initialize=false}}var e=config.cfg;e[D]&&(e.endpointUrl=e[D]);n("ajax",e=function(n,e,r){});n("dependencies",e);n("properties",e);n("pageviews",e);n("exceptions",e)}r.src="https://js.monitor.azure.com/scripts/b/ai.2.min.js";r.onload=r.onerror=function(){window.__aiLoaded=true};r.crossOrigin="anonymous";r.async=1;t.parentNode.insertBefore(r,t);function g(e,t){return function(){var r=[].slice.call(arguments);t&&r.push(t);return e.apply(this,r)}}function q(e,t,r){if(!o[e]){var n=function(){var e=arguments;g(function(){window.appInsights&&window.appInsights[t]&&window.appInsights[t].apply(window.appInsights,e)})();};o[e]=n;l[e]=n}}q("flush");q("setAuthenticatedUserContext");q("clearAuthenticatedUserContext");q("trackEvent");q("trackPageView");q("trackException");q("trackTrace");q("trackMetric");q("trackDependencyData");q("startTrackPage");q("stopTrackPage");q("startTrackEvent");q("stopTrackEvent");q("addTelemetryInitializer");q("trackPageViewPerformance");l.appInsights=o}(window,window,document);
+  window.__appInsightsInit = function(connectionString) {
+    if (!connectionString) return;
+    var cfg = { config: { connectionString: connectionString, enableAutoRouteTracking: true } };
+    window.appInsights = new window.Microsoft.ApplicationInsights.ApplicationInsights(cfg);
+    window.appInsights.loadAppInsights();
+  };
+</script>
 </head>
 <body>
 <header>
@@ -429,6 +439,7 @@
         <select id="smToWeek" style="min-width:140px;"></select>
         <button type="button" class="btn-outline" id="smResetBtn">Reset to latest 4 WWs</button>
         <div class="sm-context" id="smContext"></div>
+        <div id="smLastUpdated" style="margin-left:auto;font-size:0.76rem;color:var(--muted);white-space:nowrap;"></div>
       </div>
 
       <!-- 1. KPI strip (5 tiles, each with own mini-sparkline) -->
@@ -757,11 +768,13 @@
   ).toString(16).padStart(6, '0'));
 
   // --- Identify user ---
+  let _aiUser = null;
   try {
     const meRes = await fetch('/.auth/me');
     if (meRes.ok) {
       const p = (await meRes.json()).clientPrincipal;
       $('userInfo').textContent = (p && p.userDetails) ? p.userDetails : 'Anonymous';
+      if (p && p.userDetails) _aiUser = p.userDetails;
     }
   } catch (e) { $('userInfo').textContent = ''; }
 
@@ -783,6 +796,19 @@
     }
     return;
   }
+  // --- Initialize Application Insights ---
+  if (cfg.appInsightsConnectionString) {
+    try {
+      const ai = new window.Microsoft.ApplicationInsights.ApplicationInsights({
+        config: { connectionString: cfg.appInsightsConnectionString, enableAutoRouteTracking: true }
+      });
+      ai.loadAppInsights();
+      if (_aiUser) ai.setAuthenticatedUserContext(_aiUser, undefined, true);
+      ai.trackPageView();
+      window.appInsights = ai;
+    } catch (e) { /* App Insights unavailable — continue without telemetry */ }
+  }
+
   const blobBaseUrl  = cfg.containerBaseUrl.replace(/\/$/, '');
   const blobSas      = cfg.sasToken.startsWith('?') ? cfg.sasToken : ('?' + cfg.sasToken);
   const tableBaseUrl = (cfg.tableBaseUrl || '').replace(/\/$/, '');
@@ -4744,6 +4770,18 @@
       }
 
       // Populate service selector (default to first service, or "All" if 2+ services).
+      // Show the most recent data timestamp in the top-right of the toolbar.
+      const latestTs = entities.reduce((best, e) => {
+        const t = e.Timestamp || e.Date || '';
+        return t > best ? t : best;
+      }, '');
+      if (latestTs) {
+        const d = new Date(latestTs);
+        const label = isNaN(d.getTime()) ? latestTs
+          : d.toLocaleString(undefined, { month:'short', day:'numeric', year:'numeric', hour:'2-digit', minute:'2-digit' });
+        $('smLastUpdated').innerHTML = '&#128197; Data last updated: <strong>' + esc(label) + '</strong>';
+      }
+
       const svcSel = $('smService');
       const svcOpts = ['<option value="all">All services</option>']
         .concat(serviceConfigs.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'));

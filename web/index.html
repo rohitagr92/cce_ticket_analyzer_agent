@@ -727,6 +727,12 @@
       <div class="chart-card" style="margin-bottom:16px;">
         <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, across the selected work-week window</span></h3>
         <div class="toolbar" style="margin-bottom:0;">
+          <span class="label-inline">View</span>
+          <select id="airRole" title="Choose a role-focused view">
+            <option value="all">Both views</option>
+            <option value="firstlevel">First Level (L1 / L1.5)</option>
+            <option value="engineer">Engineer</option>
+          </select>
           <span class="label-inline">Service</span>
           <select id="airService">
             <option value="Productivity Tools">Productivity Tools</option>
@@ -746,9 +752,17 @@
       </div>
 
       <div id="airWindowNote" style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;"></div>
-      <div id="airCards"></div>
+
+      <!-- First Level (L1 / L1.5): data-quality worklist — why each Medium/Low ticket scored low and the one-line action to fix it. -->
+      <div id="airWorklist" data-air-lens="firstlevel"></div>
+
+      <!-- Engineer: root-cause synthesis cards (recommended steps). -->
+      <div id="airCardsWrap" data-air-lens="engineer">
+        <div id="airCards"></div>
+      </div>
     </div>
   </section>
+
 </main>
 
 <footer>Intel End-User Collaboration &middot; data refreshed by daily Azure Automation runbooks</footer>
@@ -2325,7 +2339,7 @@
   const opxExpanded = new Set();      // expanded keys — RowKey in incidents view, pattern-key in patterns view
   const opxFirstSeenWeek = new Map(); // "Category||PossibleRootCause" -> earliest YearWeek (full history)
   let opxAllInService = [];           // entities filtered by Service only (for outlier + pattern history)
-  const opxActiveFlags = new Set();   // active flag quick-filters: 'new' | 'spike' | 'repeat' | 'misrouted' | 'lowconf'
+  const opxActiveFlags = new Set();   // active flag quick-filters: 'new' | 'spike' | 'repeat' | 'misrouted' | 'medconf' | 'lowconf'
   // Per-view sort state. dir: 1 = ascending, -1 = descending.
   const opxSort = {
     incidents: { col: 'date', dir: -1 },   // default newest first
@@ -2336,6 +2350,7 @@
     { id: 'spike',     label: 'SPIKE',     icon: '&#128293;', bg: '#fde7e7', fg: '#a51c1c' },
     { id: 'repeat',    label: 'REPEAT',    icon: '&#9851;',   bg: '#e9e1ff', fg: '#542aaa' },
     { id: 'misrouted', label: 'MISROUTED', icon: '&#9888;',   bg: '#ffe2cc', fg: '#9a4a00' },
+    { id: 'medconf',   label: 'NEEDS-EVIDENCE', icon: '&#128221;', bg: '#fff4e0', fg: '#9a6a00' },
     { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' }
   ];
 
@@ -2539,13 +2554,16 @@
     if (opxIsMisrouted(inc)) {
       out.push('<span title="Flagged as routed to the wrong queue" style="background:#ffe2cc;color:#9a4a00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#9888; MISROUTED</span>');
     }
+    if (opxConfLevel(inc) === 'medium') {
+      out.push('<span title="AI confidence is Medium — close notes are missing evidence (error code, fix steps, or root cause) that would make this High. See AI Recommendations › First Level." style="background:#fff4e0;color:#9a6a00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#128221; NEEDS-EVIDENCE</span>');
+    }
     if (opxConfLevel(inc) === 'low') {
       out.push('<span title="AI confidence is Low — review the root cause manually" style="background:#fbe2e2;color:#a51c1c;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#129302; LOW-CONF</span>');
     }
     return out.join(' ');
   }
 
-  // Set of flag ids ('new','spike','repeat','misrouted','lowconf') an incident carries.
+  // Set of flag ids ('new','spike','repeat','misrouted','medconf','lowconf') an incident carries.
   function opxIncidentFlagSet(inc, pStats) {
     const s = new Set();
     const ps = pStats[opxPatternKey(inc)];
@@ -2556,6 +2574,7 @@
     if (ps && ps.spike)  s.add('spike');
     if (ps && ps.repeat) s.add('repeat');
     if (opxIsMisrouted(inc)) s.add('misrouted');
+    if (opxConfLevel(inc) === 'medium') s.add('medconf');
     if (opxConfLevel(inc) === 'low') s.add('lowconf');
     return s;
   }
@@ -2572,7 +2591,7 @@
 
   // Render the flag quick-filter chips (also doubles as a legend).
   function opxRenderFlagBar(base, pStats) {
-    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, lowconf: 0 };
+    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, medconf: 0, lowconf: 0 };
     for (const inc of base) opxIncidentFlagSet(inc, pStats).forEach(f => counts[f]++);
 
     const allActive = opxActiveFlags.size === 0;
@@ -3596,6 +3615,126 @@
     '</div>';
   }
 
+  // ---- First-Level data-quality worklist ----------------------------------
+  // Deterministic, no-LLM: each Medium/Low ticket is checked against the SAME
+  // Booster checklist the categorisation prompt uses. We surface WHICH booster is
+  // missing and the one-line action that would raise the ticket's confidence.
+
+  function airConf(e) { return (e.Confidence || '').toString().trim().toLowerCase(); }
+
+  // All free text we can scan for an error code / KB / entitlement signal.
+  function airEvidenceText(e) {
+    return [e.AIAnalysis, e.DetailedRootCause, e.PossibleRootCause, e.ShortDescription, e.Description, e.Title]
+      .filter(Boolean).join(' ');
+  }
+
+  // Each rule mirrors a CONFIDENCE BOOSTER from TicketCategorisation_ProductivityTools.md.
+  // `missing(e)` returns true when the booster is absent — i.e. the gap to fix.
+  const AIR_EVIDENCE_RULES = [
+    {
+      id: 'errorcode', boost: '+15%',
+      heading: 'need a specific error code, KB, or entitlement name',
+      action: 'Add the exact error code / KB number / entitlement (e.g. KB10045042, MSOL License, AGS entitlement) to the close notes.',
+      missing: (e) => !/\bKB\s?\d{3,}\b|error\s*(?:code)?\s*[:#]?\s*\d{3,}|\b\d{5}\b|\bMSOL\b|\bAGS\b|entitlement|F3 License|License Exception|0x[0-9a-fA-F]{4,}/i.test(airEvidenceText(e))
+    },
+    {
+      id: 'resolution', boost: '+15%',
+      heading: 'have no documented resolution steps',
+      action: 'Record the actual fix steps performed \u2014 not just \u201cissue resolved\u201d.',
+      missing: (e) => !airTicketResolved(e)
+    },
+    {
+      id: 'rootcause', boost: '+10%',
+      heading: 'have an unconfirmed root cause',
+      action: 'State the confirmed root cause with the evidence that supports it.',
+      missing: (e) => {
+        const prc = (e.PossibleRootCause || e.RootCause || '').trim().toLowerCase();
+        const drc = (e.DetailedRootCause || '').trim().toLowerCase();
+        return !prc || prc === 'unknown' || !drc || drc === 'unknown';
+      }
+    }
+  ];
+
+  // Gaps present on a single ticket (subset of AIR_EVIDENCE_RULES).
+  function airEvidenceGaps(e) { return AIR_EVIDENCE_RULES.filter(r => r.missing(e)); }
+
+  // Render the L1 worklist into #airWorklist for the current filtered set.
+  function airRenderWorklist(filtered) {
+    const el = $('airWorklist');
+    if (!el) return;
+    const sn = (rk) => 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(rk || '');
+
+    if (!filtered || filtered.length === 0) {
+      el.innerHTML = '<div class="chart-card"><h3>&#128203; First Level &mdash; data-quality worklist</h3>' +
+        '<div class="state" style="margin-top:8px;">No tickets in the selected window. Widen the WW range or pick <em>All Products</em>.</div></div>';
+      return;
+    }
+
+    const mediumLow = filtered.filter(e => { const c = airConf(e); return c === 'medium' || c === 'low'; });
+    if (mediumLow.length === 0) {
+      el.innerHTML = '<div class="chart-card"><h3>&#128203; First Level &mdash; data-quality worklist</h3>' +
+        '<div class="state" style="margin-top:8px;">Every analyzed ticket in this window is already rated <strong>High</strong> confidence \u2014 nothing to improve here. &#127881;</div></div>';
+      return;
+    }
+
+    // Bucket the Medium/Low tickets by which booster they are missing.
+    const buckets = {};
+    let improvable = 0;
+    for (const e of mediumLow) {
+      const gaps = airEvidenceGaps(e);
+      if (gaps.length) improvable++;
+      for (const g of gaps) (buckets[g.id] = buckets[g.id] || []).push(e);
+    }
+    const medCount = mediumLow.filter(e => airConf(e) === 'medium').length;
+    const lowCount = mediumLow.filter(e => airConf(e) === 'low').length;
+
+    const banner =
+      '<div style="border:1px solid #ffd591;background:#fffaf0;border-radius:10px;padding:14px 16px;margin-bottom:14px;">' +
+        '<div style="font-weight:700;color:#9a6a00;font-size:0.95rem;">&#128203; ' + improvable + ' of ' + mediumLow.length +
+          ' Medium/Low tickets have a fixable evidence gap</div>' +
+        '<div style="font-size:0.84rem;color:var(--muted);margin-top:4px;">' +
+          medCount + ' Medium &middot; ' + lowCount + ' Low &middot; out of ' + filtered.length + ' analyzed. ' +
+          'Closing these gaps in the close notes is the fastest way to raise the <strong>High-confidence</strong> rate. ' +
+          '<em>This coaching improves future scores \u2014 it does not change already-closed tickets.</em></div>' +
+      '</div>';
+
+    const groups = AIR_EVIDENCE_RULES.map(rule => {
+      const list = (buckets[rule.id] || []).slice()
+        .sort((a, b) => (airConf(b) === 'low') - (airConf(a) === 'low')); // Low first
+      if (!list.length) return '';
+      const chips = list.map(e => {
+        const rk = e.RowKey || '';
+        const c  = airConf(e);
+        const badge = c === 'low'
+          ? '<span style="background:#fbe2e2;color:#a51c1c;padding:1px 6px;border-radius:999px;font-size:0.66rem;font-weight:700;margin-left:5px;">LOW</span>'
+          : '<span style="background:#fff4e0;color:#9a6a00;padding:1px 6px;border-radius:999px;font-size:0.66rem;font-weight:700;margin-left:5px;">MED</span>';
+        return '<a href="' + sn(rk) + '" target="_blank" rel="noopener" title="Open in ServiceNow" ' +
+          'style="display:inline-flex;align-items:center;text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;margin:4px 5px 0 0;font-size:0.78rem;color:var(--intel-classic);">' +
+          esc(rk || '(no number)') + badge + '</a>';
+      }).join('');
+      return '<div style="border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:10px;">' +
+        '<div style="font-weight:700;color:var(--intel-classic);">' + list.length + ' ticket' + (list.length === 1 ? '' : 's') + ' ' + esc(rule.heading) +
+          ' <span style="color:#2ea36b;font-weight:600;font-size:0.78rem;">' + rule.boost + ' each</span></div>' +
+        '<div style="font-size:0.84rem;color:var(--text);margin-top:6px;"><strong>Action:</strong> ' + esc(rule.action) + '</div>' +
+        '<div style="margin-top:6px;">' + chips + '</div>' +
+      '</div>';
+    }).join('');
+
+    el.innerHTML = '<div class="chart-card">' +
+      '<h3>&#128203; First Level &mdash; data-quality worklist <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; what to add to each ticket to lift its confidence</span></h3>' +
+      banner + groups +
+      '</div>';
+  }
+
+  // Role lens for the AI Recommendations tab ('all' shows both sections).
+  function applyAirLens() {
+    const role = ($('airRole') && $('airRole').value) || 'all';
+    document.querySelectorAll('#pane-airecs [data-air-lens]').forEach(el => {
+      const lenses = (el.getAttribute('data-air-lens') || '').split(/\s+/);
+      el.style.display = (role === 'all' || lenses.includes(role)) ? '' : 'none';
+    });
+  }
+
   function airRefresh() {
     const filtered = airGetFiltered();
     const product  = $('airProduct').value;
@@ -3609,10 +3748,12 @@
       ' · recommendations are distilled from analysis engineers/AI already recorded — no live model call.';
 
     if (filtered.length === 0) {
+      airRenderWorklist(filtered);
       $('airCards').innerHTML = '<div class="state">No resolved tickets in the selected work-week window for this selection. Widen the WW range, try <em>All Products</em> / <em>All Symptoms</em>, or click Reset.</div>';
       $('airSummary').textContent = '0 tickets';
       return;
     }
+    airRenderWorklist(filtered);
     const top5 = airTopRootCauses(filtered, 5);
     $('airCards').innerHTML = top5.map((g, i) => airRenderCard(i + 1, g)).join('');
     $('airSummary').textContent = filtered.length + ' tickets · top ' + top5.length + ' root causes';
@@ -3642,8 +3783,10 @@
         populateAirSymptoms(false);
         airRefresh();
       });
+      $('airRole').addEventListener('change', applyAirLens);
       loading.style.display = 'none'; content.style.display = 'block';
       airRefresh();
+      applyAirLens();
       airLoaded = true;
     } catch (e) {
       loading.style.display = 'none';

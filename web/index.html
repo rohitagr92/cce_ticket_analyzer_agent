@@ -3915,7 +3915,7 @@
     $('smKpis').innerHTML =
       tile('Tickets — current WW', m.curTotal,                  wwLabel,                                                          m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
       tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' AI-analyzed · ' + wwLabel,   m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
+      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' rated High · ' + wwLabel,   m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
       topIssueTile();
   }
 

@@ -398,6 +398,7 @@
       </div>
       <div>
         <span class="user-info" id="userInfo">Loading...</span>
+        <a class="signout" href="mailto:7d20a744.intel.onmicrosoft.com@amer.teams.ms?subject=Incident%20Analyzer%20feedback" title="Send feedback to the team">&#128172; Feedback</a>
         <a class="signout" href="/.auth/logout">Sign out</a>
       </div>
     </div>
@@ -442,7 +443,7 @@
         <div id="smLastUpdated" style="margin-left:auto;font-size:0.76rem;color:var(--muted);white-space:nowrap;"></div>
       </div>
 
-      <!-- 1. KPI strip (5 tiles, each with own mini-sparkline) -->
+      <!-- 1. KPI strip (4 tiles, each with own mini-sparkline) -->
       <div class="sm-kpis" id="smKpis"></div>
 
       <!-- 2. Top movers (compact, left) -->
@@ -3906,16 +3907,15 @@
     };
 
     const dTotal = smFormatDelta(m.curTotal, m.hasPrior ? m.priorTotal : null, { higherIsWorse: true });
-    const dCats  = smFormatDelta(m.curCats,  m.hasPrior ? m.priorCats  : null, { higherIsWorse: false });
     const dEx    = smFormatDelta(m.curExPct, m.hasPrior ? m.priorExPct : null, { higherIsWorse: true, percent: true });
     const dHi    = smFormatDelta(m.curHiPct, m.hasPrior ? m.priorHiPct : null, { higherIsWorse: false, percent: true });
 
+    const wwLabel = formatWW(curWk || '');
     const h = history || {};
     $('smKpis').innerHTML =
-      tile('Tickets — current WW', m.curTotal,                  formatWW(curWk || ''),                              m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
-      tile('Active categories',    m.curCats,                   'excl. Excluded',                                   m.hasPrior ? dCats  : null, h.cats,   '#0068b5') +
-      tile('% Excluded',           m.curExPct.toFixed(1) + '%', m.curEx + ' / ' + m.curTotal,                       m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' / ' + m.curAiCount + ' AI-analyzed',    m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
+      tile('Tickets — current WW', m.curTotal,                  wwLabel,                                                          m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
+      tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
+      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' of ' + m.curAiCount + ' AI-analyzed · ' + wwLabel,   m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
       topIssueTile();
   }
 

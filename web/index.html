@@ -377,16 +377,6 @@
   }
   .btn-primary:hover { background: var(--intel-blue); border-color: var(--intel-blue); }
 </style>
-<!-- Application Insights SDK — initialized lazily from config.json -->
-<script type="text/javascript">
-  !function(T,l,y){var S=T.location,k="script",D="instrumentationKey",C="ingestionendpoint",I="disableExceptionTracking",E="ai.device.",b="toLowerCase",w="crossOriginIsolated",N="XMLHttpRequest",e=window,n=document,r=n.createElement(k),t=n.head||n.getElementsByTagName(k)[0],o={},c,s,i,f;function a(config,i,t){function n(i,t){if(!config[i]){var e=config.initialize;config[i]=new t(e,config,t);if(e)config.initialize=false}}var e=config.cfg;e[D]&&(e.endpointUrl=e[D]);n("ajax",e=function(n,e,r){});n("dependencies",e);n("properties",e);n("pageviews",e);n("exceptions",e)}r.src="https://js.monitor.azure.com/scripts/b/ai.2.min.js";r.onload=r.onerror=function(){window.__aiLoaded=true};r.crossOrigin="anonymous";r.async=1;t.parentNode.insertBefore(r,t);function g(e,t){return function(){var r=[].slice.call(arguments);t&&r.push(t);return e.apply(this,r)}}function q(e,t,r){if(!o[e]){var n=function(){var e=arguments;g(function(){window.appInsights&&window.appInsights[t]&&window.appInsights[t].apply(window.appInsights,e)})();};o[e]=n;l[e]=n}}q("flush");q("setAuthenticatedUserContext");q("clearAuthenticatedUserContext");q("trackEvent");q("trackPageView");q("trackException");q("trackTrace");q("trackMetric");q("trackDependencyData");q("startTrackPage");q("stopTrackPage");q("startTrackEvent");q("stopTrackEvent");q("addTelemetryInitializer");q("trackPageViewPerformance");l.appInsights=o}(window,window,document);
-  window.__appInsightsInit = function(connectionString) {
-    if (!connectionString) return;
-    var cfg = { config: { connectionString: connectionString, enableAutoRouteTracking: true } };
-    window.appInsights = new window.Microsoft.ApplicationInsights.ApplicationInsights(cfg);
-    window.appInsights.loadAppInsights();
-  };
-</script>
 </head>
 <body>
 <header>
@@ -398,7 +388,6 @@
       </div>
       <div>
         <span class="user-info" id="userInfo">Loading...</span>
-        <a class="signout" href="mailto:7d20a744.intel.onmicrosoft.com@amer.teams.ms?subject=Incident%20Analyzer%20feedback" title="Send feedback to the team">&#128172; Feedback</a>
         <a class="signout" href="/.auth/logout">Sign out</a>
       </div>
     </div>
@@ -432,13 +421,6 @@
     <div id="smError" class="state error" style="display:none;"></div>
     <div id="smContent" style="display:none;">
       <div class="sm-toolbar">
-        <span class="label-inline">View</span>
-        <select id="smRole" title="Choose a role-focused view">
-          <option value="all" selected>All panels</option>
-          <option value="po">Product Owner</option>
-          <option value="engineer">Engineer</option>
-          <option value="ops">Operations (TAC/L1/L3)</option>
-        </select>
         <span class="label-inline">Service</span>
         <select id="smService"></select>
         <span class="label-inline">From WW</span>
@@ -450,17 +432,17 @@
         <div id="smLastUpdated" style="margin-left:auto;font-size:0.76rem;color:var(--muted);white-space:nowrap;"></div>
       </div>
 
-      <!-- 1. KPI strip (4 tiles, each with own mini-sparkline) -->
-      <div class="sm-kpis" id="smKpis" data-lenses="po engineer ops"></div>
+      <!-- 1. KPI strip (5 tiles, each with own mini-sparkline) -->
+      <div class="sm-kpis" id="smKpis"></div>
 
       <!-- 2. Top movers (compact, left) -->
-      <div class="sm-fullcard" data-lenses="po ops">
+      <div class="sm-fullcard">
         <h3 class="tp-section-title" style="margin-top:0;"><span>&#128200;</span> Top movers &mdash; categories (WoW)</h3>
         <div id="smMovers"></div>
       </div>
 
       <!-- 3. Root Cause -> Product flow (FULL WIDTH, larger) -->
-      <div class="sm-fullcard" data-lenses="po engineer">
+      <div class="sm-fullcard">
         <div class="sm-fc-header">
           <h3 class="tp-section-title" style="margin:0;"><span>&#127919;</span> Root Cause &rarr; Product flow</h3>
           <div class="sm-fc-controls">
@@ -479,35 +461,27 @@
       </div>
 
       <!-- 4. Smart Insights panel (auto-generated narrative) -->
-      <div data-lenses="po engineer ops">
-        <h3 class="tp-section-title"><span>&#128161;</span> Smart insights</h3>
-        <div class="sm-card" id="smActions"></div>
-      </div>
+      <h3 class="tp-section-title"><span>&#128161;</span> Smart insights</h3>
+      <div class="sm-card" id="smActions"></div>
 
       <!-- 5. Per-Product Weekly Trend (full width) -->
-      <div data-lenses="po engineer">
-        <h3 class="tp-section-title"><span>&#128200;</span> Per-product weekly trend</h3>
-        <div class="sm-fullcard"><div class="ctx" id="smPptCtx"></div><div class="tp-grid-products" id="smPpt"></div></div>
-      </div>
+      <h3 class="tp-section-title"><span>&#128200;</span> Per-product weekly trend</h3>
+      <div class="sm-fullcard"><div class="ctx" id="smPptCtx"></div><div class="tp-grid-products" id="smPpt"></div></div>
 
       <!-- 6. Forecast (next 2-4 WWs) -->
-      <div data-lenses="po">
-        <h3 class="tp-section-title"><span>&#128302;</span> Forecast &mdash; what the next few weeks look like</h3>
-        <div class="sm-fullcard" id="smForecast"></div>
-      </div>
+      <h3 class="tp-section-title"><span>&#128302;</span> Forecast &mdash; what the next few weeks look like</h3>
+      <div class="sm-fullcard" id="smForecast"></div>
 
       <!-- 7. Drill-down: pick a Product -> top 5 root causes for the selected range -->
-      <div data-lenses="engineer ops">
-        <h3 class="tp-section-title"><span>&#128269;</span> Drill-down &mdash; pick a product, see top root causes for the selected range</h3>
-        <div class="sm-card">
-          <div class="sm-toolbar" style="margin-bottom:12px;">
-            <span class="label-inline">Product</span>
-            <select id="smDrillProduct" style="min-width:280px;"></select>
-            <div class="sm-context" id="smDrillContext"></div>
-          </div>
-          <h4 style="margin:4px 0 8px 0; font-size:0.92rem; color:var(--intel-classic);">Top 5 root causes</h4>
-          <div id="smDrillProducts"></div>
+      <h3 class="tp-section-title"><span>&#128269;</span> Drill-down &mdash; pick a product, see top root causes for the selected range</h3>
+      <div class="sm-card">
+        <div class="sm-toolbar" style="margin-bottom:12px;">
+          <span class="label-inline">Product</span>
+          <select id="smDrillProduct" style="min-width:280px;"></select>
+          <div class="sm-context" id="smDrillContext"></div>
         </div>
+        <h4 style="margin:4px 0 8px 0; font-size:0.92rem; color:var(--intel-classic);">Top 5 root causes</h4>
+        <div id="smDrillProducts"></div>
       </div>
     </div>
   </section>
@@ -727,12 +701,6 @@
       <div class="chart-card" style="margin-bottom:16px;">
         <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, across the selected work-week window</span></h3>
         <div class="toolbar" style="margin-bottom:0;">
-          <span class="label-inline">View</span>
-          <select id="airRole" title="Choose a role-focused view">
-            <option value="all">Both views</option>
-            <option value="firstlevel">First Level (L1 / L1.5)</option>
-            <option value="engineer">Engineer</option>
-          </select>
           <span class="label-inline">Service</span>
           <select id="airService">
             <option value="Productivity Tools">Productivity Tools</option>
@@ -752,17 +720,9 @@
       </div>
 
       <div id="airWindowNote" style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;"></div>
-
-      <!-- First Level (L1 / L1.5): data-quality worklist — why each Medium/Low ticket scored low and the one-line action to fix it. -->
-      <div id="airWorklist" data-air-lens="firstlevel"></div>
-
-      <!-- Engineer: root-cause synthesis cards (recommended steps). -->
-      <div id="airCardsWrap" data-air-lens="engineer">
-        <div id="airCards"></div>
-      </div>
+      <div id="airCards"></div>
     </div>
   </section>
-
 </main>
 
 <footer>Intel End-User Collaboration &middot; data refreshed by daily Azure Automation runbooks</footer>
@@ -798,13 +758,11 @@
   ).toString(16).padStart(6, '0'));
 
   // --- Identify user ---
-  let _aiUser = null;
   try {
     const meRes = await fetch('/.auth/me');
     if (meRes.ok) {
       const p = (await meRes.json()).clientPrincipal;
       $('userInfo').textContent = (p && p.userDetails) ? p.userDetails : 'Anonymous';
-      if (p && p.userDetails) _aiUser = p.userDetails;
     }
   } catch (e) { $('userInfo').textContent = ''; }
 
@@ -826,19 +784,6 @@
     }
     return;
   }
-  // --- Initialize Application Insights ---
-  if (cfg.appInsightsConnectionString) {
-    try {
-      const ai = new window.Microsoft.ApplicationInsights.ApplicationInsights({
-        config: { connectionString: cfg.appInsightsConnectionString, enableAutoRouteTracking: true }
-      });
-      ai.loadAppInsights();
-      if (_aiUser) ai.setAuthenticatedUserContext(_aiUser, undefined, true);
-      ai.trackPageView();
-      window.appInsights = ai;
-    } catch (e) { /* App Insights unavailable — continue without telemetry */ }
-  }
-
   const blobBaseUrl  = cfg.containerBaseUrl.replace(/\/$/, '');
   const blobSas      = cfg.sasToken.startsWith('?') ? cfg.sasToken : ('?' + cfg.sasToken);
   const tableBaseUrl = (cfg.tableBaseUrl || '').replace(/\/$/, '');
@@ -2339,7 +2284,7 @@
   const opxExpanded = new Set();      // expanded keys — RowKey in incidents view, pattern-key in patterns view
   const opxFirstSeenWeek = new Map(); // "Category||PossibleRootCause" -> earliest YearWeek (full history)
   let opxAllInService = [];           // entities filtered by Service only (for outlier + pattern history)
-  const opxActiveFlags = new Set();   // active flag quick-filters: 'new' | 'spike' | 'repeat' | 'misrouted' | 'medconf' | 'lowconf'
+  const opxActiveFlags = new Set();   // active flag quick-filters: 'new' | 'spike' | 'repeat' | 'misrouted' | 'lowconf'
   // Per-view sort state. dir: 1 = ascending, -1 = descending.
   const opxSort = {
     incidents: { col: 'date', dir: -1 },   // default newest first
@@ -2350,7 +2295,6 @@
     { id: 'spike',     label: 'SPIKE',     icon: '&#128293;', bg: '#fde7e7', fg: '#a51c1c' },
     { id: 'repeat',    label: 'REPEAT',    icon: '&#9851;',   bg: '#e9e1ff', fg: '#542aaa' },
     { id: 'misrouted', label: 'MISROUTED', icon: '&#9888;',   bg: '#ffe2cc', fg: '#9a4a00' },
-    { id: 'medconf',   label: 'NEEDS-EVIDENCE', icon: '&#128221;', bg: '#fff4e0', fg: '#9a6a00' },
     { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' }
   ];
 
@@ -2554,16 +2498,13 @@
     if (opxIsMisrouted(inc)) {
       out.push('<span title="Flagged as routed to the wrong queue" style="background:#ffe2cc;color:#9a4a00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#9888; MISROUTED</span>');
     }
-    if (opxConfLevel(inc) === 'medium') {
-      out.push('<span title="AI confidence is Medium — close notes are missing evidence (error code, fix steps, or root cause) that would make this High. See AI Recommendations › First Level." style="background:#fff4e0;color:#9a6a00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#128221; NEEDS-EVIDENCE</span>');
-    }
     if (opxConfLevel(inc) === 'low') {
       out.push('<span title="AI confidence is Low — review the root cause manually" style="background:#fbe2e2;color:#a51c1c;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#129302; LOW-CONF</span>');
     }
     return out.join(' ');
   }
 
-  // Set of flag ids ('new','spike','repeat','misrouted','medconf','lowconf') an incident carries.
+  // Set of flag ids ('new','spike','repeat','misrouted','lowconf') an incident carries.
   function opxIncidentFlagSet(inc, pStats) {
     const s = new Set();
     const ps = pStats[opxPatternKey(inc)];
@@ -2574,7 +2515,6 @@
     if (ps && ps.spike)  s.add('spike');
     if (ps && ps.repeat) s.add('repeat');
     if (opxIsMisrouted(inc)) s.add('misrouted');
-    if (opxConfLevel(inc) === 'medium') s.add('medconf');
     if (opxConfLevel(inc) === 'low') s.add('lowconf');
     return s;
   }
@@ -2591,7 +2531,7 @@
 
   // Render the flag quick-filter chips (also doubles as a legend).
   function opxRenderFlagBar(base, pStats) {
-    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, medconf: 0, lowconf: 0 };
+    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, lowconf: 0 };
     for (const inc of base) opxIncidentFlagSet(inc, pStats).forEach(f => counts[f]++);
 
     const allActive = opxActiveFlags.size === 0;
@@ -3615,126 +3555,6 @@
     '</div>';
   }
 
-  // ---- First-Level data-quality worklist ----------------------------------
-  // Deterministic, no-LLM: each Medium/Low ticket is checked against the SAME
-  // Booster checklist the categorisation prompt uses. We surface WHICH booster is
-  // missing and the one-line action that would raise the ticket's confidence.
-
-  function airConf(e) { return (e.Confidence || '').toString().trim().toLowerCase(); }
-
-  // All free text we can scan for an error code / KB / entitlement signal.
-  function airEvidenceText(e) {
-    return [e.AIAnalysis, e.DetailedRootCause, e.PossibleRootCause, e.ShortDescription, e.Description, e.Title]
-      .filter(Boolean).join(' ');
-  }
-
-  // Each rule mirrors a CONFIDENCE BOOSTER from TicketCategorisation_ProductivityTools.md.
-  // `missing(e)` returns true when the booster is absent — i.e. the gap to fix.
-  const AIR_EVIDENCE_RULES = [
-    {
-      id: 'errorcode', boost: '+15%',
-      heading: 'need a specific error code, KB, or entitlement name',
-      action: 'Add the exact error code / KB number / entitlement (e.g. KB10045042, MSOL License, AGS entitlement) to the close notes.',
-      missing: (e) => !/\bKB\s?\d{3,}\b|error\s*(?:code)?\s*[:#]?\s*\d{3,}|\b\d{5}\b|\bMSOL\b|\bAGS\b|entitlement|F3 License|License Exception|0x[0-9a-fA-F]{4,}/i.test(airEvidenceText(e))
-    },
-    {
-      id: 'resolution', boost: '+15%',
-      heading: 'have no documented resolution steps',
-      action: 'Record the actual fix steps performed \u2014 not just \u201cissue resolved\u201d.',
-      missing: (e) => !airTicketResolved(e)
-    },
-    {
-      id: 'rootcause', boost: '+10%',
-      heading: 'have an unconfirmed root cause',
-      action: 'State the confirmed root cause with the evidence that supports it.',
-      missing: (e) => {
-        const prc = (e.PossibleRootCause || e.RootCause || '').trim().toLowerCase();
-        const drc = (e.DetailedRootCause || '').trim().toLowerCase();
-        return !prc || prc === 'unknown' || !drc || drc === 'unknown';
-      }
-    }
-  ];
-
-  // Gaps present on a single ticket (subset of AIR_EVIDENCE_RULES).
-  function airEvidenceGaps(e) { return AIR_EVIDENCE_RULES.filter(r => r.missing(e)); }
-
-  // Render the L1 worklist into #airWorklist for the current filtered set.
-  function airRenderWorklist(filtered) {
-    const el = $('airWorklist');
-    if (!el) return;
-    const sn = (rk) => 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(rk || '');
-
-    if (!filtered || filtered.length === 0) {
-      el.innerHTML = '<div class="chart-card"><h3>&#128203; First Level &mdash; data-quality worklist</h3>' +
-        '<div class="state" style="margin-top:8px;">No tickets in the selected window. Widen the WW range or pick <em>All Products</em>.</div></div>';
-      return;
-    }
-
-    const mediumLow = filtered.filter(e => { const c = airConf(e); return c === 'medium' || c === 'low'; });
-    if (mediumLow.length === 0) {
-      el.innerHTML = '<div class="chart-card"><h3>&#128203; First Level &mdash; data-quality worklist</h3>' +
-        '<div class="state" style="margin-top:8px;">Every analyzed ticket in this window is already rated <strong>High</strong> confidence \u2014 nothing to improve here. &#127881;</div></div>';
-      return;
-    }
-
-    // Bucket the Medium/Low tickets by which booster they are missing.
-    const buckets = {};
-    let improvable = 0;
-    for (const e of mediumLow) {
-      const gaps = airEvidenceGaps(e);
-      if (gaps.length) improvable++;
-      for (const g of gaps) (buckets[g.id] = buckets[g.id] || []).push(e);
-    }
-    const medCount = mediumLow.filter(e => airConf(e) === 'medium').length;
-    const lowCount = mediumLow.filter(e => airConf(e) === 'low').length;
-
-    const banner =
-      '<div style="border:1px solid #ffd591;background:#fffaf0;border-radius:10px;padding:14px 16px;margin-bottom:14px;">' +
-        '<div style="font-weight:700;color:#9a6a00;font-size:0.95rem;">&#128203; ' + improvable + ' of ' + mediumLow.length +
-          ' Medium/Low tickets have a fixable evidence gap</div>' +
-        '<div style="font-size:0.84rem;color:var(--muted);margin-top:4px;">' +
-          medCount + ' Medium &middot; ' + lowCount + ' Low &middot; out of ' + filtered.length + ' analyzed. ' +
-          'Closing these gaps in the close notes is the fastest way to raise the <strong>High-confidence</strong> rate. ' +
-          '<em>This coaching improves future scores \u2014 it does not change already-closed tickets.</em></div>' +
-      '</div>';
-
-    const groups = AIR_EVIDENCE_RULES.map(rule => {
-      const list = (buckets[rule.id] || []).slice()
-        .sort((a, b) => (airConf(b) === 'low') - (airConf(a) === 'low')); // Low first
-      if (!list.length) return '';
-      const chips = list.map(e => {
-        const rk = e.RowKey || '';
-        const c  = airConf(e);
-        const badge = c === 'low'
-          ? '<span style="background:#fbe2e2;color:#a51c1c;padding:1px 6px;border-radius:999px;font-size:0.66rem;font-weight:700;margin-left:5px;">LOW</span>'
-          : '<span style="background:#fff4e0;color:#9a6a00;padding:1px 6px;border-radius:999px;font-size:0.66rem;font-weight:700;margin-left:5px;">MED</span>';
-        return '<a href="' + sn(rk) + '" target="_blank" rel="noopener" title="Open in ServiceNow" ' +
-          'style="display:inline-flex;align-items:center;text-decoration:none;border:1px solid var(--border);border-radius:8px;padding:3px 8px;margin:4px 5px 0 0;font-size:0.78rem;color:var(--intel-classic);">' +
-          esc(rk || '(no number)') + badge + '</a>';
-      }).join('');
-      return '<div style="border:1px solid var(--border);border-radius:10px;padding:13px 15px;margin-bottom:10px;">' +
-        '<div style="font-weight:700;color:var(--intel-classic);">' + list.length + ' ticket' + (list.length === 1 ? '' : 's') + ' ' + esc(rule.heading) +
-          ' <span style="color:#2ea36b;font-weight:600;font-size:0.78rem;">' + rule.boost + ' each</span></div>' +
-        '<div style="font-size:0.84rem;color:var(--text);margin-top:6px;"><strong>Action:</strong> ' + esc(rule.action) + '</div>' +
-        '<div style="margin-top:6px;">' + chips + '</div>' +
-      '</div>';
-    }).join('');
-
-    el.innerHTML = '<div class="chart-card">' +
-      '<h3>&#128203; First Level &mdash; data-quality worklist <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; what to add to each ticket to lift its confidence</span></h3>' +
-      banner + groups +
-      '</div>';
-  }
-
-  // Role lens for the AI Recommendations tab ('all' shows both sections).
-  function applyAirLens() {
-    const role = ($('airRole') && $('airRole').value) || 'all';
-    document.querySelectorAll('#pane-airecs [data-air-lens]').forEach(el => {
-      const lenses = (el.getAttribute('data-air-lens') || '').split(/\s+/);
-      el.style.display = (role === 'all' || lenses.includes(role)) ? '' : 'none';
-    });
-  }
-
   function airRefresh() {
     const filtered = airGetFiltered();
     const product  = $('airProduct').value;
@@ -3748,12 +3568,10 @@
       ' · recommendations are distilled from analysis engineers/AI already recorded — no live model call.';
 
     if (filtered.length === 0) {
-      airRenderWorklist(filtered);
       $('airCards').innerHTML = '<div class="state">No resolved tickets in the selected work-week window for this selection. Widen the WW range, try <em>All Products</em> / <em>All Symptoms</em>, or click Reset.</div>';
       $('airSummary').textContent = '0 tickets';
       return;
     }
-    airRenderWorklist(filtered);
     const top5 = airTopRootCauses(filtered, 5);
     $('airCards').innerHTML = top5.map((g, i) => airRenderCard(i + 1, g)).join('');
     $('airSummary').textContent = filtered.length + ' tickets · top ' + top5.length + ' root causes';
@@ -3783,10 +3601,8 @@
         populateAirSymptoms(false);
         airRefresh();
       });
-      $('airRole').addEventListener('change', applyAirLens);
       loading.style.display = 'none'; content.style.display = 'block';
       airRefresh();
-      applyAirLens();
       airLoaded = true;
     } catch (e) {
       loading.style.display = 'none';
@@ -3896,8 +3712,6 @@
     const priorAi = priorEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
     const curHi = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
     const priorHi = priorAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
-    const curLow = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'low').length;
-    const curMed = curAi.length - curHi - curLow;  // everything that isn't High or Low
     const curHiPct = curAi.length ? (curHi * 100 / curAi.length) : 0;
     const priorHiPct = priorAi.length ? (priorHi * 100 / priorAi.length) : 0;
 
@@ -3916,7 +3730,7 @@
       clearedNames: cleared, freshNames: fresh,
       curEx, priorEx, curExPct, priorExPct,
       curAiCount: curAi.length, priorAiCount: priorAi.length,
-      curHi, priorHi, curMed, curLow, curHiPct, priorHiPct,
+      curHi, priorHi, curHiPct, priorHiPct,
       curCov, priorCov
     };
   }
@@ -4066,14 +3880,17 @@
       '</div>';
     };
 
-    const wwLabel = formatWW(curWk || '');
+    const dTotal = smFormatDelta(m.curTotal, m.hasPrior ? m.priorTotal : null, { higherIsWorse: true });
+    const dCats  = smFormatDelta(m.curCats,  m.hasPrior ? m.priorCats  : null, { higherIsWorse: false });
+    const dEx    = smFormatDelta(m.curExPct, m.hasPrior ? m.priorExPct : null, { higherIsWorse: true, percent: true });
+    const dHi    = smFormatDelta(m.curHiPct, m.hasPrior ? m.priorHiPct : null, { higherIsWorse: false, percent: true });
+
     const h = history || {};
-    // KPI tiles always reflect the latest WW only — no WoW arrows/deltas (kept the
-    // 8-WW mini-sparkline for context). Only the "Top issue" tile follows the range.
     $('smKpis').innerHTML =
-      tile('Tickets — latest WW',  m.curTotal,                  wwLabel,                                                          null, h.total,  '#0068b5') +
-      tile('% Misrouted',          m.curExPct.toFixed(1) + '%', m.curEx + ' of ' + m.curTotal + ' tickets · ' + wwLabel,         null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' High · ' + m.curMed + ' Med · ' + m.curLow + ' Low · ' + wwLabel,   null, h.hiPct,  '#2ea36b') +
+      tile('Tickets — current WW', m.curTotal,                  formatWW(curWk || ''),                              m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
+      tile('Active categories',    m.curCats,                   'excl. Excluded',                                   m.hasPrior ? dCats  : null, h.cats,   '#0068b5') +
+      tile('% Excluded',           m.curExPct.toFixed(1) + '%', m.curEx + ' / ' + m.curTotal,                       m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
+      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' / ' + m.curAiCount + ' AI-analyzed',    m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
       topIssueTile();
   }
 
@@ -5065,22 +4882,19 @@
         const rangeLbl = weeksInRange.length === 1
           ? formatWW(curWk)
           : formatWW(fromWk) + ' \u2192 ' + formatWW(toWk) + ' (' + weeksInRange.length + ' WWs)';
-        // KPI tiles are pinned to the latest WW in the data, regardless of the
-        // selected range. Only the "Top issue" tile and the charts follow the range.
-        const latestWk = weeks[weeks.length - 1];
-        const latestEnts = byWeek[latestWk] || [];
         const contextLabel = (svc === 'all' ? 'All services' : svc) +
           ' &middot; range <strong>' + rangeLbl + '</strong>' +
-          ' &middot; KPIs show latest WW <strong>' + formatWW(latestWk) + '</strong>' +
+          ' &middot; KPIs compare <strong>' + formatWW(curWk) + '</strong>' +
+          (priorWk ? ' vs <strong>' + formatWW(priorWk) + '</strong>' : ' (no prior WW in range)') +
           ' &middot; ' + rangeEnts.length + ' tickets in range / ' + filtered.length + ' tracked overall';
         $('smContext').innerHTML = contextLabel;
 
-        // KPI metrics are always for the latest WW; Top Issue + history follow selection.
-        const metrics = smComputeMetrics(latestEnts, [], null);
-        const history = smBuildHistorySeries(filtered, latestWk, 8);
+        // Metrics + 8-WW per-KPI history for the tile sparklines + Top Issue for the range.
+        const metrics = smComputeMetrics(curEnts, priorEnts, priorWk);
+        const history = smBuildHistorySeries(filtered, curWk, 8);
         const topIssue = computeTopIssue(rangeEnts, weeksInRange);
         const topN = parseInt(sankeyTopNSel.value, 10) || 3;
-        smRenderKpis(latestWk, null, metrics, history, topIssue);
+        smRenderKpis(curWk, priorWk, metrics, history, topIssue);
         smRenderMovers(curEnts, priorEnts, priorWk);
         smRenderPareto(rangeEnts, rangeLbl);
         smRenderSankey(rangeEnts, rangeLbl, topN);
@@ -5096,7 +4910,8 @@
         rebuildRangeSelectors();
         rebuildDrillProductOptions();
         render();
-      });      fromSel.addEventListener('change', () => {
+      });
+      fromSel.addEventListener('change', () => {
         rebuildDrillProductOptions();
         render();
       });
@@ -5117,18 +4932,6 @@
         rebuildDrillProductOptions();
         render();
       });
-
-      // Role lens: show only panels tagged for the chosen role ('all' shows everything).
-      const roleSel = $('smRole');
-      const applyRoleLens = () => {
-        const role = roleSel ? roleSel.value : 'all';
-        document.querySelectorAll('#smContent [data-lenses]').forEach(el => {
-          const lenses = (el.getAttribute('data-lenses') || '').split(/\s+/);
-          el.style.display = (role === 'all' || lenses.includes(role)) ? '' : 'none';
-        });
-      };
-      if (roleSel) roleSel.addEventListener('change', applyRoleLens);
-      applyRoleLens();
 
       rebuildRangeSelectors();
       rebuildDrillProductOptions();

@@ -36,7 +36,7 @@ Every ticket must be described along **three separate axes**. Do not confuse the
     - *Microsoft 365 Copilot* - Copilot in any Office app, Copilot licensing.
     - *Microsoft Forms* - Forms creation/access, Teams polls.
     - *Microsoft Visio / Project / Loop* - app-specific.
-    - *Microsoft 365 Planner / To Do* - Group membership, Planner plan/board, To Do list issues.
+    - *Microsoft 365 Planner / To Do* - Planner plan/board, To Do list issues.
     - *Smartsheet* - access issue, Features related.
     - *Shared File Service (Share Drives)* - mapped network drives, SMB, DFS shared drive paths.
     - *Google Workspace* - Google Drive / Docs / Gemini.
@@ -52,7 +52,7 @@ Every ticket must be described along **three separate axes**. Do not confuse the
 Apply the three-axis model in this order:
 
 1. **Pick the Primary Category (= Product).** Which in-scope product owns the failure? Decision tree below makes this mechanical. Never pick a symptom or a cause here.
-2. **Pick the Sub-symptom (= Symptom).** From the chosen product's bulleted sub-symptom list, pick the single label that best matches what the user reported. Copy it verbatim.
+2. **Pick the Sub-symptom (= Symptom).** Go to the sub-symptom heading from `TrendSubCategorisation_ProductivityTools.md`, pick the single label that best matches what the user reported. Sub-categories should be specific enough to be actionable (e.g., "Sync Issues" ) but general enough that similar incidents group together. Copy it verbatim.
 3. **Pick the Possible Root Cause (= short canonical LABEL).** Go to the chosen product's table in `PossibleRootCause_ProductivityTools.md`, pick the single bold **Root Cause Label** that best fits the evidence, and copy that label **verbatim** (typically 2–5 words, no sentence, no description). For Excluded tickets, use the canonical Excluded label (e.g. `Out-of-scope Service Offering`). Write `Unknown` ONLY when no label in the table can be defended after a careful read — this should be vanishingly rare.
 4. **Write the AI Analysis.** 2–3 full sentences explaining what happened, what fixed it, and any notable evidence. This is the **only** field where narrative belongs. Required for every ticket, including Excluded ones — for Excluded, the AI Analysis must explain *why* the ticket is out of scope and where it belongs.
 
@@ -324,10 +324,10 @@ Each category lists the **sub-symptoms** (the recurring failure modes seen in ti
 
 ***
 
-**Microsoft 365 Groups / Planner / To Do Issues**
+**Microsoft 365 Planner / To Do Issues**
 
 - *Sub-symptoms:*
-    - M365 Group membership / ownership issue (cannot add owner, group missing from Outlook/Teams)
+    
     - Planner plan / board access issue (cannot open plan, missing tasks, plan not loading)
     - To Do list sync / access issue
     - Group provisioning failure (group not created from Teams / SharePoint site)
@@ -368,7 +368,7 @@ Each category lists the **sub-symptoms** (the recurring failure modes seen in ti
 12. **Project-specific issue?** -> Microsoft Project Issues.
 13. **Loop-specific issue?** -> Microsoft Loop Issues.
 14. **Forms-specific issue?** -> Microsoft Forms Issues.
-15. **M365 Group / Planner / To Do issue?** -> Microsoft 365 Groups / Planner / To Do Issues.
+15. **M365 Planner / To Do issue?** -> Microsoft 365 Planner / To Do Issues.
 16. **Smartsheet issue?** -> Smartsheet Issues.
 17. **Google Workspace / Gemini issue?** -> Google Workspace Issues.
 18. **Canva issue?** -> Canva Issues.

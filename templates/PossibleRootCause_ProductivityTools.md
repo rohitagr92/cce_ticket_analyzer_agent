@@ -1,6 +1,6 @@
 # Possible Root Cause Reference - Productivity Tools
 
-> **Purpose:** Canonical, fixed catalog of root cause labels for all Productivity Tools incidents. After selecting the Category and Sub-symptom from `TicketCategorisation_ProductivityTools.md`, you MUST pick exactly one **bold label** from the matching product's table below — copy it verbatim, do not paraphrase, do not invent a new label.
+> **Purpose:** Canonical, fixed catalog of root cause labels for all Productivity Tools incidents. After selecting the Category from `TicketCategorisation_ProductivityTools.md` and Sub-symptom `TrendSubCategorisation_ProductivityTools.md`  from , you MUST pick exactly one **bold label** from the matching product's table below — copy it verbatim, do not paraphrase, do not invent a new label.
 >
 > **Output rule:** Always end your response with one root cause label in the strict output block:
 > ```
@@ -17,21 +17,21 @@
 | # | Root Cause Label | Description |
 |---|---|---|
 | 1.1 | **Sync Stall** | OneDrive client stuck/stopped on device; restart or sign-out/sign-in re-establishes sync. |
-| 1.2 | **Long File Path Issue** | File/folder path exceeds OneDrive's 400-character limit or contains reserved characters, blocking sync. |
-| 1.3 | **File Availability Setting** | "Always keep on this device" toggle or Error 0x80070032 prevents file copy/move to Samba or external location. |
+| 1.2 | **Long File Path Issue** | File/folder path exceeds OneDrive's 260-character limit or contains reserved characters, blocking sync. |
+| 1.3 | **File Availability Setting** | "Always keep on this device" toggle or "Files on Demand" or offline availability setting misconfigured, causing local file not found / not synced. |
 | 1.4 | **Quota Storage Issue** | OneDrive for Business storage quota full; sync stops or orphaned folder inaccessible until quota is increased via Intel Service Catalog. |
 | 1.5 | **OneDrive Client Failure** | OneDrive desktop client failed to launch or threw error 0x80070194; resolved by re-linking or fresh sign-in. |
 | 1.6 | **Shared File Permission Denied** | User lacks a valid sharing permission entry on a SharePoint/OneDrive file; owner must remove and re-add. |
 | 1.7 | **Stale or Revoked Share Link** | Share link expired, revoked, or points to content the user no longer has access to after a role change. |
-| 1.8 | **PUID Mismatch** | Rejoined user's new account identity (PUID) does not match old SharePoint/OneDrive permission entries; owner must re-share under the new account. |
+| 1.8 | **PUID Mismatch** | Rejoined user's new account identity (PUID) does not match old SharePoint/OneDrive permission entries; owner must re-share under the new account or Rejoined user lost OneDrive access to prior content because old permissions did not transfer to the new identity. |
 | 1.9 | **Prior OneDrive Site Expired** | Previous OneDrive site was not retained within the 30-day post-separation window and is permanently deleted. |
 | 1.10 | **Former Employee Data Request** | File is in a separated employee's OneDrive; access requires a formal IT request within the 30-day retention window. |
-| 1.11 | **SharePoint Site Quota Exceeded** | SharePoint site collection reached its storage quota; no uploads until the site owner raises a quota increase request. |
-| 1.12 | **Rejoin Access Issue** | Rejoined user lost OneDrive access to prior content because old permissions did not transfer to the new identity. |
+| 1.11 | 
+| 1.12 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an Microsoft OneDrive app. |
 | 1.13 | **Missing Files After PC Refresh** | Files not re-synced to the new device after PC refresh because OneDrive client was not signed in or Known Folder Move was not re-enabled. |
 | 1.14 | **OneDrive Sign-In / Connectivity Failure** | OneDrive client cannot authenticate or reach service endpoints; blocks login on user device. |
 | 1.15 | **Known Folder Backup Failure** | OneDrive Known Folder Move (Desktop / Documents / Pictures backup) is paused, errored, or never completed. |
-| 1.16 | **Offline Files Setting Issue** | "Always keep on this device" or offline availability setting misconfigured, causing local file not found / not synced. |
+
 
 ---
 
@@ -40,11 +40,11 @@
 | # | Root Cause Label | Description |
 |---|---|---|
 | 2.1 | **Corrupted Office Identity** | Cached credential or Office identity token corrupt; repeated sign-in prompts despite a valid license. |
-| 2.2 | **F3 License Restriction** | F3 license blocks desktop M365 app activation; resolved by submitting "MSOL License - F3 License Exception" via AGS. |
+| 2.2 | **F3 License Restriction** | F3 license blocks desktop M365 app activation; resolved by submitting "MSOL License - F3 License Exception" via AGS or AGS entitlement for Microsoft 365 Apps install not granted on the user's account. |
 | 2.3 | **Licensing Endpoint Unreachable** | Device offline or unable to reach licensing endpoints, blocking activation. |
 | 2.4 | **Click-to-Run Installer Corruption** | Error 30015-xx indicates corrupted installer state; requires Quick/Online Repair or full reinstall. |
 | 2.5 | **Company Portal Install Stuck** | M365 Apps installer hung in Company Portal; stalled process must be cleared before retry. |
-| 2.6 | **AGS Entitlement Missing** | AGS entitlement for Microsoft 365 Apps install not granted on the user's account. |
+| 2.6 | 
 | 2.7 | **License Not Assigned After Rejoin** | Office suite license not provisioned to the rejoined user's new identity. |
 | 2.8 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an M365 app. |
 | 2.9 | **Office App Crash** | Office desktop app crashes on launch or during use; commonly resolved by Quick/Online Repair or profile reset. |
@@ -176,7 +176,7 @@
 | 11.2 | **Google Drive Quota Storage Issue** | Google Drive storage quota full; file uploads and new Doc/Sheet/Slide creation blocked. |
 | 11.3 | **External Sharing Blocked by Policy** | Sharing Google Drive content with external (non-Intel) addresses blocked by Intel IT policy; exception request required. |
 | 11.4 | **External Application Access Issue** | User cannot access a third-party Google Workspace integration or connected app due to OAuth, policy, or licensing. |
-| 11.5 | **Gemini Access Issue** | User cannot access Gemini AI features due to licensing, regional rollout, or policy restriction. |
+| 11.5 | **Gemini/Google Workspace Access Issue** | User cannot access Gemini AI features or Google Workspace Apps due to licensing, regional rollout, or policy restriction. |
 
 ---
 
@@ -189,6 +189,7 @@
 | 12.3 | **Visio AGS Entitlement Not Granted** | AGS entitlement not confirmed before Company Portal install attempt; entitlement must be granted first. |
 | 12.4 | **Visio File Permission Denied** | Visio file in a SharePoint/OneDrive location with incorrect permissions; owner must re-share. |
 | 12.5 | **Visio Activation Failure** | Visio activation fails after install (sign-in, licensing endpoint, or cached identity issue). |
+| 12.6 | **Visio Install Failure** | Microsoft Visio install from Company Portal fails (Click-to-Run error, hung installer, or missing prerequisite). |
 
 ---
 
@@ -205,12 +206,12 @@
 
 ---
 
-## 14. Microsoft 365 Groups / Planner / To Do Issues
+## 14. Microsoft 365 Planner / To Do Issues
 
 | # | Root Cause Label | Description |
 |---|---|---|
-| 14.1 | **M365 Group Membership Removed** | User removed from M365 Group manually or via access review; re-add requires group owner or IT admin. |
-| 14.2 | **No Active Group Owner** | Group has no active owner after a departure; ownership must be reassigned. |
+| 14.1 | 
+| 14.2 | 
 | 14.3 | **Planner Plan Deleted** | Plan deleted when associated M365 Group was removed; recovery requires IT admin within soft-delete window. |
 | 14.4 | **To Do Account Provisioning Delay** | To Do tasks not appearing due to incomplete M365 account provisioning or pending tenant sync. |
 
@@ -241,20 +242,14 @@
 
 ## 17. Excluded (Out-of-scope tickets)
 
-Use these labels **only** when Category = `Excluded` — i.e. the ticket is not a Productivity Tools product fault and should not be counted against PT root-cause analysis. Pick the closest matching label; if none fit, use `Out-of-scope Service Offering`.
+Use these labels **only** when Category = `Unknown` — i.e. the ticket is not a Productivity Tools product fault and should not be counted against PT root-cause analysis. Pick the closest matching label; if none fit, use `Out-of-scope Service Offering`.
 
 | # | Root Cause Label | When to Apply |
 |---|---|---|
-| 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity). |
-| 17.2 | **SharePoint Online Access Request** | SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT. |
-| 17.3 | **Mailbox / Calendar Enablement** | Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT. |
-| 17.4 | **Cellular / SIM Activation** | Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT. |
-| 17.5 | **Identity / PUID / Account Provisioning** | New-hire/rehire/PUID account provisioning, AGS group membership — owned by Identity, not PT. |
-| 17.6 | **Hardware / Device Issue** | Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT. |
-| 17.7 | **Network / VPN Infrastructure** | Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT. |
-| 17.8 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product fault; should be redirected to self-service docs or training. |
-| 17.9 | **Duplicate / Cancelled Ticket** | Ticket withdrawn, cancelled, duplicate of another INC, or closed without action by the requester. |
-| 17.10 | **Third-Party SaaS Issue** | Non-Microsoft, non-Google SaaS app outside the PT catalog (e.g. vendor portals, custom internal apps). |
+| 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity), SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT, Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT, Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT, AGS group membership — owned by Identity, not PT, Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT, Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT |
+| 17.2 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product fault; should be redirected to self-service docs or training. |
+| 17.3 | **Duplicate / Cancelled Ticket** | Ticket withdrawn, cancelled, duplicate of another INC, or closed without action by the requester. |
+| 17.4 | **Third-Party SaaS Issue** | Non-Microsoft, non-Google SaaS app outside the PT catalog (e.g. vendor portals, custom internal apps). |
 
 ---
 
@@ -264,9 +259,9 @@ Use these labels **only** when Category = `Excluded` — i.e. the ticket is not 
 |---|---|
 | **Tenant License / SKU Blackout** | Feature hidden in AGS, no entitlement assignable (common with Copilot) |
 | **Corrupted Local Office Client** | Multi-symptom Office issues; resolved by Quick/Online Repair or sign-out/in |
-| **Long File Path Issue** | OneDrive/SharePoint 400-char path cap, reserved characters, long shortcut chains |
+| **Long File Path Issue** | OneDrive/SharePoint 260-char path cap, reserved characters, long shortcut chains |
 | **PUID Mismatch** | Rejoin/rehire PUID change breaks inherited permissions |
-| **Mapped Drive vs OneDrive Confusion** | User reports OneDrive issue but root cause is SMB/shared drive |
+| **Mapped Drive vs OneDrive Confusion** | User reports OneDrive issue but root cause is Shared drive |
 | **Phased Rollout Gate** | Feature works for some users due to tenant ring assignment |
 | **Stale Browser / Teams Cache** | ChunkLoadError and Copilot UI load failures |
 | **Network Proxy / VPN Interference** | Intermittent licensing or sync endpoint failures |
@@ -277,7 +272,7 @@ Use these labels **only** when Category = `Excluded` — i.e. the ticket is not 
 
 ## How to Use This Catalog
 
-1. Pick the **Category** and **Sub-symptom** from `TicketCategorisation_ProductivityTools.md`.
+1. Pick the **Category** from `TicketCategorisation_ProductivityTools.md` and **Sub-symptom** from `TrendSubCategorisation_ProductivityTools.md`.
 2. Find the closest **Root Cause Label** from the matching product section above based on the actual evidence in the incident's work/close notes.
 3. Output:
 

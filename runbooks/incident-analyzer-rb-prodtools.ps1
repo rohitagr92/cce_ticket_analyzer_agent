@@ -1502,8 +1502,7 @@ function Get-MergedWeeklyRunData {
 function Filter-IncidentsByResolvedWindow {
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory)]
-        [array]$Incidents,
+        [array]$Incidents = @(),
 
         [int]$LookbackHours = 26
     )
@@ -2622,7 +2621,8 @@ try {
         $Script:reportperiod = "$($yesterday.ToString('yyyy-MM-dd HH:mm'))" + " to " + "$($today.ToString('yyyy-MM-dd HH:mm'))"
 
         $incidentsResponse = Invoke-AuthenticatedApiCall -Url $Script:Constants.ServicenowIncidentsURL -AccessToken $serviceNowToken -Method GET
-        $incidents = $incidentsResponse.result
+        # Normalize to a safe array so null API payloads do not fail downstream mandatory binding.
+        $incidents = @($incidentsResponse.result)
 
         $lookbackHours = [int]($Script:Constants.DailyLookbackHours ?? 26)
         $incidents = Filter-IncidentsByResolvedWindow -Incidents $incidents -LookbackHours $lookbackHours

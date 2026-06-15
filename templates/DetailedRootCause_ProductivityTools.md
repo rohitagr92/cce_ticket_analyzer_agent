@@ -2,7 +2,7 @@
 
 > **How to use this file:** The "Detailed Root Cause" column in the report must contain the **exact heading** of one of the entries below (verbatim, including capitalisation). Do not paraphrase the heading itself. Use the description and "When to pick this" notes to decide which one matches the incident, then write the descriptive sentence in the AI Analysis field.
 >
-> Headings are grouped by **Product Category** (from `TicketCategorisation_ProductivityTools.md`). Each entry is also tagged with its **Top Root Cause** bucket (from `TopRootCause_ProductivityTools.md`).
+> Headings are grouped by **Product Category** (from `TicketCategorisation_ProductivityTools.md`). Each entry is also tagged with its **Root Cause** bucket (from `PossibleRootCause_ProductivityTools.md`).
 >
 > If no existing heading fits the incident, output exactly `Unknown` for the Detailed Root Cause (no `[NEW]` tag, no new heading).
 
@@ -585,7 +585,7 @@ User cannot delete or share a Loop workspace because they lack the owner / admin
 
 ---
 
-## Microsoft 365 Groups / Planner / To Do Issues
+## Microsoft 365 Planner / To Do Issues
 
 ### M365 Group membership removed
 **Top Root Cause:** Identity / Account Lifecycle

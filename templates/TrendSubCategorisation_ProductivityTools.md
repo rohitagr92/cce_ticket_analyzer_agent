@@ -7,16 +7,16 @@ Your task is to classify each incident into a **sub-category** that captures the
 ### Instructions
 
 1. **Read all incidents first** to understand the full landscape of issues in this category.
-2. **Assign a sub-category** to each incident. Sub-categories should be specific enough to be actionable (e.g., "OneDrive sync failure" rather than just "sync issue") but general enough that similar incidents group together.
+2. **Assign a sub-category** to each incident. Sub-categories should be specific enough to be actionable (e.g., "Sync Issues" ) but general enough that similar incidents group together.
 3. **Be consistent** — use the exact same sub-category name for similar incidents. Use the exact labels listed below where they apply.
-4. **Focus on root cause**, not symptoms. For example, if Copilot was missing in Excel because the license was unassigned, sub-categorize it under "Copilot license missing", not under an Excel sub-category.
-5. **Use sub-category labels only** in the JSON output. The grouping headers (e.g., "Sync Issues", "Access & Permission Issues") below are for navigation and reasoning; do NOT use them as the sub-category value.
+4. **Focus on symptoms**, not root cause. For example, if Copilot was missing in Excel because the license was unassigned, sub-categorize it under "Copilot license missing", not under an Excel sub-category.
+5. **Use sub-category labels only** in the JSON output. The grouping headers (e.g., "Sync Issues", "Access & Permission Issues") below are for sub-category value.
 
 ### Sub-Category Guidelines by Parent Category
 
 ---
 
-#### Microsoft OneDrive
+#### Microsoft OneDrive Issues
 
 **Sync Issues**
 - OneDrive sync failure
@@ -43,10 +43,13 @@ Your task is to classify each incident into a **sub-category** that captures the
 - File open issue (desktop)
 - Web vs desktop mismatch
 - File access inconsistency
+- Version history issue
 
 **Application / Client Issues**
 - OneDrive client not running
 - Login/connectivity issue
+- Hang or Crash issue
+- Unable to install
 
 **Storage & Backup Issues**
 - Storage quota exceeded
@@ -58,7 +61,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft Excel
+#### Microsoft Excel Issues
 
 **File Opening Issues**
 - File not opening
@@ -85,7 +88,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft PowerPoint
+#### Microsoft PowerPoint Issues
 
 **File Opening Issues**
 - Presentation not opening
@@ -109,7 +112,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft Word
+#### Microsoft Word Issues
 
 **File Access Issues**
 - Document not opening
@@ -130,7 +133,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft OneNote
+#### Microsoft OneNote Issues
 
 **Sync Issues**
 - Notebook sync failure
@@ -144,7 +147,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 - OneNote not opening
 - OneNote Crash
 - OneNote Hang
-- OneNote Slowness
+- OneNote Performance Issues
 - OneNote Features not working
 
 **Usage Queries**
@@ -152,7 +155,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft 365 Apps for Enterprise
+#### Microsoft 365 Apps for Enterprise Issues
 
 **Application Access Issues**
 - Office apps not opening
@@ -177,7 +180,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft 365 Copilot
+#### Microsoft 365 Copilot Issues
 
 **Feature Availability Issues**
 - Copilot not visible
@@ -199,11 +202,11 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Copilot not opening
 - Copilot Crash
 - Copilot Hang
-- Copilot Slowness
+- Copilot Perfomance Issue
 
 ---
 
-#### Microsoft Forms
+#### Microsoft Forms Issues
 
 **Access Issues**
 - Forms access issue
@@ -218,7 +221,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft Visio Professional Client
+#### Microsoft Visio Professional Client Issues
 
 **Installation Issues**
 - Visio install failure
@@ -238,7 +241,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft Loop
+#### Microsoft Loop Issues
 
 **Workspace Access Issues**
 - Workspace not loading
@@ -254,7 +257,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Smartsheet
+#### Smartsheet Issues
 
 **Access Issues**
 - Smartsheet access issue
@@ -267,7 +270,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Google Workspace
+#### Google Workspace Issues
 
 **Access Issues**
 - Google access issue
@@ -280,10 +283,12 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Microsoft Project
+#### Microsoft Project Issues
 
-**Licensing Issues**
-- License activation issue
+**Activation Issues**
+- License expired issue
+- Trial expired issue
+- Activation failure
 
 **Installation Issues**
 - Installation failure
@@ -305,20 +310,18 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
-#### Shared File Service (Share Drives)
+#### Shared File Service (Share Drives) Issues
 
 **Access Issues**
 - Access permission issue
 - Mapped drive not connecting
+- Unable to map the drive
 
 **File Handling Issues**
 - Missing folder / file
 
 **Storage Issues**
 - Quota / storage issue
-
-**Sync Issues**
-- Drive sync failure
 
 **Usage Queries**
 - Shared drive usage query
@@ -327,22 +330,22 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Other / Miscellaneous
 
-- Use a descriptive 2–6 word label that captures the specific issue when none of the above sub-categories apply.
+- Use a Sub-category as 'Unknown' when none of the above sub-categories apply.
 
 ---
 
 ### Cross-Category Disambiguation Rules
 
-- **Copilot wins over the host Office app.** If "Copilot not visible in Excel" is the symptom and the root cause is licensing/feature rollout, use a Microsoft 365 Copilot sub-category — not a Microsoft Excel sub-category.
+- **Copilot wins over the host Office app.** If "Copilot not visible in Excel" is the symptom and the root cause is licensing/feature rollout, use a "Licensing Issues" as subcategory.
 - **Rejoin scenarios.** If the user is a rejoined employee or accessing a former employee's data, use a rejoin subcategory inside **Microsoft OneDrive** (e.g., "Rejoin access issue", "Former employee data — within 30 days") — not a generic "Shared file access issue".
 - **Single-app vs multi-app failure.**
-    - Failure isolated to one Office app → use that app's sub-category (e.g., "Excel performance issue").
-    - Failure across multiple Office apps, or driven by suite-wide install / update / license tier → use a Microsoft 365 Apps for Enterprise sub-category.
+    - Failure isolated to one Office app → use that app's sub-category e.g., "Performance Issues" under Microsoft Excel.
+    - Failure across multiple Office apps, or driven by suite-wide install / update / license tier → use a "Installation Issues" or "Licensing Issues" as subcategory.
 - **OneDrive client vs SharePoint permission.**
-    - Sync / client / availability failure → Microsoft OneDrive sub-category.
-    - "Access denied" on a shared file resolved by owner re-share → "Shared file access issue" or "Permission not applied" under Microsoft OneDrive (or the equivalent under Rejoin if the user rejoined).
-- **OneNote on a new laptop.** Default to a Microsoft OneNote sub-category (e.g., "Data loss after PC refresh" or "Notebook sync failure") unless the work notes specifically attribute the failure to the OneDrive client.
-- **Mapped network drive / Samba** is always a Shared File Service (Share Drives) sub-category — never OneDrive.
+    - Sync / client / availability failure → "Application / Client Issues" as subcategory.
+    - "Access denied" on a shared file resolved by owner re-share → "Access & Permission Issues" as a subcategory under Microsoft OneDrive (or the equivalent under Rejoin if the user rejoined).
+- **OneNote on a new laptop.** Default to a "Missing Data Issues" or "Usage Queries" as a subcategory unless the work notes specifically attribute the failure to the OneDrive client.
+- **Mapped network drive not connecting** is a "Access Issues" as a subCategory where server name contains "SFS"  — never OneDrive.
 
 ### Output Format
 
@@ -352,7 +355,7 @@ Return your response as a JSON array. Each element must have exactly these field
 [
   {
     "IncidentNumber": "INC15511605",
-    "SubCategory": "Copilot license missing",
+    "SubCategory": "Licensing Issues",
     "Justification": "Copilot not enabled in Excel and PowerPoint because the MSOL License – Copilot for M365 entitlement was hidden in AGS due to the blackout period."
   }
 ]
@@ -360,7 +363,7 @@ Return your response as a JSON array. Each element must have exactly these field
 
 **Rules:**
 - The `IncidentNumber` must exactly match the input.
-- The `SubCategory` must be one of the exact labels listed under the parent category above (do NOT use the bold grouping header as the value).
-- If no listed sub-category fits, use a short descriptive label (2–6 words) and note this in the `Justification`.
+- The `SubCategory` must be one of the exact labels as parent category above (use the bold grouping header as the value).
+- If no listed sub-category fits, use 'Unknown' and note this in the `Justification`.
 - The `Justification` must be one sentence explaining why this sub-category was chosen.
 - Return ONLY the JSON array, no additional text or markdown fencing.

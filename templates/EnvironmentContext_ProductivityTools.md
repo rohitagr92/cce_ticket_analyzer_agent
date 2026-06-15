@@ -16,7 +16,7 @@ The **Productivity Tools** service offering covers cloud-first collaboration, co
 - **Microsoft Forms** — surveys, quizzes, and polls; ownership transfer is governed by tenant policy.
 - **Microsoft Visio Professional Client** — diagramming desktop app with subscription-based activation.
 - **Microsoft Project (Desktop / Project for the web)** — project scheduling.
-- **Microsoft 365 Groups / Planner / To Do** — supporting collaboration apps tied to Groups.
+- **Microsoft 365 Planner / To Do** — supporting collaboration apps tied to Groups.
 - **Google Workspace** — Docs, Sheets, Slides, Drive, Gmail (federated where used), **Gemini** AI; tenant identity federated from Azure AD.
 - **Smartsheet** — SaaS work management, SSO-integrated.
 - **Shared File Service (Share Drives)** — legacy on-prem / hybrid SMB shares mapped via DFS namespaces, plus modern Azure Files where adopted.

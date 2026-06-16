@@ -312,6 +312,16 @@
   }
 
   /* Forecast section */
+  .conf-kpi-wrap { position:relative; display:inline-block; }
+  .conf-kpi-info { display:inline-flex; align-items:center; justify-content:center; width:17px; height:17px; border-radius:50%; background:#dde6f0; color:#4a6cf7; font-size:11px; font-weight:800; cursor:default; margin-left:6px; vertical-align:middle; user-select:none; }
+  .conf-kpi-tooltip { display:none; position:absolute; top:calc(100% + 8px); left:0; z-index:999; background:#1e2a3a; color:#f0f4fa; border-radius:10px; padding:14px 16px; width:340px; font-size:0.82rem; line-height:1.55; box-shadow:0 6px 24px rgba(0,0,0,0.22); pointer-events:none; }
+  .conf-kpi-tooltip::before { content:''; position:absolute; top:-6px; left:18px; border-left:6px solid transparent; border-right:6px solid transparent; border-bottom:6px solid #1e2a3a; }
+  .conf-kpi-wrap:hover .conf-kpi-tooltip, .conf-kpi-info:focus + .conf-kpi-tooltip { display:block; }
+  .conf-kpi-tooltip .tip-formula { background:#0d1b2a; border-radius:6px; padding:8px 10px; font-family:monospace; font-size:0.8rem; color:#7dd3fc; margin:8px 0 4px; white-space:normal; word-break:break-all; }
+  .conf-kpi-tooltip .tip-row { display:flex; justify-content:space-between; padding:2px 0; border-bottom:1px solid rgba(255,255,255,0.07); }
+  .conf-kpi-tooltip .tip-row:last-child { border-bottom:none; }
+  .conf-kpi-tooltip .tip-label { color:#a0b4c8; }
+  .conf-kpi-tooltip .tip-val { font-weight:700; color:#f0f4fa; }
   .sm-forecast-grid { display:grid; grid-template-columns: 2fr 1fr; gap:18px; }
   @media (max-width:980px){ .sm-forecast-grid { grid-template-columns:1fr; } }
   .sm-fc-block { background:#fafcff; border:1px solid #e5edf5; border-radius:8px; padding:14px 16px; }
@@ -3401,14 +3411,31 @@
     const mix = airConfidenceMix(serviceEntities || []);
     const known = mix.High + mix.Medium + mix.Low;
     const total = known + mix.Unknown;
-    const overallPct = known > 0 ? ((mix.High + mix.Medium) / known) * 100 : 0;
+    const overallPct = total > 0 ? ((mix.High + mix.Medium) / total) * 100 : 0;
     const pct = n => known > 0 ? ((n / known) * 100).toFixed(1) + '%' : '0.0%';
+    const numerator = mix.High + mix.Medium;
+    const tooltip =
+      '<div class="conf-kpi-tooltip">' +
+        '<strong style="font-size:0.85rem;color:#fff;">How is this calculated?</strong>' +
+        '<div class="tip-formula">(High + Medium) / Total &times; 100 = (' + mix.High + ' + ' + mix.Medium + ') / ' + total + ' &times; 100 = ' + overallPct.toFixed(1) + '%</div>' +
+        '<div style="margin-top:8px;margin-bottom:4px;font-size:0.78rem;color:#a0b4c8;text-transform:uppercase;letter-spacing:0.04em;">Breakdown</div>' +
+        '<div class="tip-row"><span class="tip-label">&#x2705; High confidence</span><span class="tip-val">' + mix.High + ' tickets</span></div>' +
+        '<div class="tip-row"><span class="tip-label">&#x1F7E1; Medium confidence</span><span class="tip-val">' + mix.Medium + ' tickets</span></div>' +
+        '<div class="tip-row"><span class="tip-label">&#x274C; Low confidence</span><span class="tip-val">' + mix.Low + ' tickets</span></div>' +
+        '<div class="tip-row"><span class="tip-label">&#x2753; Unknown / Missing</span><span class="tip-val">' + mix.Unknown + ' tickets</span></div>' +
+        '<div class="tip-row" style="margin-top:4px;padding-top:6px;border-top:1px solid rgba(255,255,255,0.15);"><span class="tip-label">Total in scope</span><span class="tip-val">' + total + ' tickets</span></div>' +
+        '<div style="margin-top:10px;font-size:0.78rem;color:#7dd3fc;">&#9432; Unknown/Missing tickets count against the score. High+Medium tickets raise it.</div>' +
+      '</div>';
 
     host.innerHTML =
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">' +
         '<div>' +
           '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.45px;color:var(--muted);font-weight:700;">Overall AI Confidence by Service Offering</div>' +
-          '<div style="font-size:1.9rem;font-weight:800;color:var(--intel-classic);line-height:1.1;margin-top:2px;">' + overallPct.toFixed(1) + '%</div>' +
+          '<div class="conf-kpi-wrap" style="display:inline-block;">' +
+            '<span style="font-size:1.9rem;font-weight:800;color:var(--intel-classic);line-height:1.1;margin-top:2px;display:inline-block;">' + overallPct.toFixed(1) + '%</span>' +
+            '<span class="conf-kpi-info" tabindex="0">?</span>' +
+            tooltip +
+          '</div>' +
           '<div style="font-size:0.82rem;color:var(--muted);margin-top:4px;">Scope: <strong>' + esc(serviceLabel || 'All services') + '</strong> &middot; service-level KPI (not week-filter dependent)</div>' +
         '</div>' +
         '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">' +
@@ -4864,8 +4891,8 @@
   function smRenderForecast(filtered, allWeeks) {
     const host = $('smForecast');
     const weeksInRange = (allWeeks || []).slice();
-    if (!weeksInRange || weeksInRange.length < 3) {
-      host.innerHTML = '<div class="sm-empty">Forecast needs at least 3 weeks of history.</div>';
+    if (!weeksInRange || weeksInRange.length < 4) {
+      host.innerHTML = '<div class="sm-empty">Forecast needs at least 4 weeks of history.</div>';
       return;
     }
     const usable = filtered.filter(e => (e.Category || '') !== 'Excluded');
@@ -4873,7 +4900,7 @@
     const rcField = Object.keys(prcCounts).length > 0 ? 'PossibleRootCause' : 'Subcategory';
     const lookback = Math.min(8, weeksInRange.length);
     const baseWeeks = weeksInRange.slice(-lookback);
-    const horizon = 4;
+    const horizon = 2; // Forecast next 2 work weeks
     const futureWeeks = [];
     let wk = weeksInRange[weeksInRange.length - 1];
     for (let i = 0; i < horizon; i++) { wk = smNextWW(wk) || ('Wk+' + (i + 1)); futureWeeks.push(wk); }
@@ -4900,29 +4927,36 @@
       return;
     }
 
-    // Weighted moving average and bounded uncertainty.
-    const wts = [0.1, 0.2, 0.3, 0.4];
+    // Moving average of last 4 WW + trend adjustment.
+    // Formula: Next WW Forecast = (Average of last 4 WW) + (Weekly Trend × Week Number)
+    // Weekly Trend = (WW8 - WW1) / 7 weeks
     const forecastRows = topRcs.map(row => {
       const ys = row.ys.slice();
+      const last4 = ys.slice(-Math.min(4, ys.length)); // Last 4 weeks (or fewer if not available)
+      const avg4Ww = last4.reduce((a, b) => a + b, 0) / Math.max(1, last4.length);
+      
+      // Calculate trend: (last - first) / 7 weeks
+      const trendDenom = Math.max(1, ys.length - 1);
+      const weeklyTrend = (ys[ys.length - 1] - ys[0]) / trendDenom;
+      
+      // Calculate standard deviation of all historical weeks for confidence interval
+      const mean = ys.reduce((a, b) => a + b, 0) / ys.length;
+      const variance = ys.reduce((sq, v) => sq + Math.pow(v - mean, 2), 0) / Math.max(1, ys.length);
+      const stdDev = Math.sqrt(variance);
+      const band = Math.max(0.5, Math.round((stdDev * 1.5) * 10) / 10); // 1.5 × standard deviation
+      
       const next = [];
-      for (let h = 0; h < horizon; h++) {
-        const win = ys.slice(-lookback);
-        const activeW = wts.slice(-win.length);
-        const wSum = activeW.reduce((a, b) => a + b, 0);
-        let pred = 0;
-        for (let i = 0; i < win.length; i++) pred += (win[i] * activeW[i]);
-        pred = Math.max(0, pred / Math.max(1, wSum));
-        pred = Math.round(pred * 10) / 10;
+      for (let weekNum = 1; weekNum <= horizon; weekNum++) {
+        let pred = avg4Ww + (weeklyTrend * weekNum);
+        pred = Math.max(0, Math.round(pred * 10) / 10);
         ys.push(pred);
         next.push(pred);
       }
-      const diffs = [];
-      for (let i = 1; i < row.ys.length; i++) diffs.push(Math.abs(row.ys[i] - row.ys[i - 1]));
-      const mad = diffs.length ? (diffs.reduce((a, b) => a + b, 0) / diffs.length) : 0;
-      const band = Math.max(1, Math.round(mad));
+      
       const trendVal = next[0] - row.ys[row.ys.length - 1];
       const trendTxt = trendVal > 0.7 ? 'rising' : (trendVal < -0.7 ? 'falling' : 'stable');
-      const conf = band <= 1 ? 'High' : (band <= 2 ? 'Medium' : 'Low');
+      const conf = stdDev <= 2 ? 'High' : (stdDev <= 4 ? 'Medium' : 'Low');
+      
       return {
         rc: row.rc,
         last: row.ys[row.ys.length - 1],
@@ -4939,7 +4973,7 @@
     for (let h = 0; h < horizon; h++) totalFuture.push(forecastRows.reduce((s, r) => s + r.next[h], 0));
 
     const table = '<table class="sm-fc-table"><thead><tr>' +
-      '<th>Root Cause</th><th class="num">Last WW</th><th class="num">W+1</th><th class="num">W+2</th><th class="num">W+3</th><th class="num">W+4</th><th>Trend</th><th>Confidence</th>' +
+      '<th>Root Cause</th><th class="num">Last WW</th><th class="num">W+1</th><th class="num">W+2</th><th>Trend</th><th>Confidence</th>' +
       '</tr></thead><tbody>' +
       forecastRows.map(r => {
         const cls = r.trendTxt === 'rising' ? 'trend-up' : (r.trendTxt === 'falling' ? 'trend-down' : 'trend-flat');
@@ -4948,8 +4982,6 @@
           '<td class="num">' + r.last + '</td>' +
           '<td class="num">' + Math.round(r.next[0]) + '</td>' +
           '<td class="num">' + Math.round(r.next[1]) + '</td>' +
-          '<td class="num">' + Math.round(r.next[2]) + '</td>' +
-          '<td class="num">' + Math.round(r.next[3]) + '</td>' +
           '<td class="' + cls + '">' + r.trendTxt + '</td>' +
           '<td><span class="conf ' + (r.conf === 'High' ? 'high' : (r.conf === 'Medium' ? 'med' : 'low')) + '">' + r.conf + '</span> &plusmn;' + r.band + '</td>' +
         '</tr>';
@@ -4976,40 +5008,83 @@
     }
 
     const totalCtx =
-      'Stable weighted forecast from last <strong>' + lookback + '</strong> WWs (full service history, not week-filter dependent) &middot; current total <strong>' +
+      'Moving average forecast from last <strong>' + lookback + '</strong> WWs (full service history, independent of week/product filters) &middot; current total <strong>' +
       totalHist[totalHist.length - 1] + '</strong> &middot; next WW expected <strong>' + Math.round(totalFuture[0]) +
-      '</strong>. Model confidence target is high stability (&ge;90% directional consistency), not absolute ticket-count certainty.';
+      '</strong> &plusmn; <strong>' + forecastRows[0].band + '</strong>. Formula: avg(last 4 WW) + trend adjustment &middot; confidence based on standard deviation.';
 
-    // Tiny SVG for total trend only (historical + forecast).
+    // SVG chart with WW labels, gridlines, ticket count labels on each point.
+    const allLabels = baseWeeks.concat(futureWeeks);
     const full = totalHist.concat(totalFuture);
-    const W = 640, H = 180, PAD_L = 38, PAD_R = 12, PAD_T = 10, PAD_B = 28;
+    const W = 700, H = 220, PAD_L = 44, PAD_R = 16, PAD_T = 24, PAD_B = 48;
     const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
-    const maxY = Math.max(4, ...full) + 2;
+    const maxY = Math.max(4, ...full) * 1.18;
     const xAt = i => PAD_L + (i * innerW) / Math.max(1, (full.length - 1));
     const yAt = v => PAD_T + innerH - (Math.max(0, v) / maxY) * innerH;
+
+    let chart = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet" style="width:100%;max-width:' + W + 'px">';
+
+    // Horizontal gridlines with y-axis tick values
+    for (let i = 0; i <= 4; i++) {
+      const yv = Math.round((maxY * i) / 4);
+      const y = yAt(yv);
+      chart += '<line x1="' + PAD_L + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + y.toFixed(1) + '" stroke="#e8eaed" stroke-width="1" />';
+      chart += '<text x="' + (PAD_L - 6) + '" y="' + (y + 4).toFixed(1) + '" text-anchor="end" font-size="11" fill="#888">' + yv + '</text>';
+    }
+
+    // X-axis baseline
+    chart += '<line x1="' + PAD_L + '" y1="' + (PAD_T + innerH) + '" x2="' + (W - PAD_R) + '" y2="' + (PAD_T + innerH) + '" stroke="#d0d3d8" stroke-width="1" />';
+
+    // Forecast shading band (between history end and chart right)
+    const fcStartX = xAt(totalHist.length - 1);
+    chart += '<rect x="' + fcStartX.toFixed(1) + '" y="' + PAD_T + '" width="' + (W - PAD_R - fcStartX).toFixed(1) + '" height="' + innerH + '" fill="#f0f4ff" opacity="0.5" />';
+
+    // Actual history line
     const histPts = totalHist.map((v, i) => xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1)).join(' ');
+    chart += '<polyline class="actual-line" points="' + histPts + '" />';
+
+    // Forecast dashed line (connects from last actual point)
     const fcPts = [xAt(totalHist.length - 1).toFixed(1) + ',' + yAt(totalHist[totalHist.length - 1]).toFixed(1)]
       .concat(totalFuture.map((v, i) => xAt(totalHist.length + i).toFixed(1) + ',' + yAt(v).toFixed(1))).join(' ');
-    let chart = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
-    for (let i = 0; i <= 4; i++) {
-      const yv = (maxY * i) / 4;
-      const y = yAt(yv);
-      chart += '<line x1="' + PAD_L + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + y.toFixed(1) + '" stroke="#eef0f4" stroke-width="1" />';
-    }
-    chart += '<polyline class="actual-line" points="' + histPts + '" />';
     chart += '<polyline class="forecast-line" points="' + fcPts + '" />';
+
+    // Dots + count labels for historical points
+    totalHist.forEach((v, i) => {
+      const cx = xAt(i), cy = yAt(v);
+      chart += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="#4a6cf7" />';
+      chart += '<text x="' + cx.toFixed(1) + '" y="' + (cy - 8).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#4a6cf7">' + v + '</text>';
+    });
+
+    // Dots + count labels for forecast points
+    totalFuture.forEach((v, i) => {
+      const cx = xAt(totalHist.length + i), cy = yAt(v);
+      const rounded = Math.round(v);
+      chart += '<circle cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4" fill="none" stroke="#f97316" stroke-width="2" stroke-dasharray="3,2" />';
+      chart += '<text x="' + cx.toFixed(1) + '" y="' + (cy - 8).toFixed(1) + '" text-anchor="middle" font-size="11" font-weight="600" fill="#f97316">~' + rounded + '</text>';
+    });
+
+    // X-axis WW labels
+    allLabels.forEach((lbl, i) => {
+      const isFc = i >= totalHist.length;
+      const shortLbl = (lbl || '').replace(/^(\d{4})-W(\d+)$/, 'WW$2').replace(/^WW(\d+)$/, 'WW$1') || lbl;
+      chart += '<text x="' + xAt(i).toFixed(1) + '" y="' + (PAD_T + innerH + 16) + '" text-anchor="middle" font-size="11" fill="' + (isFc ? '#f97316' : '#555') + '" font-weight="' + (isFc ? '600' : '400') + '">' + esc(shortLbl) + '</text>';
+    });
+
+    // Legend
+    chart += '<line x1="' + (W - 190) + '" y1="12" x2="' + (W - 170) + '" y2="12" stroke="#4a6cf7" stroke-width="2" />';
+    chart += '<circle cx="' + (W - 180) + '" cy="12" r="3" fill="#4a6cf7" />';
+    chart += '<text x="' + (W - 165) + '" y="16" font-size="11" fill="#555">Actual</text>';
+    chart += '<line x1="' + (W - 100) + '" y1="12" x2="' + (W - 80) + '" y2="12" stroke="#f97316" stroke-width="2" stroke-dasharray="4,2" />';
+    chart += '<circle cx="' + (W - 90) + '" cy="12" r="3" fill="none" stroke="#f97316" stroke-width="2" />';
+    chart += '<text x="' + (W - 75) + '" y="16" font-size="11" fill="#555">Forecast</text>';
+
     chart += '</svg>';
 
     host.innerHTML =
       '<div class="ctx">' + totalCtx + '</div>' +
       '<div class="sm-forecast-grid">' +
-        '<div class="sm-fc-block sm-fc-chart"><h4>Total ticket forecast (next 4 WWs)</h4>' +
-          '<div class="sub">Solid line = actual &middot; dashed line = weighted forecast (stable)</div>' +
+        '<div class="sm-fc-block sm-fc-chart"><h4>Total ticket forecast (next 2 work weeks)</h4>' +
+          '<div class="sub">Solid line = actual history &middot; dashed line = forecast with trend</div>' +
           chart +
-        '</div>' +
-        '<div class="sm-fc-block"><h4>Root-cause-wise 4-WW forecast</h4>' +
-          '<div class="sub">Calculated inside selected service/filter scope</div>' +
-          table +
         '</div>' +
       '</div>';
   }

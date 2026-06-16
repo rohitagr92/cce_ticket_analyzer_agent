@@ -407,15 +407,16 @@ Confidence Level: [High/Medium/Low]
 **CONFIDENCE CALCULATION FRAMEWORK:**
 
 **CONFIDENCE BOOSTERS (+):**
-- Application clearly identified and matches category (+20%)
-- Specific error message, error code, KB number, or entitlement name present (+15%)
+- Application clearly identified and matches category (+25%)
+- Specific error message, error code, or entitlement name present (+15%)
+- KB number or KB link present (+5% max contribution)
 - Agent used Productivity-Tools-specific terminology (MSOL License, AGS entitlement, OfficeFileCache, KB10045042, KB10057023, F3 License Exception) (+10%)
 - Resolution matches category examples exactly (+15%)
 - Clear root cause identification with supporting evidence (+10%)
 
 **CONFIDENCE REDUCERS (-):**
 - Application/area unclear, ambiguous, or contradictory (-20%)
-- Only user symptom language, no agent technical detail or resolution (-15%)
+- Only user symptom language, no agent technical detail or resolution (-10%)
 - Multiple possible categories apply with equal evidence (e.g., could be Copilot Issues or Excel Issues) (-10%)
 - Contradictory information between description, work notes, and close notes (-25%)
 - Vague or generic language; "issue resolved" with no documented steps (-10%)
@@ -425,6 +426,7 @@ Base Confidence (50%) + Total Boosters − Total Reducers = Final Confidence Lev
 - 90%+ = High Confidence
 - 70–89% = Medium Confidence
 - Under 70% = Low Confidence
+- Guardrail: KB/KA evidence must be treated as supporting context only and can contribute at most +5%. KB/KA presence alone must never determine category confidence.
 
 Reasoning: [Detailed explanation of why this category and sub-symptom were selected. Reference the application/area identified (Excel, OneDrive, Copilot, etc.), specific resolution indicators from the category definition that matched the ticket, key phrases or entitlement names from the work/close notes, and why other categories were excluded. Note any licensing constraints (Copilot blackout, F3 restriction) that drove the categorization.
 
@@ -436,7 +438,7 @@ Resolution Summary: [One sentence describing what actually fixed the issue (or, 
 
 How Do I or Error: [Was the incident a "How Do I" question (user education with no technical failure) or an Error (technical failure, error message, or feature unavailable)?]
 
-KB Provided: [Was a KB attached or provided in work notes/comments? If yes, provide the KB number (e.g., KB10045042, KB10057023). Otherwise "No".]
+KB Provided: [Was a KB attached or provided a link or KB number in work notes/comments? If yes, provide the KB number (e.g., KB10045042, KB10057023). Otherwise "No".]
 
 **CRITICAL OUTPUT RULES:**
 - For Primary Category, output ONLY the exact category name without any formatting.
@@ -455,7 +457,7 @@ KB Provided: [Was a KB attached or provided in work notes/comments? If yes, prov
 
 ### **Final Reminders**
 
-- **Three-axis discipline:** Category = the **product**, Sub-symptom = the **symptom** the user saw, Possible Root Cause = a **short canonical label** picked verbatim from `PossibleRootCause_ProductivityTools.md` (typically 2–5 words — never a sentence). Narrative belongs in AI Analysis only.
+- **Three-axis discipline:** Category = the **product** from `TicketCategorisation_ProductivityTools.md`, Sub-symptom = the **symptom** the user saw from `TrendSubCategorisation_ProductivityTools.md`, Possible Root Cause = a **short canonical label** picked verbatim from `PossibleRootCause_ProductivityTools.md` (typically 2–5 words — never a sentence). Narrative belongs in AI Analysis only.
 - **`Unknown` is a last resort, not a default.** Every ticket — including Excluded — must have a concrete Possible Root Cause label and a 2–3 sentence AI Analysis. For Excluded tickets, the Root Cause label is the canonical Excluded entry (e.g. `Out-of-scope Service Offering`) and the AI Analysis must explain why it is out of scope and where it belongs.
 - **"Excluded" is a category** only for tickets clearly outside Productivity Tools scope. Do not use Excluded for Copilot/Office licensing, rejoin scenarios, shared file permissions, or any documented Productivity Tools resolution.
 - **Single-app vs multi-app:** Failure isolated to one Office app → that app's category. Multi-app or suite-wide (install / update / F3 license / activation loop) → Microsoft 365 Apps for Enterprise Issues.

@@ -1572,6 +1572,7 @@ function Invoke-TicketProcessing {
         }
         # Remove any markdown formatting from category
         $rawCategory = $rawCategory -replace '\*+', ''
+        $rawCategory = Get-CanonicalAlias -Field 'Category' -Product '' -Raw $rawCategory
         
         # STRICT MD ALLOWLIST: coerce category to a canonical label from TicketCategorisation.md
         $canonicalCategory = Get-CanonicalLabel -Raw $rawCategory -Allowlist $Script:CanonicalLabels.Categories -Fallback 'Other / Miscellaneous'
@@ -1586,26 +1587,37 @@ function Invoke-TicketProcessing {
             $rawSubSymptom = ($rawSubSymptom -split "`n")[0].Trim()
             $rawSubSymptom = $rawSubSymptom -replace '\*+', ''
         }
+        $rawSubSymptom = Get-CanonicalAlias -Field 'Subcategory' -Product $canonicalCategory -Raw $rawSubSymptom
         $ticket.SubSymptom = $rawSubSymptom
 
         # Canonical subcategory (per-product allowlist from TrendSubCategorisation.md)
         $subAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.Subcategories -Product $canonicalCategory
         $ticket.Subcategory = Get-CanonicalLabel -Raw $rawSubSymptom -Allowlist $subAllowlist -Fallback ''
+        if ([string]::IsNullOrWhiteSpace($ticket.Subcategory)) {
+            $ticket.Subcategory = Get-CanonicalFallbackLabel -Field Subcategory -Product $canonicalCategory -Allowlist $subAllowlist
+        }
 
         # Canonical Possible Root Cause (per-product allowlist from PossibleRootCause.md)
         $prcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.PossibleRootCauses -Product $canonicalCategory
-        $rawPrc = [string]$categoryInfo.possible_root_cause
-        $ticket.PossibleRootCause = Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback 'Unknown'
+        $rawPrc = Get-CanonicalAlias -Field 'PossibleRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.possible_root_cause)
+        $ticket.PossibleRootCause = Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback ''
+        if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
+            $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
+        }
 
         # Canonical Detailed Root Cause (per-product allowlist from DetailedRootCause.md)
         $drcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.DetailedRootCauses -Product $canonicalCategory
-        $ticket.DetailedRootCause = Get-CanonicalLabel -Raw ([string]$categoryInfo.detailed_root_cause) -Allowlist $drcAllowlist -Fallback 'Unknown'
+        $rawDrc = Get-CanonicalAlias -Field 'DetailedRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.detailed_root_cause)
+        $ticket.DetailedRootCause = Get-CanonicalLabel -Raw $rawDrc -Allowlist $drcAllowlist -Fallback ''
+        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause)) {
+            $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
+        }
 
-        # Stage 2 rescue: if either PRC or DRC came back Unknown, ask the AI to map again
+        # Stage 2 rescue: if either PRC or DRC is still empty, ask the AI to map again
         # using ONLY the narrow per-category allowlists. This trades 1 extra small AI call
-        # for a much lower Unknown rate without touching the source-of-truth MD files.
-        $needPrcRescue = ($ticket.PossibleRootCause -eq 'Unknown' -and $prcAllowlist -and $prcAllowlist.Count -gt 0)
-        $needDrcRescue = ($ticket.DetailedRootCause -eq 'Unknown' -and $drcAllowlist -and $drcAllowlist.Count -gt 0)
+        # for a much lower empty-label rate without touching the source-of-truth MD files.
+        $needPrcRescue = ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -and $prcAllowlist -and $prcAllowlist.Count -gt 0)
+        $needDrcRescue = ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause) -and $drcAllowlist -and $drcAllowlist.Count -gt 0)
         if ($Script:Config.Rescue.Enabled -and ($needPrcRescue -or $needDrcRescue)) {
             Write-ScriptLog "RESCUE [$($Incident.number)] invoking narrow re-classifier (needPrc=$needPrcRescue needDrc=$needDrcRescue)" -Level Info -Category "RescueClassifier"
             $rescue = Resolve-RootCauseRescue `
@@ -1619,19 +1631,26 @@ function Invoke-TicketProcessing {
                 -NeedPrc           $needPrcRescue `
                 -NeedDrc           $needDrcRescue
             if ($needPrcRescue -and $rescue.PossibleRootCause) {
-                $coerced = Get-CanonicalLabel -Raw $rescue.PossibleRootCause -Allowlist $prcAllowlist -Fallback 'Unknown'
-                if ($coerced -ne 'Unknown') {
+                $coerced = Get-CanonicalLabel -Raw $rescue.PossibleRootCause -Allowlist $prcAllowlist -Fallback ''
+                if (-not [string]::IsNullOrWhiteSpace($coerced)) {
                     Write-ScriptLog "RESCUE [$($Incident.number)] PRC '$($ticket.PossibleRootCause)' -> '$coerced' (raw='$($rescue.PossibleRootCause)')" -Level Info -Category "RescueClassifier"
                     $ticket.PossibleRootCause = $coerced
                 }
             }
             if ($needDrcRescue -and $rescue.DetailedRootCause) {
-                $coerced = Get-CanonicalLabel -Raw $rescue.DetailedRootCause -Allowlist $drcAllowlist -Fallback 'Unknown'
-                if ($coerced -ne 'Unknown') {
+                $coerced = Get-CanonicalLabel -Raw $rescue.DetailedRootCause -Allowlist $drcAllowlist -Fallback ''
+                if (-not [string]::IsNullOrWhiteSpace($coerced)) {
                     Write-ScriptLog "RESCUE [$($Incident.number)] DRC '$($ticket.DetailedRootCause)' -> '$coerced' (raw='$($rescue.DetailedRootCause)')" -Level Info -Category "RescueClassifier"
                     $ticket.DetailedRootCause = $coerced
                 }
             }
+        }
+
+        if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
+            $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
+        }
+        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause)) {
+            $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
         }
 
         # Service is hardcoded for this runbook (separate runbook will handle Email and Calendaring)
@@ -1641,9 +1660,9 @@ function Invoke-TicketProcessing {
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
 
         # Always persist a usable Confidence (High/Medium/Low) so the dashboards
-        # never fall back to "Unknown". When the model gives no parseable level we
+        # never fall back to empty. When the model gives no parseable level we
         # derive one from whether both root causes resolved to canonical labels.
-        $rootCausesKnown = ($ticket.PossibleRootCause -ne 'Unknown' -and $ticket.DetailedRootCause -ne 'Unknown')
+        $rootCausesKnown = (-not [string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -and -not [string]::IsNullOrWhiteSpace($ticket.DetailedRootCause))
         $ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$categoryInfo.confidence_level) -RootCausesKnown $rootCausesKnown
         if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.confidence_level)) {
             Write-ScriptLog "Confidence not parsed for $($Incident.number) - defaulted to '$($ticket.Confidence)' (rootCausesKnown=$rootCausesKnown)" -Level Info -Category "Categorization"
@@ -2292,7 +2311,8 @@ if ($loadedCount -eq $templateMap.Count) {
 # Parses the 4 reference markdown files into hashtables of canonical labels.
 # This is what enforces "the MD file is the single source of truth" for
 # Category, Subcategory, PossibleRootCause, and DetailedRootCause assignment.
-# AI output is later coerced against these lists; anything not matching is set to "Unknown".
+# AI output is later coerced against these lists; anything not matching is force-mapped
+# to a canonical fallback label per category.
 
 function Get-CanonicalLabelsFromTemplates {
     [CmdletBinding()]
@@ -2300,7 +2320,8 @@ function Get-CanonicalLabelsFromTemplates {
 
     $result = @{
         Categories          = New-Object System.Collections.Generic.List[string]
-        Subcategories       = @{}   # product => list of subcategory labels
+        Subcategories       = @{}   # product => list of subcategory group headers
+        SubcategoryAliasMap = @{}   # "<productNorm>||<symptomNorm>" => group header
         PossibleRootCauses  = @{}   # product => list of root-cause labels
         DetailedRootCauses  = @{}   # product => list of detailed entry headings
     }
@@ -2315,7 +2336,9 @@ function Get-CanonicalLabelsFromTemplates {
     if (-not $result.Categories.Contains('Excluded'))              { $result.Categories.Add('Excluded') }
     if (-not $result.Categories.Contains('Other / Miscellaneous')) { $result.Categories.Add('Other / Miscellaneous') }
 
-    # --- Subcategories: "#### Product" sections in TrendSubCategorisation, bullet items inside ---
+    # --- Subcategories: "#### Product" sections in TrendSubCategorisation ---
+    # Canonical value must be the bold grouping header (for example "Sync Issues").
+    # Bulleted symptom lines are treated as aliases that map to the active header.
     # Product key here lacks the " Issues" suffix (e.g. "Microsoft OneDrive"); the lookup
     # helper's substring fallback handles "Microsoft OneDrive Issues" -> "Microsoft OneDrive".
     $subText = [string]$Script:PromptTemplates.TrendSubCategorisation
@@ -2326,16 +2349,33 @@ function Get-CanonicalLabelsFromTemplates {
             if ($lines.Count -lt 2) { continue }
             $product = $lines[0].Trim()
             $body    = $lines[1]
-            $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\s*[-*]\s+(.+?)\s*$')) {
-                $lbl = $m.Groups[1].Value.Trim()
-                # Skip group-header bold lines and meta lines
-                if ($lbl -match '^\*\*.+\*\*$') { continue }
-                if ($lbl -match '^\*[A-Z]') { continue }   # e.g. "*Sub-symptoms:*"
-                $lbl = $lbl -replace '\s*\(.+?\)\s*$', ''
-                if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
+            $headers = New-Object System.Collections.Generic.List[string]
+            $currentHeader = ''
+            foreach ($ln in ($body -split "`r?`n")) {
+                $trim = [string]$ln
+                $trim = $trim.Trim()
+                if (-not $trim) { continue }
+
+                if ($trim -match '^\*\*(.+?)\*\*\s*$') {
+                    $currentHeader = $matches[1].Trim()
+                    if ($currentHeader -and -not $headers.Contains($currentHeader)) { $headers.Add($currentHeader) }
+                    continue
+                }
+
+                if ($trim -match '^\s*[-*]\s+(.+?)\s*$') {
+                    $sym = $matches[1].Trim()
+                    if ($sym -match '^\*\*.+\*\*$') { continue }
+                    if ($sym -match '^\*[A-Z]') { continue }
+                    $sym = $sym -replace '\s*\(.+?\)\s*$', ''
+                    if ($currentHeader -and $sym) {
+                        $aliasKey = ('{0}||{1}' -f (Normalize-CanonicalText -Raw $product), (Normalize-CanonicalText -Raw $sym))
+                        if (-not $result.SubcategoryAliasMap.ContainsKey($aliasKey)) {
+                            $result.SubcategoryAliasMap[$aliasKey] = $currentHeader
+                        }
+                    }
+                }
             }
-            if ($labels.Count -gt 0) { $result.Subcategories[$product] = $labels }
+            if ($headers.Count -gt 0) { $result.Subcategories[$product] = $headers }
         }
     }
 
@@ -2417,27 +2457,171 @@ function Get-FallbackReasoning {
     return "$($Ticket.Category): detailed analysis was not captured for this ticket."
 }
 
+function Normalize-CanonicalText {
+    [CmdletBinding()]
+    param([string]$Raw)
+
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return '' }
+    $s = $Raw
+    $s = $s -replace '[\u2010\u2011\u2012\u2013\u2014\u2015]', '-'
+    $s = $s -replace '\*+', ''
+    $s = $s -replace '^\["\s]+|["\]\s]+$', ''
+    $s = $s -replace '\s+', ' '
+    return $s.Trim().ToLowerInvariant()
+}
+
+function Get-CanonicalAlias {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('Category','Subcategory','PossibleRootCause','DetailedRootCause')]
+        [string]$Field,
+        [string]$Product,
+        [string]$Raw
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return $Raw }
+
+    $p = Normalize-CanonicalText -Raw $Product
+    $k = Normalize-CanonicalText -Raw $Raw
+
+    switch ($Field) {
+        'Category' {
+            if ($k -eq 'microsoft 365 groups / planner / to do issues') { return 'Microsoft 365 Planner / To Do Issues' }
+        }
+        'Subcategory' {
+            if ($Script:CanonicalLabels -and $Script:CanonicalLabels.SubcategoryAliasMap) {
+                $aliasKey = ('{0}||{1}' -f $p, $k)
+                if ($Script:CanonicalLabels.SubcategoryAliasMap.ContainsKey($aliasKey)) {
+                    return [string]$Script:CanonicalLabels.SubcategoryAliasMap[$aliasKey]
+                }
+            }
+            if ($k -eq 'former employee data - beyond 30 days') { return 'Former employee data - beyond 30 days (not recoverable)' }
+            if ($k -eq 'former employee data - within 30 days') { return 'Former employee data - within 30 days' }
+            if ($k -eq 'copilot not visible (icon missing in excel / word / powerpoint / teams)') { return 'Feature Availability Issues' }
+            if ($k -eq 'sync failure (file not uploading, file in cloud missing on device)') { return 'Sync Issues' }
+            if ($k -eq 'permissions / access after rehire') { return 'Access & Permission Issues' }
+            if ($p -eq 'excluded' -and ($k -eq 'out of scope')) { return 'Out of Scope' }
+        }
+        'PossibleRootCause' {
+            if ($k -eq 'document lock or stuck word process') { return "Word Document Won't Open" }
+            if ($k -eq 'permission issue on the synced file or shortcut') { return 'Shared File Permission Denied' }
+            if ($k -eq 'rejoin access issue') { return 'PUID Mismatch' }
+            if ($k -eq 'sharepoint online access request') { return 'Out-of-scope Service Offering' }
+        }
+        'DetailedRootCause' {
+            if ($k -eq 'unknown' -and $p -eq 'excluded') { return 'Out-of-scope service offering' }
+        }
+    }
+
+    return $Raw
+}
+
+function Get-CanonicalFallbackLabel {
+    [CmdletBinding()]
+    param(
+        [ValidateSet('Subcategory','PossibleRootCause','DetailedRootCause')]
+        [string]$Field,
+        [string]$Product,
+        [System.Collections.Generic.List[string]]$Allowlist
+    )
+
+    if (-not $Allowlist -or $Allowlist.Count -eq 0) { return '' }
+
+    $preferred = @()
+    switch ($Field) {
+        'Subcategory' {
+            switch ($Product) {
+                'Excluded' { $preferred = @('Out of Scope') }
+                'Microsoft OneDrive Issues' { $preferred = @('Access & Permission Issues','Sync Issues') }
+                'Microsoft Word Issues' { $preferred = @('File Access Issues','Performance Issues') }
+                'Microsoft Excel Issues' { $preferred = @('File Opening Issues','Performance Issues') }
+                'Microsoft PowerPoint Issues' { $preferred = @('File Opening Issues','Performance Issues') }
+                'Microsoft 365 Copilot Issues' { $preferred = @('Feature Availability Issues','Licensing Issues') }
+                'Microsoft 365 Apps for Enterprise Issues' { $preferred = @('Application Access Issues','Licensing Issues') }
+                'Microsoft OneNote Issues' { $preferred = @('Application Issues','Missing Data Issues') }
+                'Microsoft Forms Issues' { $preferred = @('Access Issues') }
+                'Shared File Service (Share Drives) Issues' { $preferred = @('Access Issues') }
+                'Google Workspace Issues' { $preferred = @('Access Issues') }
+                'Microsoft Loop Issues' { $preferred = @('Workspace Access Issues') }
+                'Microsoft 365 Planner / To Do Issues' { $preferred = @('Access Issues') }
+                'Smartsheet Issues' { $preferred = @('Access Issues') }
+                'Microsoft Project Issues' { $preferred = @('File Handling Issues','Application Issues') }
+                default { $preferred = @() }
+            }
+        }
+        'PossibleRootCause' {
+            switch ($Product) {
+                'Excluded' { $preferred = @('Out-of-scope Service Offering') }
+                'Microsoft OneDrive Issues' { $preferred = @('PUID Mismatch','Shared File Permission Denied','Sync Stall') }
+                'Microsoft Word Issues' { $preferred = @("Word Document Won't Open") }
+                'Microsoft Excel Issues' { $preferred = @('Hung Excel Process') }
+                'Microsoft PowerPoint Issues' { $preferred = @("Presentation Won't Open") }
+                'Microsoft 365 Copilot Issues' { $preferred = @('Copilot License Blackout') }
+                'Microsoft 365 Apps for Enterprise Issues' { $preferred = @('Corrupted Office Identity') }
+                'Microsoft OneNote Issues' { $preferred = @('OneNote Feature Not Working') }
+                'Microsoft Forms Issues' { $preferred = @('Forms Entitlement Missing') }
+                'Shared File Service (Share Drives) Issues' { $preferred = @('AGS Share Entitlement Missing') }
+                'Google Workspace Issues' { $preferred = @('External Application Access Issue') }
+                'Microsoft Loop Issues' { $preferred = @('Workspace Load Failure') }
+                'Microsoft 365 Planner / To Do Issues' { $preferred = @('To Do Account Provisioning Delay') }
+                'Smartsheet Issues' { $preferred = @('Smartsheet Entitlement Missing') }
+                'Microsoft Project Issues' { $preferred = @('Project File Open / Save Failure') }
+                default { $preferred = @('Usage Guidance (How Do I)') }
+            }
+        }
+        'DetailedRootCause' {
+            switch ($Product) {
+                'Excluded' { $preferred = @('Out-of-scope service offering') }
+                'Microsoft OneDrive Issues' { $preferred = @('Rejoin access not reapplied to OneDrive','Shared file permission denied') }
+                'Microsoft Word Issues' { $preferred = @("Word document won't open") }
+                'Microsoft Excel Issues' { $preferred = @('Excel data refresh failure') }
+                'Microsoft PowerPoint Issues' { $preferred = @("Presentation won't open") }
+                'Microsoft 365 Copilot Issues' { $preferred = @('Copilot licence blackout (pool depleted)') }
+                'Microsoft 365 Apps for Enterprise Issues' { $preferred = @('Corrupted Office installation') }
+                'Microsoft OneNote Issues' { $preferred = @('OneNote feature not working') }
+                'Microsoft Forms Issues' { $preferred = @('Forms Creation Access entitlement missing') }
+                'Shared File Service (Share Drives) Issues' { $preferred = @('Missing AGS entitlement for share') }
+                'Google Workspace Issues' { $preferred = @('Google external application access issue') }
+                'Microsoft Loop Issues' { $preferred = @('Loop workspace load failure') }
+                'Microsoft 365 Planner / To Do Issues' { $preferred = @('M365 Group membership removed') }
+                'Smartsheet Issues' { $preferred = @('Smartsheet entitlement missing') }
+                'Microsoft Project Issues' { $preferred = @('Project file open / save failure') }
+                default { $preferred = @() }
+            }
+        }
+    }
+
+    foreach ($pick in $preferred) {
+        foreach ($lbl in $Allowlist) {
+            if ($lbl -ieq $pick) { return $lbl }
+        }
+    }
+    return $Allowlist[0]
+}
+
 function Get-CanonicalLabel {
     [CmdletBinding()]
     param(
         [string]$Raw,
         [System.Collections.Generic.List[string]]$Allowlist,
-        [string]$Fallback = 'Unknown'
+        [string]$Fallback = ''
     )
 
     if (-not $Allowlist -or $Allowlist.Count -eq 0) { return $Fallback }
     if ([string]::IsNullOrWhiteSpace($Raw))         { return $Fallback }
 
-    $clean = ($Raw.Trim() -replace '\*+', '' -replace '^\["]+|["\]]+$', '').Trim()
+    $clean = Normalize-CanonicalText -Raw $Raw
     if ([string]::IsNullOrWhiteSpace($clean)) { return $Fallback }
 
     # Exact match (case-insensitive)
     foreach ($lbl in $Allowlist) {
-        if ($lbl -ieq $clean) { return $lbl }
+        if ($lbl -ieq $Raw) { return $lbl }
+        if ((Normalize-CanonicalText -Raw $lbl) -eq $clean) { return $lbl }
     }
     # Substring match either direction
     foreach ($lbl in $Allowlist) {
-        if ($clean -like "*$lbl*" -or $lbl -like "*$clean*") { return $lbl }
+        $nLbl = Normalize-CanonicalText -Raw $lbl
+        if ($clean -like "*$nLbl*" -or $nLbl -like "*$clean*") { return $lbl }
     }
     return $Fallback
 }

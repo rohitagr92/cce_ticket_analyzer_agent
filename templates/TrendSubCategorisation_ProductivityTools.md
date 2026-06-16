@@ -20,6 +20,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 **Sync Issues**
 - OneDrive sync failure
+- Sync failure (file not uploading, file in cloud missing on device)
 - Sync stuck issue
 - Cross-device sync delay
 - Sync conflict error
@@ -30,10 +31,16 @@ Your task is to classify each incident into a **sub-category** that captures the
 **Access & Permission Issues**
 - Shared file access issue
 - Permission not applied
+- Permissions / access after rehire
 - Owner re-share required
 - Rejoin access issue
 - Former employee data — within 30 days
+- Former employee data — within 30 days
+- Former employee data - within 30 days
 - Former employee data — beyond 30 days (not recoverable)
+- Former employee data — beyond 30 days
+- Former employee data - beyond 30 days (not recoverable)
+- Former employee data - beyond 30 days
 
 **PC Refresh Issues**
 - Missing files after refresh
@@ -257,6 +264,36 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
+#### Microsoft 365 Planner / To Do Issues
+
+**Access Issues**
+- Planner plan / board access issue
+- To Do list sync / access issue
+
+**Provisioning Issues**
+- Group provisioning failure
+
+**Usage Queries**
+- Planner / To Do usage query
+
+---
+
+#### Canva Issues
+
+**Access Issues**
+- Access / SSO sign-in issue
+- License / entitlement missing
+
+**Sharing & Content Issues**
+- Sharing / collaboration issue
+- Template / brand kit access issue
+- Export / download failure
+
+**Usage Queries**
+- Canva usage query
+
+---
+
 #### Smartsheet Issues
 
 **Access Issues**
@@ -328,9 +365,16 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 ---
 
+#### Excluded
+
+**Out of Scope**
+- Out of scope
+
+---
+
 #### Other / Miscellaneous
 
-- Use a Sub-category as 'Unknown' when none of the above sub-categories apply.
+- Use a defined product-specific fallback label when none of the above sub-categories apply.
 
 ---
 
@@ -364,6 +408,6 @@ Return your response as a JSON array. Each element must have exactly these field
 **Rules:**
 - The `IncidentNumber` must exactly match the input.
 - The `SubCategory` must be one of the exact labels as parent category above (use the bold grouping header as the value).
-- If no listed sub-category fits, use 'Unknown' and note this in the `Justification`.
+- If no listed sub-category fits, use the category-specific fallback label from this template.
 - The `Justification` must be one sentence explaining why this sub-category was chosen.
 - Return ONLY the JSON array, no additional text or markdown fencing.

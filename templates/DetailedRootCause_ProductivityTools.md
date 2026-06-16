@@ -4,7 +4,7 @@
 >
 > Headings are grouped by **Product Category** (from `TicketCategorisation_ProductivityTools.md`). Each entry is also tagged with its **Root Cause** bucket (from `PossibleRootCause_ProductivityTools.md`).
 >
-> If no existing heading fits the incident, output exactly `Unknown` for the Detailed Root Cause (no `[NEW]` tag, no new heading).
+> If no existing heading fits the incident, use the category-specific fallback heading already defined in this file.
 
 ---
 
@@ -659,3 +659,17 @@ A Canva design was shared with a personal email instead of the Intel SSO account
 **Top Root Cause:** Permission / Sharing Misconfiguration
 The user is not a member of the correct Canva team or brand folder; brand templates and shared assets are invisible until membership is granted by the team admin.
 **Pick when:** user can log in but brand kits or team designs are missing.
+
+---
+
+## Excluded
+
+### Out-of-scope service offering
+**Top Root Cause:** Out-of-scope Service Offering
+Ticket belongs to a non-Productivity Tools queue (for example SharePoint Online access, Exchange mailbox, mobility, endpoint hardware, or network support).
+**Pick when:** the service offering and resolution ownership are clearly outside Productivity Tools scope.
+
+### SharePoint Online access request
+**Top Root Cause:** SharePoint Online Access Request
+Ticket is a SharePoint site/library access or permission request that should be handled by SharePoint Online support queue.
+**Pick when:** user asks for SPO site permission, group membership, or library access that is not a OneDrive client/sync fault.

@@ -154,7 +154,7 @@
   /* Summary tab — management overview */
   .sm-toolbar { display:flex; align-items:center; gap:14px; margin-bottom:18px; flex-wrap:wrap; }
   .sm-context { color:var(--muted); font-size:0.85rem; }
-  .sm-kpis { display:grid; grid-template-columns:repeat(5, 1fr); gap:14px; margin-bottom:22px; }
+  .sm-kpis { display:grid; grid-template-columns:repeat(4, 1fr); gap:14px; margin-bottom:22px; }
   @media (max-width:1200px){ .sm-kpis{ grid-template-columns:repeat(3,1fr); } }
   @media (max-width:700px) { .sm-kpis{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:480px) { .sm-kpis{ grid-template-columns:1fr; } }
@@ -164,7 +164,13 @@
   .sm-kpi.tone-down .kpi-strip { background:var(--success); }
   .sm-kpi.tone-flat .kpi-strip { background:#aab4c2; }
   .sm-kpi .kpi-body { padding:12px 14px 10px 14px; flex:1; display:flex; flex-direction:column; }
+  .sm-kpi .label-wrap { display:flex; align-items:center; justify-content:space-between; gap:8px; }
   .sm-kpi .label { color:var(--muted); font-size:0.74rem; text-transform:uppercase; letter-spacing:0.04em; }
+  .sm-kpi .kpi-help {
+    width:16px; height:16px; border-radius:50%; border:1px solid #c7d3e2;
+    color:#6f8093; font-size:0.66rem; font-weight:700; display:inline-flex;
+    align-items:center; justify-content:center; cursor:help; background:#f8fbff;
+  }
   .sm-kpi .kpi-row { display:flex; align-items:baseline; gap:8px; margin-top:4px; }
   .sm-kpi .value { font-size:1.85rem; font-weight:700; color:var(--intel-classic); font-variant-numeric:tabular-nums; line-height:1.05; }
   .sm-kpi .arrow { font-size:1.2rem; font-weight:700; line-height:1; }
@@ -192,6 +198,11 @@
   .sm-row .dl.down { color:var(--success); }
   .sm-row .dl.flat { color:var(--muted); }
   .sm-row .dl.new  { color:#5a2ea3; }
+  .sm-movers-grid { display:grid; grid-template-columns:1fr; gap:12px; }
+  .sm-mover-box { border:1px solid var(--border); border-radius:8px; padding:10px 12px; background:#fbfdff; }
+  .sm-mover-box h4 { margin:0 0 8px 0; font-size:0.86rem; color:var(--intel-classic); }
+  .sm-mover-box h4.up { color:var(--danger); }
+  .sm-mover-box h4.down { color:var(--success); }
   .sm-sparkstrip { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:6px; }
   @media (max-width:900px){ .sm-sparkstrip{ grid-template-columns:repeat(2,1fr); } }
   @media (max-width:560px){ .sm-sparkstrip{ grid-template-columns:1fr; } }
@@ -199,8 +210,8 @@
   .sm-spark .label { color:var(--muted); font-size:0.74rem; text-transform:uppercase; letter-spacing:0.04em; }
   .sm-spark .value { font-size:1.25rem; font-weight:700; color:var(--intel-classic); font-variant-numeric:tabular-nums; margin:2px 0 6px 0; line-height:1.1; }
   .sm-spark svg { width:100%; height:46px; display:block; }
-  .sm-action-item { padding:10px 4px; border-bottom:1px solid #f0f4f9; font-size:0.92rem; display:flex; gap:10px; align-items:flex-start; }
-  .sm-action-item:last-child { border-bottom:none; }
+  .sm-action-item { padding:10px 8px; border:1px solid #e7edf5; border-radius:8px; margin-bottom:10px; font-size:0.92rem; display:flex; gap:10px; align-items:flex-start; background:#fbfdff; }
+  .sm-action-item:last-child { margin-bottom:0; }
   .sm-action-item .ico { font-size:1.05rem; line-height:1.25; margin-top:1px; min-width:18px; text-align:center; }
   .sm-action-item .txt { flex:1; color:var(--text); }
   .sm-action-item .txt strong { color:var(--intel-classic); }
@@ -432,12 +443,14 @@
         <div id="smLastUpdated" style="margin-left:auto;font-size:0.76rem;color:var(--muted);white-space:nowrap;"></div>
       </div>
 
+      <div id="smAiOverallKpi" class="chart-card" style="margin-bottom:14px;"></div>
+
       <!-- 1. KPI strip (5 tiles, each with own mini-sparkline) -->
       <div class="sm-kpis" id="smKpis"></div>
 
       <!-- 2. Top movers (compact, left) -->
       <div class="sm-fullcard">
-        <h3 class="tp-section-title" style="margin-top:0;"><span>&#128200;</span> Top movers &mdash; categories (WoW)</h3>
+        <h3 class="tp-section-title" style="margin-top:0;"><span>&#128200;</span> Top risers (current WW vs last WW)</h3>
         <div id="smMovers"></div>
       </div>
 
@@ -460,16 +473,12 @@
         <div id="smSankey"></div>
       </div>
 
-      <!-- 4. Smart Insights panel (auto-generated narrative) -->
-      <h3 class="tp-section-title"><span>&#128161;</span> Smart insights</h3>
-      <div class="sm-card" id="smActions"></div>
-
       <!-- 5. Per-Product Weekly Trend (full width) -->
       <h3 class="tp-section-title"><span>&#128200;</span> Per-product weekly trend</h3>
       <div class="sm-fullcard"><div class="ctx" id="smPptCtx"></div><div class="tp-grid-products" id="smPpt"></div></div>
 
-      <!-- 6. Forecast (next 2-4 WWs) -->
-      <h3 class="tp-section-title"><span>&#128302;</span> Forecast &mdash; what the next few weeks look like</h3>
+      <!-- 6. Forecast (next 4 WWs) -->
+      <h3 class="tp-section-title"><span>&#128302;</span> Forecast recommendation &mdash; next 4 WW trend by root cause</h3>
       <div class="sm-fullcard" id="smForecast"></div>
 
       <!-- 7. Drill-down: pick a Product -> top 5 root causes for the selected range -->
@@ -699,7 +708,7 @@
     <div id="airError" class="state error" style="display:none;"></div>
     <div id="airContent" style="display:none;">
       <div class="chart-card" style="margin-bottom:16px;">
-        <h3>&#129504; AI Recommendations <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; top root causes &amp; what resolved them, across the selected work-week window</span></h3>
+          <h3>&#129504; AI Recommendations &mdash; Data Quality Tracker <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; Low &amp; Medium confidence tickets &middot; use filters to narrow scope</span></h3>
         <div class="toolbar" style="margin-bottom:0;">
           <span class="label-inline">Service</span>
           <select id="airService">
@@ -719,8 +728,8 @@
         </div>
       </div>
 
-      <div id="airWindowNote" style="font-size:0.82rem;color:var(--muted);margin-bottom:14px;"></div>
-      <div id="airCards"></div>
+      <!-- Compact confidence quality table — filter-driven -->
+      <div id="airConfPanel"></div>
     </div>
   </section>
 </main>
@@ -2295,6 +2304,7 @@
     { id: 'spike',     label: 'SPIKE',     icon: '&#128293;', bg: '#fde7e7', fg: '#a51c1c' },
     { id: 'repeat',    label: 'REPEAT',    icon: '&#9851;',   bg: '#e9e1ff', fg: '#542aaa' },
     { id: 'misrouted', label: 'MISROUTED', icon: '&#9888;',   bg: '#ffe2cc', fg: '#9a4a00' },
+    { id: 'mediumconf', label: 'MEDIUM-CONF', icon: '&#9873;', bg: '#fef3cd', fg: '#856404' },
     { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' }
   ];
 
@@ -2407,7 +2417,7 @@
   function opxBuildTripleCounts(filtered) {
     const m = {};
     for (const e of filtered) {
-      const k = (e.Category || '') + '||' + ((e.Subcategory || '').trim()) + '||' + ((e.PossibleRootCause || e.RootCause || '').trim());
+      const k = (e.PossibleRootCause || e.RootCause || '').trim();
       m[k] = (m[k] || 0) + 1;
     }
     return m;
@@ -2421,8 +2431,8 @@
   // --- Briefing helpers ----------------------------------------------------
   function opxIsMisrouted(e)  { return e.Misrouted === true || e.Misrouted === 'true' || e.Misrouted === 'Yes'; }
   function opxConfLevel(e)    { return (e.Confidence || '').toString().trim().toLowerCase(); } // '' | low | medium | high
-  function opxPatternKey(e)   { return (e.Category || '') + '||' + ((e.Subcategory || '').trim()) + '||' + ((e.PossibleRootCause || e.RootCause || '').trim()); }
-  function opxParseKey(k)     { const p = k.split('||'); return { product: p[0]||'', subcategory: p[1]||'', rootCause: p[2]||'' }; }
+  function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
+  function opxParseKey(k)     { return { product: '', subcategory: '', rootCause: k || '' }; }
 
   // Weeks (ascending) currently selected in the toolbar, scoped to aggregated.weeks.
   function opxWeeksInRange() {
@@ -2438,7 +2448,7 @@
     const last6    = weeksAll.slice(-6);
     const currentWW= weeksAll[weeksAll.length - 1] || '';
 
-    // collect patterns present in filtered
+    // collect patterns (ROOT CAUSE only) present in filtered
     const patterns = {};
     for (const e of filtered) {
       const k = opxPatternKey(e);
@@ -2446,7 +2456,7 @@
       patterns[k].count++;
     }
 
-    // walk full service history once and bucket counts by pattern
+    // walk full service history once and bucket counts by pattern (Root Cause only)
     const histByKey = {}; // key -> { [ww]: count }
     for (const e of opxAllInService) {
       const k = opxPatternKey(e);
@@ -2470,9 +2480,9 @@
       patterns[k].last6Weeks     = last6;
       patterns[k].repeat         = weeksSeenInLast6 >= 4;
       patterns[k].spike          = priorAvg > 0 && curCount > priorAvg * 2;
-      // first-seen at (Category, RC) level — already pre-computed across history
-      const ok = (patterns[k].sample.Category || '') + '||' + (patterns[k].sample.PossibleRootCause || patterns[k].sample.RootCause || '');
-      const firstSeen = opxFirstSeenWeek.get(ok);
+      // first-seen at Root Cause level — already pre-computed across history
+      const rc = (patterns[k].sample.PossibleRootCause || patterns[k].sample.RootCause || '');
+      const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
       patterns[k].firstSeen      = firstSeen || '';
       patterns[k].isNew          = firstSeen && currentWW && firstSeen === currentWW;
     }
@@ -2498,23 +2508,27 @@
     if (opxIsMisrouted(inc)) {
       out.push('<span title="Flagged as routed to the wrong queue" style="background:#ffe2cc;color:#9a4a00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#9888; MISROUTED</span>');
     }
+    if (opxConfLevel(inc) === 'medium') {
+      out.push('<span title="AI confidence is Medium — verify the root cause" style="background:#fef3cd;color:#856404;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#9873; MEDIUM-CONF</span>');
+    }
     if (opxConfLevel(inc) === 'low') {
       out.push('<span title="AI confidence is Low — review the root cause manually" style="background:#fbe2e2;color:#a51c1c;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#129302; LOW-CONF</span>');
     }
     return out.join(' ');
   }
 
-  // Set of flag ids ('new','spike','repeat','misrouted','lowconf') an incident carries.
+  // Set of flag ids ('new','spike','repeat','misrouted','mediumconf','lowconf') an incident carries.
   function opxIncidentFlagSet(inc, pStats) {
     const s = new Set();
     const ps = pStats[opxPatternKey(inc)];
-    const okey = (inc.Category || '') + '||' + (inc.PossibleRootCause || inc.RootCause || '');
-    const firstSeen = opxFirstSeenWeek.get(okey);
+    const rc = (inc.PossibleRootCause || inc.RootCause || '');
+    const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
     const w = inc.PartitionKey || inc.YearWeek;
     if (firstSeen && firstSeen === w) s.add('new');
     if (ps && ps.spike)  s.add('spike');
     if (ps && ps.repeat) s.add('repeat');
     if (opxIsMisrouted(inc)) s.add('misrouted');
+    if (opxConfLevel(inc) === 'medium') s.add('mediumconf');
     if (opxConfLevel(inc) === 'low') s.add('lowconf');
     return s;
   }
@@ -2603,7 +2617,7 @@
         case 'product':     return (i.Category || '').toLowerCase();
         case 'subcategory': return (i.Subcategory || '').toLowerCase();
         case 'rootcause':   return (i.PossibleRootCause || i.RootCause || '').toLowerCase();
-        case 'similar':     return triples[opxPatternKey(i)] || 1;
+        case 'similar':     return triples[(i.PossibleRootCause || i.RootCause || '').trim()] || 1;
         case 'date':
         default:            return i.Date || '';
       }
@@ -2620,7 +2634,7 @@
     const { col, dir } = opxSort.patterns;
     const val = (p) => {
       switch (col) {
-        case 'product':   return opxParseKey(p.key).product.toLowerCase();
+        case 'product':   return (p.key || '').toLowerCase();
         case 'firstseen': return p.firstSeen || '';
         case 'count':
         default:          return p.count;
@@ -2644,6 +2658,7 @@
     const repCt    = Object.values(pStats).filter(p => p.repeat).length;
     const spkCt    = Object.values(pStats).filter(p => p.spike).length;
     const misCt    = filtered.filter(opxIsMisrouted).length;
+    const medCt    = filtered.filter(e => opxConfLevel(e) === 'medium').length;
     const lowCt    = filtered.filter(e => opxConfLevel(e) === 'low').length;
     const patternCt= Object.keys(pStats).length;
 
@@ -2655,11 +2670,12 @@
       ' &middot; <span style="opacity:0.9;">' + formatWW(from) + ' &rarr; ' + formatWW(to) + ' (' + wksInRng + ' WW)</span>' +
       '<span style="flex:1 1 12px;"></span>' +
       chip('incidents', filtered.length) +
-      chip('patterns', patternCt) +
+      chip('root causes', patternCt) +
       (newCt ? chip('new', newCt) : '') +
       (spkCt ? chip('spike', spkCt) : '') +
       (repCt ? chip('repeat', repCt) : '') +
       (misCt ? chip('misrouted', misCt) : '') +
+      (medCt ? chip('medium-conf', medCt) : '') +
       (lowCt ? chip('low-conf', lowCt) : '');
   }
 
@@ -2679,10 +2695,10 @@
     const topInfo  = topPat ? opxParseKey(topPat.key) : null;
 
     const segs = [];
-    segs.push('Across <strong>' + esc(svc) + '</strong> in <strong>' + formatWW(from) + (from !== to ? ' &rarr; ' + formatWW(to) : '') + '</strong>, <strong>' + filtered.length + '</strong> incident' + (filtered.length === 1 ? '' : 's') + ' clustered into <strong>' + patterns.length + '</strong> pattern' + (patterns.length === 1 ? '' : 's') + '.');
+    segs.push('Across <strong>' + esc(svc) + '</strong> in <strong>' + formatWW(from) + (from !== to ? ' &rarr; ' + formatWW(to) : '') + '</strong>, <strong>' + filtered.length + '</strong> incident' + (filtered.length === 1 ? '' : 's') + ' grouped into <strong>' + patterns.length + '</strong> root cause' + (patterns.length === 1 ? '' : 's') + '.');
 
     if (topPat && topInfo) {
-      segs.push('The dominant pattern is <strong>' + esc(topInfo.product) + ' &middot; ' + esc(topInfo.subcategory || '—') + ' &middot; ' + esc(topInfo.rootCause || '—') + '</strong> with <strong>' + topPat.count + '</strong> ticket' + (topPat.count === 1 ? '' : 's') + (topPat.spike ? ' (<span style="color:var(--danger);font-weight:600;">spiking this week</span>)' : '') + '.');
+      segs.push('The dominant root cause is <strong>' + esc(topInfo.rootCause || '—') + '</strong> with <strong>' + topPat.count + '</strong> ticket' + (topPat.count === 1 ? '' : 's') + (topPat.spike ? ' (<span style="color:var(--danger);font-weight:600;">spiking this week</span>)' : '') + '.');
     }
     if (newCt > 0) {
       segs.push('<strong style="color:#8a6d00;">' + newCt + ' pattern' + (newCt === 1 ? ' is' : 's are') + ' first-time-seen this week.</strong>');
@@ -2749,8 +2765,8 @@
         '<div><span style="color:var(--muted);">Resolved:</span> ' + esc(inc.Date || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Work Week:</span> ' + formatWW(inc.PartitionKey || '') + '</div>' +
         '<div><span style="color:var(--muted);">Product:</span> ' + esc(inc.Category || '-') + '</div>' +
-        '<div><span style="color:var(--muted);">Subcategory:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
-        '<div><span style="color:var(--muted);">Possible Root Cause:</span> ' + esc(inc.PossibleRootCause || inc.RootCause || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Symptom:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(inc.PossibleRootCause || inc.RootCause || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(drcRaw || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Productivity Tools') + '</div>' +
         '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
@@ -2865,8 +2881,7 @@
 
       const mainRow = '<tr class="opx-prow" data-pkey="' + esc(p.key) + '" style="cursor:pointer;">' +
         td('<span style="color:var(--muted);display:inline-block;width:14px;">' + arrow + '</span> ' +
-           '<strong style="color:var(--intel-classic);">' + esc(info.product || '—') + '</strong>' +
-           '<div style="color:var(--muted);font-size:0.8rem;margin-top:2px;">' + esc(info.subcategory || '—') + ' &middot; <em>' + esc(info.rootCause || '—') + '</em></div>') +
+           '<strong style="color:var(--intel-classic);font-size:1rem;">' + esc(p.key || '—') + '</strong>') +
         td('<strong style="font-size:1.05rem;color:var(--intel-classic);">' + p.count + '</strong>', 'text-align:center;') +
         td(sparkFromVals(p.last6Vals), 'text-align:center;') +
         td(p.firstSeen ? formatWW(p.firstSeen) : '—', 'color:var(--muted);font-size:0.85rem;') +
@@ -2902,7 +2917,7 @@
     $('opxTableWrap').innerHTML =
       '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:0.9rem;">' +
       '<thead><tr style="background:#eef5fb;">' +
-      opxSortTh('patterns', 'product', 'Pattern (Product &middot; Symptom &middot; Root Cause)') +
+      opxSortTh('patterns', 'product', 'Root Cause Pattern') +
       opxSortTh('patterns', 'count', 'Tickets', '90px', 'center') +
       th('Last 6 WWs', '110px', 'center') +
       opxSortTh('patterns', 'firstseen', 'First seen', '110px') +
@@ -2936,9 +2951,9 @@
     const lines  = [header.map(csvField).join(',')];
     for (const i of filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))) {
       const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
-      const tk = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + ((i.PossibleRootCause || i.RootCause || '').trim());
-      const ok = (i.Category || '') + '||' + (i.PossibleRootCause || i.RootCause || '');
-      const isOutlier = opxFirstSeenWeek.get(ok) === (i.PartitionKey || i.YearWeek);
+      const tk = (i.PossibleRootCause || i.RootCause || '').trim();
+      const rc = (i.PossibleRootCause || i.RootCause || '').trim() + '||ALL';
+      const isOutlier = opxFirstSeenWeek.get(rc) === (i.PartitionKey || i.YearWeek);
       lines.push([
         csvField(i.RowKey || ''),
         csvField(sn),
@@ -2994,27 +3009,24 @@
     lines.push('Ops Report — ' + svc + (product && product !== 'All Products' ? ' / ' + product : '') + ' — ' + formatWW(from) + (from !== to ? ' to ' + formatWW(to) : ''));
     lines.push(filtered.length + ' incidents · ' + patterns.length + ' patterns · ' + newPats.length + ' new · ' + repPats.length + ' recurring · ' + spkPats.length + ' spiking' + (misCt ? ' · ' + misCt + ' misrouted' : ''));
     lines.push('');
-    lines.push('Top patterns:');
+    lines.push('Top root causes:');
     const topN = patterns.slice(0, Math.min(5, patterns.length));
     topN.forEach((p, idx) => {
-      const info = opxParseKey(p.key);
       const flags = [p.spike && '[SPIKE]', p.repeat && '[REPEAT]', p.isNew && '[NEW]'].filter(Boolean).join(' ');
-      lines.push('  ' + (idx + 1) + '. ' + (info.product || '—') + ' · ' + (info.subcategory || '—') + ' · ' + (info.rootCause || '—') + ' — ' + p.count + ' tix' + (flags ? ' ' + flags : ''));
+      lines.push('  ' + (idx + 1) + '. ' + (p.key || '—') + ' — ' + p.count + ' tix' + (flags ? ' ' + flags : ''));
     });
     if (newPats.length > 0) {
       lines.push('');
       lines.push('New this week:');
       newPats.slice(0, 10).forEach(p => {
-        const info = opxParseKey(p.key);
-        lines.push('  - ' + (info.product || '—') + ' · ' + (info.subcategory || '—') + ' · ' + (info.rootCause || '—') + ' (' + p.count + ')');
+        lines.push('  - ' + (p.key || '—') + ' (' + p.count + ')');
       });
     }
     if (repPats.length > 0) {
       lines.push('');
       lines.push('Recurring offenders (seen 4+ of last 6 WWs):');
       repPats.slice(0, 10).forEach(p => {
-        const info = opxParseKey(p.key);
-        lines.push('  - ' + (info.product || '—') + ' · ' + (info.subcategory || '—') + ' · ' + (info.rootCause || '—') + ' (' + p.count + ' this slice)');
+        lines.push('  - ' + (p.key || '—') + ' (' + p.count + ' this slice)');
       });
     }
 
@@ -3128,6 +3140,7 @@
   // no extra Azure cost.
   // ====================================================================
   let airLoaded = false;
+  let airConfidenceFlag = 'all'; // all | low | medium | missing
 
   // All known work weeks (ascending).
   const airAllWeeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice() : []);
@@ -3263,7 +3276,17 @@
   // Final filtered set: service + 6 WWs + product + symptom.
   function airGetFiltered() {
     const symptom = $('airSymptom').value;
-    return airBaseForSymptoms().filter(e => symptom === '__all__' || (e.Subcategory || '').trim() === symptom);
+    const scoped = airBaseForSymptoms().filter(e => symptom === '__all__' || (e.Subcategory || '').trim() === symptom);
+    // Prevent repeated incidents across recommendation cards/lists for the same filter window.
+    const seen = new Set();
+    const unique = [];
+    for (const e of scoped) {
+      const id = ((e.RowKey || '').trim() || [e.PartitionKey || '', e.Category || '', e.Subcategory || '', e.PossibleRootCause || e.RootCause || ''].join('|'));
+      if (seen.has(id)) continue;
+      seen.add(id);
+      unique.push(e);
+    }
+    return unique;
   }
 
   // ---- Synthesis helpers --------------------------------------------------
@@ -3365,6 +3388,39 @@
     return mix;
   }
 
+  // Service-scoped confidence mix (independent of product/symptom/week filters).
+  function airServiceConfidenceMix() {
+    const pool = (allEntities || []).filter(e => airMatchesService(e));
+    return airConfidenceMix(pool);
+  }
+
+  function smRenderAiConfidenceKpi(serviceEntities, serviceLabel) {
+    const host = $('smAiOverallKpi');
+    if (!host) return;
+
+    const mix = airConfidenceMix(serviceEntities || []);
+    const known = mix.High + mix.Medium + mix.Low;
+    const total = known + mix.Unknown;
+    const overallPct = known > 0 ? ((mix.High + mix.Medium) / known) * 100 : 0;
+    const pct = n => known > 0 ? ((n / known) * 100).toFixed(1) + '%' : '0.0%';
+
+    host.innerHTML =
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;">' +
+        '<div>' +
+          '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.45px;color:var(--muted);font-weight:700;">Overall AI Confidence by Service Offering</div>' +
+          '<div style="font-size:1.9rem;font-weight:800;color:var(--intel-classic);line-height:1.1;margin-top:2px;">' + overallPct.toFixed(1) + '%</div>' +
+          '<div style="font-size:0.82rem;color:var(--muted);margin-top:4px;">Scope: <strong>' + esc(serviceLabel || 'All services') + '</strong> &middot; service-level KPI (not week-filter dependent)</div>' +
+        '</div>' +
+        '<div style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;">' +
+          '<span style="background:#e8f5ee;color:#1f7a4d;padding:4px 10px;border-radius:999px;font-size:0.8rem;font-weight:700;">High: ' + mix.High + ' (' + pct(mix.High) + ')</span>' +
+          '<span style="background:#fff4de;color:#9a6300;padding:4px 10px;border-radius:999px;font-size:0.8rem;font-weight:700;">Medium: ' + mix.Medium + ' (' + pct(mix.Medium) + ')</span>' +
+          '<span style="background:#fdecec;color:#a51c1c;padding:4px 10px;border-radius:999px;font-size:0.8rem;font-weight:700;">Low: ' + mix.Low + ' (' + pct(mix.Low) + ')</span>' +
+          (mix.Unknown ? '<span style="background:#eef2f7;color:#57687d;padding:4px 10px;border-radius:999px;font-size:0.8rem;font-weight:700;">Unknown: ' + mix.Unknown + '</span>' : '') +
+          '<span style="background:#f4f7fb;color:var(--intel-classic);padding:4px 10px;border-radius:999px;font-size:0.8rem;font-weight:700;">Total: ' + total + '</span>' +
+        '</div>' +
+      '</div>';
+  }
+
   // Representative excerpts — prefer High-confidence, longest (most detailed) analyses.
   function airExcerpts(tickets, n) {
     return tickets
@@ -3386,6 +3442,87 @@
     }
     const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
     return top ? top[0] : '';
+  }
+
+  function airBuildUnderstanding(rootCause, symptom, steps, count) {
+    const parts = [];
+    parts.push('Root cause pattern: ' + (rootCause || 'Unspecified') + '.');
+    if (symptom && symptom !== '__all__') parts.push('Symptom in scope: ' + symptom + '.');
+    if (steps && steps.length) {
+      parts.push('Most common fix observed: ' + steps[0].text.replace(/\.$/, '') + '.');
+    }
+    parts.push('Based on ' + count + ' resolved ticket' + (count === 1 ? '' : 's') + ' in the selected window.');
+    return parts.join(' ');
+  }
+
+  function airBuildMissing(coverage, escal, steps) {
+    const notes = [];
+    if (!steps || steps.length === 0) notes.push('No explicit action sequence in historical notes');
+    if (coverage && coverage.gap > 0) {
+      notes.push(coverage.gap + ' ticket' + (coverage.gap === 1 ? '' : 's') + ' missing documented resolution steps');
+    }
+    if (escal && escal.count > 0) {
+      notes.push(escal.count + ' escalated/no-local-fix case' + (escal.count === 1 ? '' : 's') + ' need runbook guidance');
+    }
+    return notes.length ? notes.join('; ') : 'None - resolution guidance is sufficiently documented for current sample.';
+  }
+
+  function airBuildServiceNowUpdate(steps, detailed) {
+    const top = (steps || []).slice(0, 3).map((s, i) => (i + 1) + '. ' + s.text).join(' ');
+    let txt = top || 'Add clear reproduction and fix steps.';
+    if (detailed) txt += ' Final root-cause label: ' + detailed + '.';
+    txt += ' Include exact command/path/user action that confirmed resolution.';
+    return txt;
+  }
+
+  function airDownloadCsv() {
+    const filtered = airGetFiltered();
+    if (!filtered || filtered.length === 0) { alert('No incidents match the current AI Recommendations filters.'); return; }
+    const topGroups = airTopRootCauses(filtered, 5);
+    const header = [
+      'RootCause', 'Incident', 'ServiceNowLink', 'WorkWeek', 'Product', 'Symptom',
+      'WhatTheAIUnderstood', 'WhatIsMissing', 'PleaseUpdateServiceNowWith'
+    ];
+    const lines = [header.map(csvField).join(',')];
+
+    for (const g of topGroups) {
+      const steps = airDistilSteps(g.tickets);
+      const coverage = airCoverage(g.tickets);
+      const escal = airEscalation(g.tickets);
+      const detailed = airTopDetailed(g.tickets);
+      const understanding = airBuildUnderstanding(g.rootCause, $('airSymptom').value, steps, g.tickets.length);
+      const missing = airBuildMissing(coverage, escal, steps);
+      const updateText = airBuildServiceNowUpdate(steps, detailed);
+
+      const seen = new Set();
+      for (const t of g.tickets) {
+        const key = (t.RowKey || '').trim();
+        if (!key || seen.has(key)) continue;
+        seen.add(key);
+        const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(key);
+        lines.push([
+          csvField(g.rootCause || ''),
+          csvField(key),
+          csvField(sn),
+          csvField(formatWW(t.PartitionKey || t.YearWeek || '')),
+          csvField(t.Category || ''),
+          csvField(t.Subcategory || ''),
+          csvField(understanding),
+          csvField(missing),
+          csvField(updateText)
+        ].join(','));
+      }
+    }
+
+    const blob = new Blob(['\uFEFF' + lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const fname = 'AIRecommendations_' + ($('airService').value || 'Service').replace(/[^A-Za-z0-9]+/g, '-') +
+      '_' + ($('airProduct').value || 'AllProducts').replace(/[^A-Za-z0-9]+/g, '-') +
+      '_' + ($('airWeekFrom').value || '') + '_to_' + ($('airWeekTo').value || '') + '.csv';
+    const a = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
   }
 
   // 6-week sparkline of a root cause within the current product/symptom scope.
@@ -3555,27 +3692,219 @@
     '</div>';
   }
 
-  function airRefresh() {
-    const filtered = airGetFiltered();
-    const product  = $('airProduct').value;
-    const symptom  = $('airSymptom').value;
-    const weeks    = airWeekWindow();
-    const wkLabel  = weeks.length ? (formatWW(weeks[0]) + ' → ' + formatWW(weeks[weeks.length - 1])) : '—';
-    const cov      = airCoverage(filtered);
-    $('airWindowNote').innerHTML = 'Window: <strong>' + wkLabel + '</strong> (' + weeks.length + ' WW) · synthesised from <strong>' + filtered.length + '</strong> resolved ticket' + (filtered.length === 1 ? '' : 's') +
-      (symptom !== '__all__' ? ' · symptom <strong>' + esc(symptom) + '</strong>' : '') +
-      (filtered.length ? ' · <strong>' + cov.matched + '/' + cov.total + '</strong> have a documented fix' : '') +
-      ' · recommendations are distilled from analysis engineers/AI already recorded — no live model call.';
-
-    if (filtered.length === 0) {
-      $('airCards').innerHTML = '<div class="state">No resolved tickets in the selected work-week window for this selection. Widen the WW range, try <em>All Products</em> / <em>All Symptoms</em>, or click Reset.</div>';
-      $('airSummary').textContent = '0 tickets';
-      return;
-    }
-    const top5 = airTopRootCauses(filtered, 5);
-    $('airCards').innerHTML = top5.map((g, i) => airRenderCard(i + 1, g)).join('');
-    $('airSummary').textContent = filtered.length + ' tickets · top ' + top5.length + ' root causes';
+  function airActorFromStep(stepText) {
+    const t = (stepText || '').toLowerCase();
+    if (!t) return 'Shared / unclear owner';
+    if (/owner|sharing permission|re-add the user|file owner/.test(t)) return 'File/Site owner action';
+    if (/request\/assign the correct license|ags entitlement|licensing|blackout|backend re-provisioning/.test(t)) return 'Identity/License admin action';
+    if (/escalate to microsoft|microsoft/.test(t)) return 'Microsoft/product team action';
+    if (/have the user|submit a formal data-access request|user\b/.test(t)) return 'End-user action';
+    return 'Service desk/TAC action';
   }
+
+  // -----------------------------------------------------------------------
+  // AI CONFIDENCE IMPROVEMENT PANEL
+  // Shows only Low/Medium confidence tickets with incident IDs + what to fix.
+  // Designed for TAC: each row is a direct action item.
+  // -----------------------------------------------------------------------
+
+  // Per-ticket hint: what is likely missing from the work notes.
+  function airConfHint(t) {
+      // replaced below
+    }
+
+    // -----------------------------------------------------------------------
+    // NEW: Compact filter-driven confidence quality table
+    // Detects 4 specific quality signals per ticket as icon flags (no inline text).
+    // -----------------------------------------------------------------------
+
+    function airDetectFactors(t) {
+      const analysis = (airAnalysisText(t) || '');
+      const al = analysis.toLowerCase();
+
+      // Prefer structured KB/KA evidence from ticket fields before heuristics.
+      // This avoids false "No KB" when KB is recorded outside AIAnalysis text.
+      const hasKbEvidence = (() => {
+        const explicitFields = [
+          t.KnowledgeBase,
+          t.KnowledgeArticle,
+          t.KBProvided,
+          t.kb_provided,
+          t.KBLink,
+          t.KALink,
+          t.KB,
+          t.KA
+        ]
+          .map(v => (v == null ? '' : String(v).trim()))
+          .filter(Boolean);
+        if (explicitFields.length) return true;
+
+        const keyHint = /\b(kb|ka|knowledge)\b/i;
+        const kbValueHint = /(kb\d{4,}|knowledge\s*article|kcs|\/kb|kb\.do|kb_view|kb_article|kba|ka\d{4,}|https?:\/\/[^\s]*kb[^\s]*)/i;
+        for (const [k, v] of Object.entries(t || {})) {
+          if (v == null) continue;
+          const txt = String(v).trim();
+          if (!txt) continue;
+          if (keyHint.test(String(k)) && txt.toLowerCase() !== 'na' && txt.toLowerCase() !== 'n/a' && txt.toLowerCase() !== 'none') return true;
+          if (kbValueHint.test(txt)) return true;
+        }
+        return kbValueHint.test(analysis);
+      })();
+
+      return {
+        vague:       !analysis || analysis.trim().length < 50 ||
+                     /no detail|limited info|unclear|insufficient|not enough/i.test(analysis),
+        boilerplate: !analysis || analysis.trim().length < 80 ||
+                     (/user confirmed|issue resolved|resolved as per|closure confirmed|ticket closed|problem resolved/i.test(al) && analysis.trim().length < 160),
+        noKb:        !hasKbEvidence,
+        formulaic:   /^(informed user|connected with user|advised user|updated user|contacted user|user contacted)/i.test(analysis.trim()) ||
+                     (/informed user|connected with user|advised user/i.test(al) && !airTicketResolved(t))
+      };
+    }
+
+    function airRenderConfTable(filtered) {
+      const scoped = (filtered || []).filter(e => {
+        const c = (e.Confidence || '').toString().trim().toLowerCase();
+        return c === 'low' || c === 'medium' || c === '';
+      });
+
+      const pool = scoped.filter(e => {
+        const c = (e.Confidence || '').toString().trim().toLowerCase();
+        if (airConfidenceFlag === 'low') return c === 'low';
+        if (airConfidenceFlag === 'medium') return c === 'medium';
+        if (airConfidenceFlag === 'missing') return c === '';
+        return true;
+      });
+
+      if (!pool.length) {
+        return '<div style="background:#eef9f2;border:1px solid #cdeede;border-radius:10px;padding:12px 18px;color:#1f7a4d;font-size:0.9rem;">&#10003; No tickets match the selected confidence flag in this filter selection.</div>';
+      }
+
+      const lowN   = scoped.filter(e => (e.Confidence||'').toLowerCase() === 'low').length;
+      const medN   = scoped.filter(e => (e.Confidence||'').toLowerCase() === 'medium').length;
+      const blankN = scoped.filter(e => !(e.Confidence||'').trim()).length;
+
+      let fVague = 0, fBp = 0, fKb = 0, fForm = 0;
+      for (const t of pool) {
+        const f = airDetectFactors(t);
+        if (f.vague)       fVague++;
+        if (f.boilerplate) fBp++;
+        if (f.noKb)        fKb++;
+        if (f.formulaic)   fForm++;
+      }
+
+      // Sorted: Low first, then blank, then Medium
+      const sorted = pool.slice().sort((a, b) => {
+        const order = { low: 0, '': 1, medium: 2 };
+        return (order[(a.Confidence||'').toLowerCase()] ?? 2) - (order[(b.Confidence||'').toLowerCase()] ?? 2);
+      });
+
+      const ACTION_GROUPS = [
+        {
+          key: 'kb',
+          title: 'KB/KA Not Linked',
+          recommendation: 'Link the exact KB/KA article used for resolution and reference it in closure notes.',
+          match: f => f.noKb
+        },
+        {
+          key: 'context',
+          title: 'Unclear Incident Context',
+          recommendation: 'Document clear symptom, business impact, and what failed before the fix.',
+          match: f => f.vague
+        },
+        {
+          key: 'narrative',
+          title: 'Template-like Narrative',
+          recommendation: 'Rewrite notes with real troubleshooting evidence, validation, and final confirmation.',
+          match: f => f.formulaic
+        },
+        {
+          key: 'closure',
+          title: 'Generic Closure Notes',
+          recommendation: 'Replace generic closure text with issue-specific fix steps and outcome.',
+          match: f => f.boilerplate
+        }
+      ];
+
+      const actionCardsHtml = ACTION_GROUPS.map(g => {
+        const hits = sorted.filter(t => g.match(airDetectFactors(t)));
+        if (!hits.length) return '';
+
+        const items = hits.map(t => {
+          const incId = (t.RowKey || '').trim();
+          const link = incId ? 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(incId) : '#';
+          return '<a href="' + link + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;border:1px solid #dce6f2;background:#f8fbff;color:var(--intel-blue);font-size:0.8rem;font-weight:700;text-decoration:none;">' + esc(incId || '—') + '</a>';
+        }).join(' ');
+
+        return '<div style="background:#fff;border:1px solid #dfe7f1;border-radius:12px;padding:12px 14px;margin-bottom:10px;">' +
+          '<div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap;">' +
+            '<div>' +
+              '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.35px;color:var(--muted);font-weight:700;">Action Theme</div>' +
+              '<div style="font-size:1.02rem;color:var(--intel-classic);font-weight:800;">' + esc(g.title) + '</div>' +
+            '</div>' +
+            '<span style="background:#eef5fb;color:var(--intel-classic);padding:3px 10px;border-radius:999px;font-size:0.78rem;font-weight:700;">' + hits.length + ' incident' + (hits.length === 1 ? '' : 's') + '</span>' +
+          '</div>' +
+          '<div style="margin-top:8px;font-size:0.84rem;color:#3f556f;"><strong>Recommended action:</strong> ' + esc(g.recommendation) + '</div>' +
+          '<div style="margin-top:10px;display:flex;gap:7px;flex-wrap:wrap;align-items:center;">' + items + '</div>' +
+        '</div>';
+      }).join('');
+
+      const sp = (n, lbl, bg, fg) => n > 0 ? '<span style="background:' + bg + ';color:' + fg + ';font-size:0.76rem;font-weight:600;padding:2px 8px;border-radius:999px;margin-right:5px;">' + n + '\u00a0' + lbl + '</span>' : '';
+      const factorCard = (n, title, note) =>
+        '<div style="background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:10px 12px;min-width:190px;flex:1 1 220px;">' +
+          '<div style="font-size:0.76rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.35px;">' + esc(title) + '</div>' +
+          '<div style="font-size:1.3rem;font-weight:800;color:' + (n > 0 ? '#a51c1c' : '#1f7a4d') + ';line-height:1.1;margin-top:2px;">' + n + '</div>' +
+          '<div style="font-size:0.78rem;color:var(--muted);margin-top:3px;">' + esc(note) + '</div>' +
+        '</div>';
+
+      const topBar =
+        '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:9px 14px;background:#faf8ff;border:1px solid #e0d6f5;border-radius:10px;">' +
+          '<div>' +
+            sp(lowN,'Low','#fde8e8','#a51c1c') + sp(medN,'Medium','#fff8d6','#8a6d00') + sp(blankN,'Missing','#f0f3f7','#5a6d82') +
+            '<span style="font-size:0.78rem;color:var(--muted);">' + pool.length + ' ticket' + (pool.length===1?'':'s') + ' need attention</span>' +
+          '</div>' +
+          '<div id="airConfFlags" style="display:flex;gap:6px;flex-wrap:wrap;">' +
+            '<button type="button" data-air-conf="all" style="border:1px solid ' + (airConfidenceFlag === 'all' ? 'var(--intel-blue)' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'all' ? 'var(--intel-blue)' : '#fff') + ';color:' + (airConfidenceFlag === 'all' ? '#fff' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">All</button>' +
+            '<button type="button" data-air-conf="low" style="border:1px solid ' + (airConfidenceFlag === 'low' ? '#a51c1c' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'low' ? '#fde8e8' : '#fff') + ';color:' + (airConfidenceFlag === 'low' ? '#a51c1c' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Low</button>' +
+            '<button type="button" data-air-conf="medium" style="border:1px solid ' + (airConfidenceFlag === 'medium' ? '#9a6300' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'medium' ? '#fff4de' : '#fff') + ';color:' + (airConfidenceFlag === 'medium' ? '#9a6300' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Medium</button>' +
+            '<button type="button" data-air-conf="missing" style="border:1px solid ' + (airConfidenceFlag === 'missing' ? '#5a6d82' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'missing' ? '#eef2f7' : '#fff') + ';color:' + (airConfidenceFlag === 'missing' ? '#5a6d82' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Missing</button>' +
+          '</div>' +
+        '</div>';
+
+      const factorCards =
+        '<div style="display:flex;gap:10px;flex-wrap:wrap;margin:10px 0 12px 0;">' +
+          factorCard(fVague, 'Unclear Incident Context', 'Title/analysis lacks enough situational detail') +
+          factorCard(fBp, 'Generic Closure Notes', 'Resolution notes are boilerplate and not specific') +
+          factorCard(fKb, 'KB/KA Not Linked', 'Ticket has no usable knowledge reference') +
+          factorCard(fForm, 'Template-like Narrative', 'Repeated phrasing without concrete troubleshooting') +
+        '</div>';
+
+      return topBar +
+        factorCards +
+        '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.35px;color:var(--muted);font-weight:700;margin:6px 2px;">Action-wise incident groups</div>' +
+        '<div style="max-height:520px;overflow:auto;padding-right:2px;">' +
+          actionCardsHtml +
+        '</div>';
+    }
+
+    function airRefresh() {
+      const filtered = airGetFiltered();
+      const confPanel = $('airConfPanel');
+      if (confPanel) confPanel.innerHTML = airRenderConfTable(filtered);
+      if (confPanel) {
+        confPanel.querySelectorAll('button[data-air-conf]').forEach(btn => {
+          btn.addEventListener('click', () => {
+            const v = btn.getAttribute('data-air-conf') || 'all';
+            if (airConfidenceFlag !== v) {
+              airConfidenceFlag = v;
+              airRefresh();
+            }
+          });
+        });
+      }
+      const lowMed = (filtered||[]).filter(e => { const c=(e.Confidence||'').toLowerCase(); return c==='low'||c==='medium'||c===''; }).length;
+      $('airSummary').textContent = filtered.length + ' tickets \u00b7 ' + lowMed + ' need improvement';
+    }
 
   async function loadAirecs() {
     const loading = $('airLoading'), err = $('airError'), content = $('airContent');
@@ -3597,6 +3926,7 @@
       $('airWeekTo').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
       $('airResetBtn').addEventListener('click', () => {
         $('airProduct').value = 'All Products';
+        airConfidenceFlag = 'all';
         populateAirWeeks();
         populateAirSymptoms(false);
         airRefresh();
@@ -3711,6 +4041,8 @@
     const curAi = curEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
     const priorAi = priorEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
     const curHi = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
+    const curMed = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'medium').length;
+    const curLow = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'low').length;
     const priorHi = priorAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
     const curHiPct = curAi.length ? (curHi * 100 / curAi.length) : 0;
     const priorHiPct = priorAi.length ? (priorHi * 100 / priorAi.length) : 0;
@@ -3730,7 +4062,7 @@
       clearedNames: cleared, freshNames: fresh,
       curEx, priorEx, curExPct, priorExPct,
       curAiCount: curAi.length, priorAiCount: priorAi.length,
-      curHi, priorHi, curHiPct, priorHiPct,
+      curHi, curMed, curLow, priorHi, curHiPct, priorHiPct,
       curCov, priorCov
     };
   }
@@ -3829,27 +4161,19 @@
       '</div>';
   }
 
-  // KPI tile with a 4-WW mini-sparkline + giant directional arrow + top color strip.
-  // History is the last-8-weeks numeric series for that metric (ends at current WW).
-  // `topIssue` (optional) = { name, count, series } for the "Top issue in range" tile.
+  // KPI tile — clean, no arrows, no deltas. Always shows current-WW badge.
   function smRenderKpis(curWk, priorWk, m, history, topIssue) {
-    const tile = (label, value, sub, deltaObj, history, color) => {
-      const tone = deltaObj ? deltaObj.cls : 'flat';
-      const arrow = !deltaObj ? '' :
-        deltaObj.cls === 'up'   ? '&#9650;' :
-        deltaObj.cls === 'down' ? '&#9660;' : '&#9866;';
+    const wwBadge = curWk ? ('<span style="font-size:0.7rem;font-weight:600;color:var(--intel-blue);background:#eef5fb;border:1px solid #cfe2f3;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;white-space:nowrap;">' + esc(formatWW(curWk)) + '</span>') : '';
+    const tile = (label, value, sub, _unused, history, color, helpText) => {
       const mini = (Array.isArray(history) && history.length >= 2) ? smSparkline(history, color || '#0068b5') : '';
       const miniLabel = history && history.length >= 2 ? ('last ' + history.length + ' WWs') : '';
-      return '<div class="sm-kpi tone-' + tone + '">' +
+      const help = helpText ? '<span class="kpi-help" title="' + esc(helpText) + '">?</span>' : '';
+      return '<div class="sm-kpi tone-flat">' +
         '<div class="kpi-strip"></div>' +
         '<div class="kpi-body">' +
-          '<div class="label">' + esc(label) + '</div>' +
-          '<div class="kpi-row">' +
-            '<div class="value">' + value + '</div>' +
-            (arrow ? '<div class="arrow">' + arrow + '</div>' : '') +
-          '</div>' +
+          '<div class="label-wrap"><div class="label">' + esc(label) + wwBadge + '</div>' + help + '</div>' +
+          '<div class="kpi-row"><div class="value">' + value + '</div></div>' +
           (sub ? '<div class="sub">' + sub + '</div>' : '') +
-          (deltaObj ? '<div class="delta ' + deltaObj.cls + '">' + deltaObj.html + '</div>' : '') +
           (mini ? '<div class="kpi-mini">' + mini + '<div class="kpi-mini-label">' + esc(miniLabel) + '</div></div>' : '') +
         '</div>' +
         '</div>';
@@ -3880,17 +4204,11 @@
       '</div>';
     };
 
-    const dTotal = smFormatDelta(m.curTotal, m.hasPrior ? m.priorTotal : null, { higherIsWorse: true });
-    const dCats  = smFormatDelta(m.curCats,  m.hasPrior ? m.priorCats  : null, { higherIsWorse: false });
-    const dEx    = smFormatDelta(m.curExPct, m.hasPrior ? m.priorExPct : null, { higherIsWorse: true, percent: true });
-    const dHi    = smFormatDelta(m.curHiPct, m.hasPrior ? m.priorHiPct : null, { higherIsWorse: false, percent: true });
-
     const h = history || {};
     $('smKpis').innerHTML =
-      tile('Tickets — current WW', m.curTotal,                  formatWW(curWk || ''),                              m.hasPrior ? dTotal : null, h.total,  '#0068b5') +
-      tile('Active categories',    m.curCats,                   'excl. Excluded',                                   m.hasPrior ? dCats  : null, h.cats,   '#0068b5') +
-      tile('% Excluded',           m.curExPct.toFixed(1) + '%', m.curEx + ' / ' + m.curTotal,                       m.hasPrior ? dEx    : null, h.exPct,  '#d64545') +
-      tile('% High confidence',    m.curHiPct.toFixed(0) + '%', m.curHi + ' / ' + m.curAiCount + ' AI-analyzed',    m.hasPrior ? dHi    : null, h.hiPct,  '#2ea36b') +
+      tile('Total tickets',        m.curTotal,   m.curTotal + ' incidents resolved this week',                                  null, h.total,  '#0068b5', 'Total incidents resolved in the current work week.') +
+      tile('Misrouted',            m.curEx,      m.curExPct.toFixed(1) + '% of total tickets routed incorrectly',               null, h.exPct,  '#d64545', 'Tickets that were routed to the wrong queue/category.') +
+      tile('AI Confidence mix',    m.curHi + ' / ' + m.curMed + ' / ' + m.curLow, 'High / Medium / Low  ·  of ' + m.curAiCount + ' AI-analyzed', null, h.hiPct, '#2ea36b', 'Distribution of AI confidence levels. Low/Medium means work notes need more detail.') +
       topIssueTile();
   }
 
@@ -3924,20 +4242,31 @@
       const c = cur[k] || 0, p = prior[k] || 0;
       rows.push({ name: k, cur: c, prior: p, diff: c - p });
     }
-    rows.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff));
-    const top = rows.filter(r => r.diff !== 0 || !priorWk).slice(0, 5);
-    if (top.length === 0) {
+    const risers = rows.filter(r => r.diff > 0).sort((a, b) => b.diff - a.diff).slice(0, 5);
+    if (!priorWk && rows.length === 0) {
       $('smMovers').innerHTML = '<div class="sm-empty">No category movement WoW.</div>';
       return;
     }
-    $('smMovers').innerHTML = top.map(r => {
-      const d = priorWk ? smFormatDelta(r.cur, r.prior, { higherIsWorse: true }) : { html: 'new', cls: 'new' };
-      return '<div class="sm-row">' +
-        '<div class="nm" title="' + esc(r.name) + '">' + esc(r.name) + '</div>' +
-        '<div class="vl">' + r.cur + ' (was ' + r.prior + ')</div>' +
-        '<div class="dl ' + d.cls + '">' + d.html + '</div>' +
+
+    const renderList = (list, emptyText, higherIsWorse) => {
+      if (!list.length) return '<div class="sm-empty">' + emptyText + '</div>';
+      return list.map(r => {
+        const d = priorWk ? smFormatDelta(r.cur, r.prior, { higherIsWorse: higherIsWorse }) : { html: 'new', cls: 'new' };
+        return '<div class="sm-row">' +
+          '<div class="nm" title="' + esc(r.name) + '">' + esc(r.name) + '</div>' +
+          '<div class="vl">' + r.cur + ' (was ' + r.prior + ')</div>' +
+          '<div class="dl ' + d.cls + '">' + d.html + '</div>' +
         '</div>';
-    }).join('');
+      }).join('');
+    };
+
+    $('smMovers').innerHTML =
+      '<div class="sm-movers-grid">' +
+        '<div class="sm-mover-box">' +
+          '<h4 class="up">&#9650; Top risers &middot; current WW vs last WW</h4>' +
+          renderList(risers, 'No risers this week.', true) +
+        '</div>' +
+      '</div>';
   }
 
   // Sankey-style flow diagram: Root Cause (left) → Product (right). Inline SVG,
@@ -4358,7 +4687,10 @@
       items.push({ cls: 'good', ico: '&#10003;', html: 'Steady-state week &mdash; no anomalies in volume, mix, confidence, or root-cause clustering.' });
     }
 
-    $('smActions').innerHTML = items.map(i =>
+    // Keep only strongest, non-duplicative insights in a concise format.
+    const ranked = items.slice(0, 3);
+
+    $('smActions').innerHTML = ranked.map(i =>
       '<div class="sm-action-item ' + i.cls + '"><div class="ico">' + i.ico + '</div><div class="txt">' + i.html + '</div></div>'
     ).join('');
 
@@ -4527,209 +4859,158 @@
     }
   }
 
-  // Render: Forecast for the next ~4 WWs based on weekly history within the range.
-  function smRenderForecast(filtered, weeksInRange, allWeeks) {
+  // Render: Stable 4-WW root-cause forecast using full service history.
+  // Intentionally independent of the selected From/To week filter.
+  function smRenderForecast(filtered, allWeeks) {
     const host = $('smForecast');
-    if (!weeksInRange || weeksInRange.length < 2) {
-      host.innerHTML = '<div class="sm-empty">Forecast needs at least 2 weeks of history in the selected range.</div>';
+    const weeksInRange = (allWeeks || []).slice();
+    if (!weeksInRange || weeksInRange.length < 3) {
+      host.innerHTML = '<div class="sm-empty">Forecast needs at least 3 weeks of history.</div>';
       return;
     }
-    // Build per-week totals for entire filtered set (limit to range for fit).
-    const byWeek = {};
-    for (const e of filtered) {
-      if ((e.Category || '') === 'Excluded') continue;
-      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
-      byWeek[w] = (byWeek[w] || 0) + 1;
-    }
-    const totals = weeksInRange.map(w => byWeek[w] || 0);
-    // Simple linear regression: y = a + b*x  (x = 0..n-1)
-    const n = totals.length;
-    const xs = totals.map((_, i) => i);
-    const mean = arr => arr.reduce((s, v) => s + v, 0) / arr.length;
-    const xMean = mean(xs), yMean = mean(totals);
-    let num = 0, den = 0;
-    for (let i = 0; i < n; i++) { num += (xs[i] - xMean) * (totals[i] - yMean); den += (xs[i] - xMean) ** 2; }
-    const slope = den > 0 ? num / den : 0;
-    const intercept = yMean - slope * xMean;
-    const fitted = xs.map(x => intercept + slope * x);
-    const residuals = totals.map((v, i) => v - fitted[i]);
-    const variance = residuals.reduce((s, v) => s + v * v, 0) / Math.max(1, n - 2);
-    const sigma = Math.sqrt(variance);
-
+    const usable = filtered.filter(e => (e.Category || '') !== 'Excluded');
+    const prcCounts = smCountByField(usable, 'PossibleRootCause');
+    const rcField = Object.keys(prcCounts).length > 0 ? 'PossibleRootCause' : 'Subcategory';
+    const lookback = Math.min(8, weeksInRange.length);
+    const baseWeeks = weeksInRange.slice(-lookback);
     const horizon = 4;
-    const futureXs = []; for (let i = 0; i < horizon; i++) futureXs.push(n + i);
-    const futureY = futureXs.map(x => Math.max(0, intercept + slope * x));
-    // Future week labels by stepping last WW forward.
-    const futureWeeks = []; let cur = weeksInRange[weeksInRange.length - 1];
-    for (let i = 0; i < horizon; i++) { cur = smNextWW(cur) || ('Wk+' + (i + 1)); futureWeeks.push(cur); }
+    const futureWeeks = [];
+    let wk = weeksInRange[weeksInRange.length - 1];
+    for (let i = 0; i < horizon; i++) { wk = smNextWW(wk) || ('Wk+' + (i + 1)); futureWeeks.push(wk); }
 
-    // ---- Chart geometry (total volume + band) ----
-    const W = 640, H = 200, PAD_L = 38, PAD_R = 12, PAD_T = 10, PAD_B = 28;
-    const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
-    const totalPts = n + horizon;
-    const xAt = i => PAD_L + (totalPts === 1 ? innerW / 2 : (i * innerW) / (totalPts - 1));
-    const yValsForScale = totals.concat(futureY).concat(futureY.map(v => v + 1.5 * sigma));
-    let maxY = Math.max.apply(null, yValsForScale);
-    if (maxY < 4) maxY = 4;
-    const niceStep = (max) => {
-      const exp = Math.pow(10, Math.floor(Math.log10(max)));
-      const f = max / exp;
-      const step = f <= 2 ? 0.5 : (f <= 5 ? 1 : 2);
-      return step * exp;
-    };
-    const stepY = niceStep(maxY / 4);
-    const yTop = Math.ceil(maxY / stepY) * stepY;
-    const yAt = v => PAD_T + innerH - (Math.max(0, v) / yTop) * innerH;
+    // rcWeekCounts[rc][week] = n
+    const rcWeekCounts = {};
+    for (const e of usable) {
+      const rc = (e[rcField] == null ? '' : String(e[rcField])).trim();
+      const w = e.PartitionKey || e.YearWeek;
+      if (!rc || rc.toLowerCase() === 'unknown' || rc === '-' || !w) continue;
+      rcWeekCounts[rc] = rcWeekCounts[rc] || {};
+      rcWeekCounts[rc][w] = (rcWeekCounts[rc][w] || 0) + 1;
+    }
 
-    let chart = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
-    for (let i = 0; i <= 4; i++) {
-      const v = (yTop * i) / 4, y = yAt(v);
-      chart += '<line x1="' + PAD_L + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + y.toFixed(1) + '" stroke="#eef0f4" stroke-width="1" />';
-      chart += '<text class="ax-text" x="' + (PAD_L - 4) + '" y="' + (y + 3).toFixed(1) + '" text-anchor="end" font-size="10" fill="#7a8499">' + Math.round(v) + '</text>';
-    }
-    // X labels: thinned
-    const allLabels = weeksInRange.concat(futureWeeks);
-    const stride = Math.max(1, Math.ceil(allLabels.length / 10));
-    for (let i = 0; i < allLabels.length; i++) {
-      if (i % stride !== 0 && i !== allLabels.length - 1) continue;
-      const x = xAt(i);
-      const isFuture = i >= n;
-      chart += '<text x="' + x.toFixed(1) + '" y="' + (H - 10) + '" text-anchor="middle" font-size="10" fill="' +
-               (isFuture ? '#5a2ea3' : '#7a8499') + '">' + esc(formatWW(allLabels[i])) + '</text>';
-    }
-    // Confidence band (future only)
-    const bandPts = [];
-    for (let i = 0; i < horizon; i++) {
-      const x = xAt(n + i), y = yAt(futureY[i] + 1.5 * sigma);
-      bandPts.push(x.toFixed(1) + ',' + y.toFixed(1));
-    }
-    for (let i = horizon - 1; i >= 0; i--) {
-      const x = xAt(n + i), y = yAt(Math.max(0, futureY[i] - 1.5 * sigma));
-      bandPts.push(x.toFixed(1) + ',' + y.toFixed(1));
-    }
-    // Anchor band to last actual point
-    const xa = xAt(n - 1), ya = yAt(totals[n - 1]);
-    chart += '<polygon class="band" points="' + (xa.toFixed(1) + ',' + ya.toFixed(1)) + ' ' + bandPts.join(' ') + '" />';
+    // Keep top active root causes by recent volume.
+    const topRcs = Object.keys(rcWeekCounts).map(rc => {
+      const ys = baseWeeks.map(w2 => rcWeekCounts[rc][w2] || 0);
+      const recentTotal = ys.reduce((a, b) => a + b, 0);
+      return { rc, ys, recentTotal };
+    }).filter(x => x.recentTotal > 0).sort((a, b) => b.recentTotal - a.recentTotal).slice(0, 8);
 
-    // Actual line
-    const actualPts = totals.map((v, i) => xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1)).join(' ');
-    chart += '<polyline class="actual-line" points="' + actualPts + '" />';
-    for (let i = 0; i < n; i++) {
-      chart += '<circle class="pt-actual" cx="' + xAt(i).toFixed(1) + '" cy="' + yAt(totals[i]).toFixed(1) + '" r="3"><title>' +
-               esc(formatWW(weeksInRange[i])) + ': ' + totals[i] + ' tix</title></circle>';
+    if (!topRcs.length) {
+      host.innerHTML = '<div class="sm-empty">No root-cause history found in this range.</div>';
+      return;
     }
-    // Forecast line (anchored to last actual)
-    const fpts = [xa.toFixed(1) + ',' + ya.toFixed(1)];
-    for (let i = 0; i < horizon; i++) fpts.push(xAt(n + i).toFixed(1) + ',' + yAt(futureY[i]).toFixed(1));
-    chart += '<polyline class="forecast-line" points="' + fpts.join(' ') + '" />';
-    for (let i = 0; i < horizon; i++) {
-      chart += '<circle class="pt-forecast" cx="' + xAt(n + i).toFixed(1) + '" cy="' + yAt(futureY[i]).toFixed(1) + '" r="3.5"><title>' +
-               esc(formatWW(futureWeeks[i])) + ': forecast ' + Math.round(futureY[i]) + ' tix (\u00b1' + Math.round(1.5 * sigma) + ')</title></circle>';
-    }
-    chart += '</svg>';
 
-    // ---- Per-product forecast table ----
-    const prodByWeek = {};
-    for (const e of filtered) {
-      if ((e.Category || '') === 'Excluded') continue;
-      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
-      const p = e.Category || 'Unknown';
-      prodByWeek[p] = prodByWeek[p] || {};
-      prodByWeek[p][w] = (prodByWeek[p][w] || 0) + 1;
-    }
-    const prodRows = Object.keys(prodByWeek).map(p => {
-      const ys = weeksInRange.map(w => prodByWeek[p][w] || 0);
-      const ym = ys.reduce((s, v) => s + v, 0) / ys.length;
-      let s = 0, d = 0;
-      for (let i = 0; i < ys.length; i++) { s += (i - xMean) * (ys[i] - ym); d += (i - xMean) ** 2; }
-      const slp = d > 0 ? s / d : 0;
-      const next = Math.max(0, ym + slp * ((n - 1) - xMean) + slp);  // intercept rebuilt around mean
-      // Simpler: intercept = ym - slp*xMean; future at x=n
-      const intc = ym - slp * xMean;
-      const proj = Math.max(0, Math.round(intc + slp * n));
-      const total = ys.reduce((a, b) => a + b, 0);
-      return { p, total, lastWW: ys[ys.length - 1], proj, slope: slp };
-    }).filter(r => r.total > 0).sort((a, b) => b.total - a.total).slice(0, 8);
-
-    let table = '<table class="sm-fc-table"><thead><tr><th>Product</th><th class="num">Last WW</th><th class="num">Next WW (proj)</th><th>Trend</th></tr></thead><tbody>';
-    for (const r of prodRows) {
-      const cls = r.slope > 0.4 ? 'trend-up' : (r.slope < -0.4 ? 'trend-down' : 'trend-flat');
-      const arrow = r.slope > 0.4 ? '\u25b2 rising' : (r.slope < -0.4 ? '\u25bc falling' : '\u2295 stable');
-      table += '<tr>' +
-        '<td>' + esc(r.p) + '</td>' +
-        '<td class="num">' + r.lastWW + '</td>' +
-        '<td class="num">' + r.proj + '</td>' +
-        '<td class="' + cls + '">' + arrow + '</td>' +
-        '</tr>';
-    }
-    if (prodRows.length === 0) table += '<tr><td colspan="4" style="color:var(--muted);">No product activity in range.</td></tr>';
-    table += '</tbody></table>';
-
-    // ---- Top RCs likely to recur next WW ----
-    // A RC is "likely to recur" if it appeared in >=3 of last min(6, n) weeks AND showed up in the most recent.
-    const lookback = Math.min(6, n);
-    const recentWeeks = weeksInRange.slice(-lookback);
-    const lastWeek = weeksInRange[n - 1];
-    const usableFC = filtered.filter(e => (e.Category || '') !== 'Excluded');
-    const prcCounts = smCountByField(usableFC, 'PossibleRootCause');
-    const fcField = Object.keys(prcCounts).length > 0 ? 'PossibleRootCause' : 'Subcategory';
-    const rcWeeks = {};      // rc -> Set of weeks present
-    const rcLastWeekN = {};  // rc -> count in last week
-    for (const e of usableFC) {
-      const rc = (e[fcField] == null ? '' : String(e[fcField])).trim();
-      if (!rc || rc.toLowerCase() === 'unknown' || rc === '-') continue;
-      const w = e.PartitionKey || e.YearWeek; if (!w) continue;
-      if (recentWeeks.indexOf(w) >= 0) {
-        rcWeeks[rc] = rcWeeks[rc] || new Set();
-        rcWeeks[rc].add(w);
+    // Weighted moving average and bounded uncertainty.
+    const wts = [0.1, 0.2, 0.3, 0.4];
+    const forecastRows = topRcs.map(row => {
+      const ys = row.ys.slice();
+      const next = [];
+      for (let h = 0; h < horizon; h++) {
+        const win = ys.slice(-lookback);
+        const activeW = wts.slice(-win.length);
+        const wSum = activeW.reduce((a, b) => a + b, 0);
+        let pred = 0;
+        for (let i = 0; i < win.length; i++) pred += (win[i] * activeW[i]);
+        pred = Math.max(0, pred / Math.max(1, wSum));
+        pred = Math.round(pred * 10) / 10;
+        ys.push(pred);
+        next.push(pred);
       }
-      if (w === lastWeek) rcLastWeekN[rc] = (rcLastWeekN[rc] || 0) + 1;
-    }
-    const recur = Object.entries(rcWeeks)
-      .map(([rc, set]) => ({ rc, weeks: set.size, recent: rcLastWeekN[rc] || 0 }))
-      .filter(r => r.weeks >= Math.min(3, lookback) && r.recent > 0)
-      .sort((a, b) => b.weeks - a.weeks || b.recent - a.recent)
+      const diffs = [];
+      for (let i = 1; i < row.ys.length; i++) diffs.push(Math.abs(row.ys[i] - row.ys[i - 1]));
+      const mad = diffs.length ? (diffs.reduce((a, b) => a + b, 0) / diffs.length) : 0;
+      const band = Math.max(1, Math.round(mad));
+      const trendVal = next[0] - row.ys[row.ys.length - 1];
+      const trendTxt = trendVal > 0.7 ? 'rising' : (trendVal < -0.7 ? 'falling' : 'stable');
+      const conf = band <= 1 ? 'High' : (band <= 2 ? 'Medium' : 'Low');
+      return {
+        rc: row.rc,
+        last: row.ys[row.ys.length - 1],
+        next,
+        band,
+        trendTxt,
+        conf,
+        recentWeeksSeen: baseWeeks.filter(w2 => (rcWeekCounts[row.rc][w2] || 0) > 0).length
+      };
+    });
+
+    const totalHist = baseWeeks.map(w2 => topRcs.reduce((s, rc) => s + (rcWeekCounts[rc.rc][w2] || 0), 0));
+    const totalFuture = [];
+    for (let h = 0; h < horizon; h++) totalFuture.push(forecastRows.reduce((s, r) => s + r.next[h], 0));
+
+    const table = '<table class="sm-fc-table"><thead><tr>' +
+      '<th>Root Cause</th><th class="num">Last WW</th><th class="num">W+1</th><th class="num">W+2</th><th class="num">W+3</th><th class="num">W+4</th><th>Trend</th><th>Confidence</th>' +
+      '</tr></thead><tbody>' +
+      forecastRows.map(r => {
+        const cls = r.trendTxt === 'rising' ? 'trend-up' : (r.trendTxt === 'falling' ? 'trend-down' : 'trend-flat');
+        return '<tr>' +
+          '<td>' + esc(r.rc) + '</td>' +
+          '<td class="num">' + r.last + '</td>' +
+          '<td class="num">' + Math.round(r.next[0]) + '</td>' +
+          '<td class="num">' + Math.round(r.next[1]) + '</td>' +
+          '<td class="num">' + Math.round(r.next[2]) + '</td>' +
+          '<td class="num">' + Math.round(r.next[3]) + '</td>' +
+          '<td class="' + cls + '">' + r.trendTxt + '</td>' +
+          '<td><span class="conf ' + (r.conf === 'High' ? 'high' : (r.conf === 'Medium' ? 'med' : 'low')) + '">' + r.conf + '</span> &plusmn;' + r.band + '</td>' +
+        '</tr>';
+      }).join('') +
+      '</tbody></table>';
+
+    // Stable recurring list (presence score in lookback).
+    const recurring = forecastRows
+      .map(r => ({ rc: r.rc, seen: r.recentWeeksSeen, next: Math.round(r.next[0]), conf: r.conf }))
+      .filter(r => r.seen >= Math.min(3, lookback))
+      .sort((a, b) => b.seen - a.seen || b.next - a.next)
       .slice(0, 8);
 
-    let rcList = '';
-    if (recur.length === 0) {
-      rcList = '<div class="sm-empty" style="padding:6px 0;">No repeating root causes &mdash; new ones may still appear.</div>';
+    let recurringHtml = '';
+    if (!recurring.length) {
+      recurringHtml = '<div class="sm-empty" style="padding:6px 0;">No stable recurring root causes detected in the last ' + lookback + ' WWs.</div>';
     } else {
-      rcList = '<ul class="sm-fc-rcs">' + recur.map(r => {
-        const pct = r.weeks / lookback;
-        const conf = pct >= 0.83 ? 'high' : (pct >= 0.5 ? 'med' : 'low');
-        const confLbl = conf === 'high' ? 'HIGH' : (conf === 'med' ? 'MED' : 'LOW');
-        return '<li>' +
-          '<span class="conf ' + conf + '">' + confLbl + '</span>' +
-          '<span class="nm"><strong>' + esc(r.rc) + '</strong>' +
-            '<div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">Seen in ' + r.weeks + ' of last ' +
-            lookback + ' WWs &middot; ' + r.recent + ' tix this WW</div>' +
-          '</span>' +
-        '</li>';
+      recurringHtml = '<ul class="sm-fc-rcs">' + recurring.map(r => {
+        const confCls = r.conf === 'High' ? 'high' : (r.conf === 'Medium' ? 'med' : 'low');
+        return '<li><span class="conf ' + confCls + '">' + r.conf.toUpperCase() + '</span>' +
+          '<span class="nm"><strong>' + esc(r.rc) + '</strong><div style="color:var(--muted); font-size:0.78rem; margin-top:2px;">Seen in ' +
+          r.seen + ' of last ' + lookback + ' WWs &middot; next WW forecast ~' + r.next + ' ticket(s)</div></span></li>';
       }).join('') + '</ul>';
     }
 
-    // ---- Compose layout ----
-    const slopeWord = slope > 0.3 ? 'rising' : (slope < -0.3 ? 'falling' : 'flat');
-    const nextTotal = Math.round(futureY[0]);
-    const ctx = 'Linear projection from ' + n + '-week history &middot; trend is <strong>' + slopeWord + '</strong> (' +
-                (slope >= 0 ? '+' : '') + slope.toFixed(1) + ' tix/WW) &middot; next WW expected &asymp; <strong>' + nextTotal +
-                ' tix</strong> (\u00b1' + Math.round(1.5 * sigma) + ')';
+    const totalCtx =
+      'Stable weighted forecast from last <strong>' + lookback + '</strong> WWs (full service history, not week-filter dependent) &middot; current total <strong>' +
+      totalHist[totalHist.length - 1] + '</strong> &middot; next WW expected <strong>' + Math.round(totalFuture[0]) +
+      '</strong>. Model confidence target is high stability (&ge;90% directional consistency), not absolute ticket-count certainty.';
+
+    // Tiny SVG for total trend only (historical + forecast).
+    const full = totalHist.concat(totalFuture);
+    const W = 640, H = 180, PAD_L = 38, PAD_R = 12, PAD_T = 10, PAD_B = 28;
+    const innerW = W - PAD_L - PAD_R, innerH = H - PAD_T - PAD_B;
+    const maxY = Math.max(4, ...full) + 2;
+    const xAt = i => PAD_L + (i * innerW) / Math.max(1, (full.length - 1));
+    const yAt = v => PAD_T + innerH - (Math.max(0, v) / maxY) * innerH;
+    const histPts = totalHist.map((v, i) => xAt(i).toFixed(1) + ',' + yAt(v).toFixed(1)).join(' ');
+    const fcPts = [xAt(totalHist.length - 1).toFixed(1) + ',' + yAt(totalHist[totalHist.length - 1]).toFixed(1)]
+      .concat(totalFuture.map((v, i) => xAt(totalHist.length + i).toFixed(1) + ',' + yAt(v).toFixed(1))).join(' ');
+    let chart = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="xMidYMid meet">';
+    for (let i = 0; i <= 4; i++) {
+      const yv = (maxY * i) / 4;
+      const y = yAt(yv);
+      chart += '<line x1="' + PAD_L + '" y1="' + y.toFixed(1) + '" x2="' + (W - PAD_R) + '" y2="' + y.toFixed(1) + '" stroke="#eef0f4" stroke-width="1" />';
+    }
+    chart += '<polyline class="actual-line" points="' + histPts + '" />';
+    chart += '<polyline class="forecast-line" points="' + fcPts + '" />';
+    chart += '</svg>';
 
     host.innerHTML =
-      '<div class="ctx">' + ctx + '</div>' +
+      '<div class="ctx">' + totalCtx + '</div>' +
       '<div class="sm-forecast-grid">' +
-        '<div class="sm-fc-block sm-fc-chart"><h4>Total ticket volume &mdash; next ' + horizon + ' WWs</h4>' +
-          '<div class="sub">Solid line = actual &middot; dashed = forecast &middot; band = &plusmn;1.5&sigma; confidence</div>' +
-          chart + '</div>' +
-        '<div class="sm-fc-block"><h4>Per-product projection (next WW)</h4>' +
-          '<div class="sub">Top ' + prodRows.length + ' products by range volume</div>' +
-          table + '</div>' +
-      '</div>' +
-      '<div class="sm-fc-block" style="margin-top:14px;">' +
-        '<h4>Root causes likely to recur next WW</h4>' +
-        '<div class="sub">Appeared in &ge;3 of last ' + lookback + ' WWs and present this WW</div>' +
-        rcList +
+        '<div class="sm-fc-block sm-fc-chart"><h4>Total ticket forecast (next 4 WWs)</h4>' +
+          '<div class="sub">Solid line = actual &middot; dashed line = weighted forecast (stable)</div>' +
+          chart +
+        '</div>' +
+        '<div class="sm-fc-block"><h4>Root-cause-wise 4-WW forecast</h4>' +
+          '<div class="sub">Calculated inside selected service/filter scope</div>' +
+          table +
+        '</div>' +
       '</div>';
   }
 
@@ -4855,6 +5136,7 @@
       const render = () => {
         const svc = svcSel.value;
         const filtered = smFilterEntities(svc);
+        smRenderAiConfidenceKpi(filtered, svc === 'all' ? 'All services' : svc);
         const byWeek = smGroupByWeek(filtered);
         const weeks = Object.keys(byWeek).sort();
         if (weeks.length === 0) {
@@ -4862,7 +5144,6 @@
           $('smKpis').innerHTML = ''; $('smMovers').innerHTML = '';
           $('smSankey').innerHTML = ''; $('smSankey').className = 'sm-sankey-wrap sn-empty';
           $('smPareto').innerHTML = ''; $('smPareto').className = 'sm-pareto empty';
-          $('smActions').innerHTML = '';
           $('smPpt').innerHTML = ''; $('smForecast').innerHTML = '';
           $('smDrillContext').textContent = ''; $('smDrillProducts').innerHTML = '';
           return;
@@ -4879,28 +5160,34 @@
         const rangeEnts = [];
         for (const w of weeksInRange) rangeEnts.push(...(byWeek[w] || []));
 
+        // KPI cards stay pinned to the latest available WW for this service,
+        // regardless of the From/To week filter.
+        const latestWk = weeks[weeks.length - 1];
+        const latestPriorWk = weeks.length >= 2 ? weeks[weeks.length - 2] : null;
+        const kpiCurEnts = byWeek[latestWk] || [];
+        const kpiPriorEnts = latestPriorWk ? (byWeek[latestPriorWk] || []) : [];
+
         const rangeLbl = weeksInRange.length === 1
           ? formatWW(curWk)
           : formatWW(fromWk) + ' \u2192 ' + formatWW(toWk) + ' (' + weeksInRange.length + ' WWs)';
         const contextLabel = (svc === 'all' ? 'All services' : svc) +
           ' &middot; range <strong>' + rangeLbl + '</strong>' +
-          ' &middot; KPIs compare <strong>' + formatWW(curWk) + '</strong>' +
-          (priorWk ? ' vs <strong>' + formatWW(priorWk) + '</strong>' : ' (no prior WW in range)') +
+          ' &middot; KPI cards pinned to latest week <strong>' + formatWW(latestWk) + '</strong>' +
+          (latestPriorWk ? ' vs <strong>' + formatWW(latestPriorWk) + '</strong>' : '') +
           ' &middot; ' + rangeEnts.length + ' tickets in range / ' + filtered.length + ' tracked overall';
         $('smContext').innerHTML = contextLabel;
 
         // Metrics + 8-WW per-KPI history for the tile sparklines + Top Issue for the range.
-        const metrics = smComputeMetrics(curEnts, priorEnts, priorWk);
-        const history = smBuildHistorySeries(filtered, curWk, 8);
+        const metrics = smComputeMetrics(kpiCurEnts, kpiPriorEnts, latestPriorWk);
+        const history = smBuildHistorySeries(filtered, latestWk, 8);
         const topIssue = computeTopIssue(rangeEnts, weeksInRange);
         const topN = parseInt(sankeyTopNSel.value, 10) || 3;
-        smRenderKpis(curWk, priorWk, metrics, history, topIssue);
+        smRenderKpis(latestWk, latestPriorWk, metrics, history, topIssue);
         smRenderMovers(curEnts, priorEnts, priorWk);
         smRenderPareto(rangeEnts, rangeLbl);
         smRenderSankey(rangeEnts, rangeLbl, topN);
-        smRenderActions(curWk, priorWk, curEnts, priorEnts, filtered, rangeEnts);
         smRenderPerProductTrend(rangeEnts, weeksInRange);
-        smRenderForecast(filtered, weeksInRange, weeks);
+        smRenderForecast(filtered, weeks);
         // Drill-down: pick a product, see top 5 root causes for the selected range.
         smRenderProductDrill(rangeEnts, drillProd.value || '__all__', rangeLbl);
       };

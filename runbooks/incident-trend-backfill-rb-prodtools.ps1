@@ -224,8 +224,24 @@ function Get-StructuredFields {
         Category    = (Get-FieldFromResponse -Text $Text -Labels @('Primary Category') -StopLabels $AllFieldLabels)
         Subcategory = (Get-FieldFromResponse -Text $Text -Labels @('Sub-symptom','Subcategory','Sub symptom') -StopLabels $AllFieldLabels)
         RootCause   = (Get-FieldFromResponse -Text $Text -Labels @('Possible Root Cause','Root Cause') -StopLabels $AllFieldLabels)
+        Confidence  = (Get-FieldFromResponse -Text $Text -Labels @('Confidence','Confidence Level') -StopLabels $AllFieldLabels)
         Analysis    = (Get-FieldFromResponse -Text $Text -Labels @('AI Analysis','Analysis') -StopLabels $AllFieldLabels)
     }
+}
+
+function New-FallbackAnalysisText {
+    param(
+        [string]$Category,
+        [string]$Subcategory,
+        [string]$RootCause
+    )
+    $parts = @()
+    if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
+    if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
+    if ($parts.Count -eq 0) {
+        return "$Category: fallback analysis generated because AI analysis text was missing in backfill output."
+    }
+    return "$Category :: " + ($parts -join '. ') + '.'
 }
 
 function Get-YearWeekFromDate {
@@ -286,6 +302,9 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             $subcat = $fields.Subcategory
             $root   = $fields.RootCause
             $anal   = $fields.Analysis
+            $conf   = $fields.Confidence
+            if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
+            if ([string]::IsNullOrWhiteSpace($anal)) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
             if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
             if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
             if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
@@ -295,6 +314,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 'Subcategory'    = [string]$subcat
                 'RootCause'      = [string]$root
                 'AIAnalysis'     = [string]$anal
+                'Confidence'     = [string]$conf
                 'Date'           = [string]$resolvedDt.ToString('yyyy-MM-dd')
                 'YearWeek'       = [string]$yw.YearWeek
                 'Year'           = [int]$yw.Year

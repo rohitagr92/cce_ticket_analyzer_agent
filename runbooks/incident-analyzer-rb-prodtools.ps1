@@ -1462,6 +1462,8 @@ function Get-MergedWeeklyRunData {
                     $converted.Processed = $parsedProcessed
                 }
 
+                $null = Ensure-TicketAiFields -Ticket $converted
+
                 $ticketMap[[string]$ticket.Number] = $converted
             }
 
@@ -1683,6 +1685,7 @@ function Invoke-TicketProcessing {
         $ticket.OriginalDescription = $Incident.short_description
         $ticket.ResolvedAt = [string]$Incident.resolved_at
         
+        $null = Ensure-TicketAiFields -Ticket $ticket -CategoryInfo $categoryInfo
         $Script:ProcessedTickets.Add($ticket)
         
         Write-ScriptLog "Successfully processed $ticketType $($Incident.number) - Category: $($ticket.Category)" -Level Success -Category "Processing"
@@ -1696,6 +1699,50 @@ function Invoke-TicketProcessing {
         Write-ScriptLog "Failed to process $ticketType $($Incident.number): $($_.Exception.Message)" -Level Error -Category "Processing"
         throw
     }
+}
+
+function New-FallbackTicketAnalysis {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Incident,
+
+        [string]$FailureReason = ''
+    )
+
+    $ticket = [TicketAnalysis]::new([string]$Incident.number)
+    $ticket.Category = 'Other / Miscellaneous'
+    $ticket.SubSymptom = 'Unclassified'
+    $ticket.Subcategory = 'Unclassified'
+    $ticket.PossibleRootCause = 'Usage Guidance (How Do I)'
+    $ticket.DetailedRootCause = 'Automated fallback classification'
+    $ticket.Service = 'Productivity Tools'
+    $ticket.Misrouted = $false
+    $ticket.ExclusionReason = ''
+    $ticket.Confidence = 'Low'
+
+    $short = ([string]$Incident.short_description).Trim()
+    if ([string]::IsNullOrWhiteSpace($short)) {
+        $short = ([string]$Incident.description).Trim()
+    }
+    if ([string]::IsNullOrWhiteSpace($short)) {
+        $short = 'No incident summary available from source payload.'
+    }
+
+    $reasoning = "Fallback analysis generated because AI categorization failed after retries. Incident: $short"
+    if (-not [string]::IsNullOrWhiteSpace($FailureReason)) {
+        $reasoning += ". Error: $FailureReason"
+    }
+    $ticket.Reasoning = $reasoning
+    $ticket.Evidence = ''
+    $ticket.Resolution = ''
+    $ticket.Type = ''
+    $ticket.KnowledgeBase = ''
+    $ticket.OriginalDescription = [string]$Incident.short_description
+    $ticket.ResolvedAt = [string]$Incident.resolved_at
+
+    $null = Ensure-TicketAiFields -Ticket $ticket
+    return $ticket
 }
 
 function Get-CategoryStatistics {
@@ -1828,9 +1875,17 @@ function Save-CategoryStatisticsToTable {
         
         $savedCount = 0
         $errorCount = 0
+        $analysisFallbackCount = 0
+        $confidenceFallbackCount = 0
         
         foreach ($ticket in $Script:ProcessedTickets) {
             try {
+                $reasoningWasBlank = [string]::IsNullOrWhiteSpace([string]$ticket.Reasoning)
+                $confidenceWasBlank = [string]::IsNullOrWhiteSpace([string]$ticket.Confidence)
+                $null = Ensure-TicketAiFields -Ticket $ticket
+                if ($reasoningWasBlank) { $analysisFallbackCount++ }
+                if ($confidenceWasBlank) { $confidenceFallbackCount++ }
+
                 # Per-ticket partitioning: use the ticket's own resolved_at so cross-week runs
                 # (e.g. backfills, Monday catch-ups) land in the correct week partition.
                 $resolvedDt = [DateTime]::MinValue
@@ -1874,7 +1929,7 @@ function Save-CategoryStatisticsToTable {
                     # incident-detail modal alongside the canonical DetailedRootCause.
                     # AIAnalysis is sourced from $ticket.Reasoning (the AI's narrative);
                     # cap to keep Azure Table single-property size sane (64 KiB hard limit).
-                    "AIAnalysis"        = if ([string]::IsNullOrWhiteSpace([string]$ticket.Reasoning)) { '' } elseif (([string]$ticket.Reasoning).Length -gt 4000) { ([string]$ticket.Reasoning).Substring(0, 4000) + '...' } else { [string]$ticket.Reasoning }
+                    "AIAnalysis"        = if (([string]$ticket.Reasoning).Length -gt 4000) { ([string]$ticket.Reasoning).Substring(0, 4000) + '...' } else { [string]$ticket.Reasoning }
                     "Confidence"        = [string]$ticket.Confidence
                 }
                 
@@ -1894,6 +1949,8 @@ function Save-CategoryStatisticsToTable {
                 Write-ScriptLog "Failed to save incident $($ticket.Number): $($_.Exception.Message)" -Level Warning
             }
         }
+
+        Write-ScriptLog "Data quality guardrails: AIAnalysis fallback applied to $analysisFallbackCount tickets; Confidence fallback applied to $confidenceFallbackCount tickets" -Level Info
         
         if ($errorCount -eq 0) {
             Write-ScriptLog "Successfully saved $savedCount incident records to Azure Table" -Level Success
@@ -2127,7 +2184,8 @@ function New-DetailsTableHtml {
         if ($ProcessedTicketsData.Count -gt 0) {
             $ticketAnalysis = $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
             if ($ticketAnalysis -and $ticketAnalysis.Reasoning) {
-                $confidenceLevel = $ticketAnalysis.Confidence ?? "Unknown"
+                # Normalize to High/Medium/Low so report UI never shows Unknown.
+                $confidenceLevel = Get-NormalizedConfidence -Raw ([string]$ticketAnalysis.Confidence) -RootCausesKnown $true
                 $reasoning = $ticketAnalysis.Reasoning
                 
                 # Set colors based on confidence level
@@ -2455,6 +2513,33 @@ function Get-FallbackReasoning {
     if (-not [string]::IsNullOrWhiteSpace($resolution))                         { $parts += "Resolution: $resolution" }
     if ($parts.Count -gt 0) { return ("$($Ticket.Category) :: " + ($parts -join '. ') + '.') }
     return "$($Ticket.Category): detailed analysis was not captured for this ticket."
+}
+
+function Ensure-TicketAiFields {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Ticket,
+
+        [object]$CategoryInfo = $null
+    )
+
+    $rootCausesKnown = (
+        -not [string]::IsNullOrWhiteSpace([string]$Ticket.PossibleRootCause) -and
+        -not [string]::IsNullOrWhiteSpace([string]$Ticket.DetailedRootCause)
+    )
+    $Ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$Ticket.Confidence) -RootCausesKnown $rootCausesKnown
+
+    if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
+        $fallbackInfo = if ($CategoryInfo) {
+            $CategoryInfo
+        } else {
+            [PSCustomObject]@{ resolution_summary = [string]$Ticket.Resolution }
+        }
+        $Ticket.Reasoning = Get-FallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
+    }
+
+    return $Ticket
 }
 
 function Normalize-CanonicalText {
@@ -2877,7 +2962,16 @@ foreach ($incident in $incidents) {
                 Start-Sleep -Seconds $waitTime
             } elseif ($retryCount -ge $maxRetries) {
                 Write-ScriptLog "Failed to process incident $($incident.number) after $maxRetries attempts: $errorMessage" -Level Warning
-                break
+
+                $fallbackTicket = New-FallbackTicketAnalysis -Incident $incident -FailureReason $errorMessage
+                $Script:ProcessedTickets.Add($fallbackTicket)
+                $allsummarisednotes.Add([PSCustomObject]@{
+                    IncidentNumber = $incident.number
+                    SummarisedNotes = "Fallback summary generated because AI categorization failed after retries."
+                })
+                $processedIncidentCount++
+                $success = $true
+                Write-ScriptLog "Applied no-skip fallback ticket for incident $($incident.number)" -Level Warning -Category "Processing"
             } else {
                 Write-ScriptLog "Retry $retryCount/$maxRetries for incident $($incident.number): $errorMessage" -Level Warning
                 Start-Sleep -Seconds 2

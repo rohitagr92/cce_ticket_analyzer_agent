@@ -211,8 +211,24 @@ function Get-StructuredFields {
         Category    = (Get-FieldFromResponse -Text $Text -Labels @('Primary Category') -StopLabels $AllFieldLabels)
         Subcategory = (Get-FieldFromResponse -Text $Text -Labels @('Sub-symptom','Subcategory','Sub symptom') -StopLabels $AllFieldLabels)
         RootCause   = (Get-FieldFromResponse -Text $Text -Labels @('Possible Root Cause','Root Cause') -StopLabels $AllFieldLabels)
+        Confidence  = (Get-FieldFromResponse -Text $Text -Labels @('Confidence','Confidence Level') -StopLabels $AllFieldLabels)
         Analysis    = (Get-FieldFromResponse -Text $Text -Labels @('AI Analysis','Analysis') -StopLabels $AllFieldLabels)
     }
+}
+
+function New-FallbackAnalysisText {
+    param(
+        [string]$Category,
+        [string]$Subcategory,
+        [string]$RootCause
+    )
+    $parts = @()
+    if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
+    if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
+    if ($parts.Count -eq 0) {
+        return "$Category: fallback analysis generated because AI analysis text was missing in backfill output."
+    }
+    return "$Category :: " + ($parts -join '. ') + '.'
 }
 
 function Get-YearWeekFromDate {
@@ -320,6 +336,8 @@ for ($i = 1; $i -le $Days; $i++) {
             $subcat = if ($fields.Subcategory) { $fields.Subcategory } else { '' }
             $root   = if ($fields.RootCause)   { $fields.RootCause }   else { '' }
             $anal   = if ($fields.Analysis)    { $fields.Analysis }    else { '' }
+            $conf   = if ($fields.Confidence)  { $fields.Confidence }  else { 'Medium' }
+            if ([string]::IsNullOrWhiteSpace($anal)) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
 
             # Defensive caps (Azure Table string properties are <= 32 KB; we stay well below).
             if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
@@ -331,6 +349,7 @@ for ($i = 1; $i -le $Days; $i++) {
                 'Subcategory'    = [string]$subcat
                 'RootCause'      = [string]$root
                 'AIAnalysis'     = [string]$anal
+                'Confidence'     = [string]$conf
                 'Date'           = [string]$resolvedDt.ToString('yyyy-MM-dd')
                 'YearWeek'       = [string]$yw.YearWeek
                 'Year'           = [int]$yw.Year

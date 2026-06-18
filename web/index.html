@@ -53,6 +53,19 @@
   .tab:hover { color: #fff; }
   .tab.active { color: #fff; border-bottom-color: var(--intel-energy); }
   .tab .count { background: rgba(255,255,255,0.18); padding: 1px 8px; border-radius: 999px; font-size: 0.75rem; font-weight: 600; }
+  
+  /* Feedback button styling */
+  #feedbackBtn {
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.25);
+    padding: 10px 16px; border-radius: 6px; margin-left: auto;
+    color: rgba(255,255,255,0.85); font-size: 0.92rem; font-weight: 500;
+    transition: all .2s ease;
+  }
+  #feedbackBtn:hover {
+    background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.4);
+    color: #fff; transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
 
   main { max-width: 1400px; margin: 0 auto; padding: 28px 32px; }
   .tab-pane { display: none; }
@@ -429,7 +442,10 @@
         <span class="icon">&#128296;</span> Ops Report+
       </button>
       <button class="tab" role="tab" data-tab="airecs">
-        <span class="icon">&#129504;</span> AI Recommendations
+        <span class="icon">&#129504;</span> AI Recommendation( Preview)
+      </button>
+      <button class="tab" id="feedbackBtn" style="margin-left: auto;" title="Send feedback about this dashboard">
+        <span class="icon">&#128231;</span> Feedback
       </button>
     </div>
   </div>
@@ -442,7 +458,12 @@
     <div id="smError" class="state error" style="display:none;"></div>
     <div id="smContent" style="display:none;">
       <div class="sm-toolbar">
-        <span class="label-inline">Service</span>
+        <span class="label-inline">Lens View</span>
+        <select id="smLens">
+          <option value="poops" selected>PO/OPS - Default</option>
+          <option value="engineer">Engineer View</option>
+        </select>
+        <span class="label-inline">Service Offering</span>
         <select id="smService"></select>
         <span class="label-inline">From WW</span>
         <select id="smFromWeek" style="min-width:140px;"></select>
@@ -459,13 +480,13 @@
       <div class="sm-kpis" id="smKpis"></div>
 
       <!-- 2. Top movers (compact, left) -->
-      <div class="sm-fullcard">
+      <div class="sm-fullcard" id="smMoversSection">
         <h3 class="tp-section-title" style="margin-top:0;"><span>&#128200;</span> Top risers (current WW vs last WW)</h3>
         <div id="smMovers"></div>
       </div>
 
       <!-- 3. Root Cause -> Product flow (FULL WIDTH, larger) -->
-      <div class="sm-fullcard">
+      <div class="sm-fullcard" id="smFlowSection">
         <div class="sm-fc-header">
           <h3 class="tp-section-title" style="margin:0;"><span>&#127919;</span> Root Cause &rarr; Product flow</h3>
           <div class="sm-fc-controls">
@@ -484,14 +505,13 @@
       </div>
 
       <!-- 5. Per-Product Weekly Trend (full width) -->
-      <h3 class="tp-section-title"><span>&#128200;</span> Per-product weekly trend</h3>
-      <div class="sm-fullcard"><div class="ctx" id="smPptCtx"></div><div class="tp-grid-products" id="smPpt"></div></div>
-
-      <!-- 6. Forecast (next 4 WWs) -->
-      <h3 class="tp-section-title"><span>&#128302;</span> Forecast recommendation &mdash; next 4 WW trend by root cause</h3>
-      <div class="sm-fullcard" id="smForecast"></div>
+      <div id="smPptSection">
+        <h3 class="tp-section-title"><span>&#128200;</span> Per-product weekly trend ( Total Incident Count)</h3>
+        <div class="sm-fullcard"><div class="ctx" id="smPptCtx"></div><div class="tp-grid-products" id="smPpt"></div></div>
+      </div>
 
       <!-- 7. Drill-down: pick a Product -> top 5 root causes for the selected range -->
+      <div id="smDrillSection">
       <h3 class="tp-section-title"><span>&#128269;</span> Drill-down &mdash; pick a product, see top root causes for the selected range</h3>
       <div class="sm-card">
         <div class="sm-toolbar" style="margin-bottom:12px;">
@@ -501,6 +521,7 @@
         </div>
         <h4 style="margin:4px 0 8px 0; font-size:0.92rem; color:var(--intel-classic);">Top 5 root causes</h4>
         <div id="smDrillProducts"></div>
+      </div>
       </div>
     </div>
   </section>
@@ -565,7 +586,7 @@
     <div id="tpError" class="state error" style="display:none;"></div>
     <div id="tpContent" style="display:none;">
       <div class="toolbar">
-        <span class="label-inline">Service</span>
+        <span class="label-inline">Service Offering</span>
         <select id="tpService">
           <option value="Productivity Tools">Productivity Tools</option>
           <option value="Email and Calendaring">Email and Calendaring</option>
@@ -586,7 +607,7 @@
         <div class="tp-mover-card"><h4 style="color:var(--success);">&#x2193; Top Fallers</h4><div class="tp-mover-list" id="tpFallers"></div></div>
       </div>
 
-      <h3 class="tp-section-title"><span>&#128202;</span> Per-Product Weekly Trend</h3>
+      <h3 class="tp-section-title"><span>&#128202;</span> Per-Product Weekly Trend ( Total Incident Count)</h3>
       <div class="tp-grid-products" id="tpProductGrid"></div>
 
       <h3 class="tp-section-title"><span>&#127919;</span> Product &times; Week Heatmap</h3>
@@ -603,7 +624,7 @@
     <div id="rcError" class="state error" style="display:none;"></div>
     <div id="rcContent" style="display:none;">
       <div class="toolbar">
-        <span class="label-inline">Service</span>
+        <span class="label-inline">Service Offering</span>
         <select id="rcService">
           <option value="Productivity Tools">Productivity Tools</option>
           <option value="Email and Calendaring">Email and Calendaring</option>
@@ -667,9 +688,9 @@
       <div id="opxStatusBar" style="background:linear-gradient(135deg,var(--intel-classic),var(--intel-blue));color:#fff;padding:10px 18px;border-radius:10px;font-size:0.92rem;margin-bottom:14px;line-height:1.5;display:flex;flex-wrap:wrap;gap:6px 18px;align-items:center;"></div>
 
       <div class="chart-card" style="margin-bottom:18px;">
-        <h3>&#128269; Triage Filters</h3>
+        <h3>&#128269; Filters</h3>
         <div class="toolbar" style="margin-bottom:10px;">
-          <span class="label-inline">Service</span>
+          <span class="label-inline">Service Offering</span>
           <select id="opxService">
             <option value="Productivity Tools">Productivity Tools</option>
             <option value="Email and Calendaring">Email and Calendaring</option>
@@ -692,15 +713,10 @@
             <button type="button" class="opx-view-btn" data-view="incidents" style="padding:7px 14px;border:0;background:#fff;color:var(--intel-classic);font-weight:600;cursor:pointer;font-size:0.85rem;">Incidents</button>
           </div>
           <button class="btn-outline" id="opxResetBtn">Reset</button>
-          <button class="btn-outline" id="opxCopyEmailBtn" title="Copy a ready-to-paste plain-text briefing for email or Teams">&#9993; Copy as email</button>
-          <button class="btn-outline" id="opxCopyIdsBtn" title="Copy all matching incident numbers">&#128203; Copy IDs</button>
           <button class="btn-primary" id="opxDownloadBtn">&#11015; CSV</button>
           <div class="summary" id="opxSummary"></div>
         </div>
       </div>
-
-      <!-- Story-mode headline — auto-generated plain-English briefing -->
-      <div id="opxHeadline" style="background:#fff;border:1px solid var(--border);border-left:4px solid var(--intel-blue);border-radius:10px;padding:14px 18px;margin-bottom:16px;font-size:0.95rem;line-height:1.55;color:#2a3850;"></div>
 
       <!-- Flag quick-filter chips (also act as a legend) -->
       <div id="opxFlagBar" style="display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:16px;"></div>
@@ -712,15 +728,15 @@
     </div>
   </section>
 
-  <!-- AI RECOMMENDATIONS TAB — synthesises engineer/AI analysis from the last 6 WWs -->
+  <!-- AI RECOMMENDATION PREVIEW TAB — synthesises engineer/AI analysis from the last 6 WWs -->
   <section class="tab-pane" id="pane-airecs">
     <div id="airLoading" class="loading">Loading recommendation data</div>
     <div id="airError" class="state error" style="display:none;"></div>
     <div id="airContent" style="display:none;">
       <div class="chart-card" style="margin-bottom:16px;">
-          <h3>&#129504; AI Recommendations &mdash; Data Quality Tracker <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; Low &amp; Medium confidence tickets &middot; use filters to narrow scope</span></h3>
+          <h3>&#129504; AI Recommendation( Preview) &mdash; Data Quality Tracker <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; Low &amp; Medium confidence tickets &middot; use filters to narrow scope</span></h3>
         <div class="toolbar" style="margin-bottom:0;">
-          <span class="label-inline">Service</span>
+          <span class="label-inline">Service Offering</span>
           <select id="airService">
             <option value="Productivity Tools">Productivity Tools</option>
             <option value="Email and Calendaring">Email and Calendaring</option>
@@ -1220,6 +1236,22 @@
 
   function esc(s) {
     return (s == null ? '' : String(s)).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function normalizedConfidenceValue(e) {
+    const raw = (e && e.Confidence != null ? String(e.Confidence) : '').trim().toLowerCase();
+    if (raw === 'high') return 'High';
+    if (raw === 'medium' || raw === 'moderate' || raw === 'med') return 'Medium';
+    if (raw === 'low') return 'Low';
+    return 'Unknown';
+  }
+
+  function hasUsableAiAnalysis(e) {
+    const ai = ((e && e.AIAnalysis) || '').toString().trim();
+    if (ai.length > 0) return true;
+    // Backward compatibility for historical rows where narrative was stored in DRC.
+    const drc = ((e && e.DetailedRootCause) || '').toString().trim();
+    return drc.length > 0 && drc.toLowerCase() !== 'unknown' && drc !== '-';
   }
 
   function populateOpsProducts() {
@@ -2315,7 +2347,8 @@
     { id: 'repeat',    label: 'REPEAT',    icon: '&#9851;',   bg: '#e9e1ff', fg: '#542aaa' },
     { id: 'misrouted', label: 'MISROUTED', icon: '&#9888;',   bg: '#ffe2cc', fg: '#9a4a00' },
     { id: 'mediumconf', label: 'MEDIUM-CONF', icon: '&#9873;', bg: '#fef3cd', fg: '#856404' },
-    { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' }
+    { id: 'lowconf',   label: 'LOW-CONF',  icon: '&#129302;', bg: '#fbe2e2', fg: '#a51c1c' },
+    { id: 'unknownconf', label: 'UNKNOWN-CONF', icon: '&#10067;', bg: '#eef2f7', fg: '#5a6d82' }
   ];
 
   function opxServiceProducts() {
@@ -2384,8 +2417,10 @@
   function populateOpxRootCauses(preserveValue) {
     const sel = $('opxRootCause');
     const prev = preserveValue ? sel.value : '__all__';
+    const selectedSub = $('opxSubcategory').value;
     const counts = {};
     for (const e of opxBaseFiltered()) {
+      if (selectedSub !== '__all__' && (e.Subcategory || '').trim() !== selectedSub) continue;
       const r = (e.PossibleRootCause || e.RootCause || '').trim();
       if (r) counts[r] = (counts[r] || 0) + 1;
     }
@@ -2401,11 +2436,15 @@
     opxFirstSeenWeek.clear();
     opxAllInService = allEntities.filter(opxMatchesService);
     for (const e of opxAllInService) {
-      const key = (e.Category || '') + '||' + (e.PossibleRootCause || e.RootCause || '');
+      const rc = (e.PossibleRootCause || e.RootCause || '');
+      const key = (e.Category || '') + '||' + rc;
+      const rcKey = rc + '||ALL';
       const w = e.PartitionKey || e.YearWeek;
       if (!w) continue;
       const cur = opxFirstSeenWeek.get(key);
       if (!cur || w < cur) opxFirstSeenWeek.set(key, w);
+      const curRc = opxFirstSeenWeek.get(rcKey);
+      if (!curRc || w < curRc) opxFirstSeenWeek.set(rcKey, w);
     }
   }
 
@@ -2440,7 +2479,7 @@
 
   // --- Briefing helpers ----------------------------------------------------
   function opxIsMisrouted(e)  { return e.Misrouted === true || e.Misrouted === 'true' || e.Misrouted === 'Yes'; }
-  function opxConfLevel(e)    { return (e.Confidence || '').toString().trim().toLowerCase(); } // '' | low | medium | high
+  function opxConfLevel(e)    { return normalizedConfidenceValue(e).toLowerCase(); } // low | medium | high | unknown
   function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
   function opxParseKey(k)     { return { product: '', subcategory: '', rootCause: k || '' }; }
 
@@ -2503,8 +2542,8 @@
   function opxRowBadges(inc, pStats) {
     const out = [];
     const ps  = pStats[opxPatternKey(inc)];
-    const okey = (inc.Category || '') + '||' + (inc.PossibleRootCause || inc.RootCause || '');
-    const firstSeen = opxFirstSeenWeek.get(okey);
+    const rc = (inc.PossibleRootCause || inc.RootCause || '');
+    const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
     const w = inc.PartitionKey || inc.YearWeek;
     if (firstSeen && firstSeen === w) {
       out.push('<span title="First-ever appearance of this (Product + Root Cause)" style="background:#fff2cc;color:#8a6d00;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#127381; NEW</span>');
@@ -2524,10 +2563,13 @@
     if (opxConfLevel(inc) === 'low') {
       out.push('<span title="AI confidence is Low — review the root cause manually" style="background:#fbe2e2;color:#a51c1c;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#129302; LOW-CONF</span>');
     }
+    if (opxConfLevel(inc) === 'unknown') {
+      out.push('<span title="AI confidence is Unknown — analysis needs follow-up" style="background:#eef2f7;color:#5a6d82;padding:2px 7px;border-radius:999px;font-size:0.7rem;font-weight:700;">&#10067; UNKNOWN-CONF</span>');
+    }
     return out.join(' ');
   }
 
-  // Set of flag ids ('new','spike','repeat','misrouted','mediumconf','lowconf') an incident carries.
+  // Set of flag ids ('new','spike','repeat','misrouted','mediumconf','lowconf','unknownconf') an incident carries.
   function opxIncidentFlagSet(inc, pStats) {
     const s = new Set();
     const ps = pStats[opxPatternKey(inc)];
@@ -2540,6 +2582,7 @@
     if (opxIsMisrouted(inc)) s.add('misrouted');
     if (opxConfLevel(inc) === 'medium') s.add('mediumconf');
     if (opxConfLevel(inc) === 'low') s.add('lowconf');
+    if (opxConfLevel(inc) === 'unknown') s.add('unknownconf');
     return s;
   }
 
@@ -2555,7 +2598,8 @@
 
   // Render the flag quick-filter chips (also doubles as a legend).
   function opxRenderFlagBar(base, pStats) {
-    const counts = { new: 0, spike: 0, repeat: 0, misrouted: 0, lowconf: 0 };
+    const counts = {};
+    for (const def of OPX_FLAG_DEFS) counts[def.id] = 0;
     for (const inc of base) opxIncidentFlagSet(inc, pStats).forEach(f => counts[f]++);
 
     const allActive = opxActiveFlags.size === 0;
@@ -2670,6 +2714,7 @@
     const misCt    = filtered.filter(opxIsMisrouted).length;
     const medCt    = filtered.filter(e => opxConfLevel(e) === 'medium').length;
     const lowCt    = filtered.filter(e => opxConfLevel(e) === 'low').length;
+    const unkCt    = filtered.filter(e => opxConfLevel(e) === 'unknown').length;
     const patternCt= Object.keys(pStats).length;
 
     const chip = (label, val, color) => '<span style="display:inline-flex;align-items:center;gap:6px;background:rgba(255,255,255,0.15);padding:3px 10px;border-radius:999px;font-size:0.83rem;"><strong style="color:#fff;">' + val + '</strong> <span style="opacity:0.85;">' + label + '</span></span>';
@@ -2686,13 +2731,16 @@
       (repCt ? chip('repeat', repCt) : '') +
       (misCt ? chip('misrouted', misCt) : '') +
       (medCt ? chip('medium-conf', medCt) : '') +
-      (lowCt ? chip('low-conf', lowCt) : '');
+      (lowCt ? chip('low-conf', lowCt) : '') +
+      (unkCt ? chip('unknown-conf', unkCt) : '');
   }
 
   // Story-mode headline — short, plain-English narrative of the slice.
   function opxRenderHeadline(filtered, pStats) {
+    const headline = $('opxHeadline');
+    if (!headline) return;
     if (filtered.length === 0) {
-      $('opxHeadline').innerHTML = '<strong>No incidents match the current filters.</strong> Try widening the WW range, switching Product to "All Products", or click <em>Reset</em>.';
+      headline.innerHTML = '<strong>No incidents match the current filters.</strong> Try widening the WW range, switching Product to "All Products", or click <em>Reset</em>.';
       return;
     }
     const svc      = $('opxService').value;
@@ -2720,7 +2768,7 @@
     if (spkPats.length > 0 && (!topPat || !topPat.spike)) {
       segs.push('<strong style="color:var(--danger);">' + spkPats.length + ' spike' + (spkPats.length === 1 ? '' : 's') + '</strong> detected (volume this WW &gt; 2&times; the 4-week average).');
     }
-    $('opxHeadline').innerHTML = segs.join(' ');
+    headline.innerHTML = segs.join(' ');
   }
 
   function opxBuildSparkline(rowKey, category, sub) {
@@ -2957,13 +3005,15 @@
     const filtered = opxGetDisplayed();
     if (filtered.length === 0) { alert('No incidents match the current filters.'); return; }
     const triples = opxBuildTripleCounts(filtered);
-    const header = ['Incident', 'ServiceNow Link', 'Resolved On', 'WW', 'Product', 'Subcategory (Symptom)', 'Possible Root Cause', 'Detailed Root Cause', 'Similar In Filter', 'First Time Seen'];
+    const header = ['Incident', 'ServiceNow Link', 'Resolved On', 'WW', 'Product', 'Subcategory (Symptom)', 'Possible Root Cause', 'AI Assessment', 'Confidence', 'Similar In Filter', 'First Seen'];
     const lines  = [header.map(csvField).join(',')];
     for (const i of filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))) {
       const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
       const tk = (i.PossibleRootCause || i.RootCause || '').trim();
       const rc = (i.PossibleRootCause || i.RootCause || '').trim() + '||ALL';
       const isOutlier = opxFirstSeenWeek.get(rc) === (i.PartitionKey || i.YearWeek);
+      const aiAssessment = (i.AIAnalysis || '').trim() ||
+        ('Assessment generated from fields: Symptom="' + (i.Subcategory || 'N/A') + '", Root Cause="' + (i.PossibleRootCause || i.RootCause || 'N/A') + '".');
       lines.push([
         csvField(i.RowKey || ''),
         csvField(sn),
@@ -2972,7 +3022,8 @@
         csvField(i.Category || ''),
         csvField(i.Subcategory || ''),
         csvField(i.PossibleRootCause || i.RootCause || ''),
-        csvField(i.DetailedRootCause || i.AIAnalysis || ''),
+        csvField(aiAssessment),
+        csvField(normalizedConfidenceValue(i)),
         csvField(triples[tk] || 1),
         csvField(isOutlier ? 'Yes' : 'No')
       ].join(','));
@@ -3023,7 +3074,7 @@
     const topN = patterns.slice(0, Math.min(5, patterns.length));
     topN.forEach((p, idx) => {
       const flags = [p.spike && '[SPIKE]', p.repeat && '[REPEAT]', p.isNew && '[NEW]'].filter(Boolean).join(' ');
-      lines.push('  ' + (idx + 1) + '. ' + (p.key || '—') + ' — ' + p.count + ' tix' + (flags ? ' ' + flags : ''));
+      lines.push('  ' + (idx + 1) + '. ' + (p.key || '—') + ' — ' + p.count + ' Ticket' + (p.count === 1 ? '' : 's') + (flags ? ' ' + flags : ''));
     });
     if (newPats.length > 0) {
       lines.push('');
@@ -3057,7 +3108,6 @@
     const filtered = opxApplyFlagFilter(base, basePStats);
     const pStats   = opxBuildPatternStats(filtered);
     opxRenderStatusBar(filtered, pStats);
-    opxRenderHeadline(filtered, pStats);
     if (opxViewMode === 'patterns') {
       $('opxTableTitle').innerHTML = '&#128737; Patterns <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&middot; ' + Object.keys(pStats).length + ' pattern' + (Object.keys(pStats).length === 1 ? '' : 's') + ' &middot; click a row to see incidents</span>';
       opxRenderPatternTable(filtered, pStats);
@@ -3095,7 +3145,7 @@
         opxRebuildFirstSeen(); populateOpxProducts(); populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
       });
       $('opxProduct').addEventListener('change', () => { populateOpxSubcategories(false); populateOpxRootCauses(false); opxRefresh(); });
-      $('opxSubcategory').addEventListener('change', opxRefresh);
+      $('opxSubcategory').addEventListener('change', () => { populateOpxRootCauses(false); opxRefresh(); });
       $('opxRootCause').addEventListener('change', opxRefresh);
       $('opxWeekFrom').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
       $('opxWeekTo').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
@@ -3130,8 +3180,6 @@
         opxRefresh();
       });
       $('opxDownloadBtn').addEventListener('click', opxDownloadCsv);
-      $('opxCopyIdsBtn').addEventListener('click', opxCopyIds);
-      $('opxCopyEmailBtn').addEventListener('click', opxCopyEmailSummary);
       loading.style.display = 'none'; content.style.display = 'block';
       opxRefresh();
       opxLoaded = true;
@@ -3143,7 +3191,7 @@
   }
 
   // ====================================================================
-  // AI RECOMMENDATIONS TAB (additive; reuses ensureTableLoaded + allEntities +
+  // AI RECOMMENDATION PREVIEW TAB (additive; reuses ensureTableLoaded + allEntities +
   // aggregated + formatWW + esc). Recommendations are SYNTHESISED CLIENT-SIDE
   // from the analysis text engineers/AI already wrote on resolved tickets across
   // the selected work-week window (default = last 7 WWs) — no live LLM call,
@@ -3389,10 +3437,10 @@
   function airConfidenceMix(tickets) {
     const mix = { High: 0, Medium: 0, Low: 0, Unknown: 0 };
     for (const t of tickets) {
-      const c = (t.Confidence || '').toString().trim().toLowerCase();
-      if (c === 'high') mix.High++;
-      else if (c === 'medium') mix.Medium++;
-      else if (c === 'low') mix.Low++;
+      const c = normalizedConfidenceValue(t);
+      if (c === 'High') mix.High++;
+      else if (c === 'Medium') mix.Medium++;
+      else if (c === 'Low') mix.Low++;
       else mix.Unknown++;
     }
     return mix;
@@ -3504,7 +3552,7 @@
 
   function airDownloadCsv() {
     const filtered = airGetFiltered();
-    if (!filtered || filtered.length === 0) { alert('No incidents match the current AI Recommendations filters.'); return; }
+    if (!filtered || filtered.length === 0) { alert('No incidents match the current AI Recommendation( Preview) filters.'); return; }
     const topGroups = airTopRootCauses(filtered, 5);
     const header = [
       'RootCause', 'Incident', 'ServiceNowLink', 'WorkWeek', 'Product', 'Symptom',
@@ -3791,15 +3839,15 @@
 
     function airRenderConfTable(filtered) {
       const scoped = (filtered || []).filter(e => {
-        const c = (e.Confidence || '').toString().trim().toLowerCase();
-        return c === 'low' || c === 'medium' || c === '';
+        const c = normalizedConfidenceValue(e).toLowerCase();
+        return c === 'low' || c === 'medium';
       });
 
       const pool = scoped.filter(e => {
-        const c = (e.Confidence || '').toString().trim().toLowerCase();
+        const c = normalizedConfidenceValue(e).toLowerCase();
         if (airConfidenceFlag === 'low') return c === 'low';
         if (airConfidenceFlag === 'medium') return c === 'medium';
-        if (airConfidenceFlag === 'missing') return c === '';
+        if (airConfidenceFlag === 'missing') return false;
         return true;
       });
 
@@ -3807,9 +3855,9 @@
         return '<div style="background:#eef9f2;border:1px solid #cdeede;border-radius:10px;padding:12px 18px;color:#1f7a4d;font-size:0.9rem;">&#10003; No tickets match the selected confidence flag in this filter selection.</div>';
       }
 
-      const lowN   = scoped.filter(e => (e.Confidence||'').toLowerCase() === 'low').length;
-      const medN   = scoped.filter(e => (e.Confidence||'').toLowerCase() === 'medium').length;
-      const blankN = scoped.filter(e => !(e.Confidence||'').trim()).length;
+      const lowN   = scoped.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'low').length;
+      const medN   = scoped.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'medium').length;
+      const blankN = 0;
 
       let fVague = 0, fBp = 0, fKb = 0, fForm = 0;
       for (const t of pool) {
@@ -3823,7 +3871,7 @@
       // Sorted: Low first, then blank, then Medium
       const sorted = pool.slice().sort((a, b) => {
         const order = { low: 0, '': 1, medium: 2 };
-        return (order[(a.Confidence||'').toLowerCase()] ?? 2) - (order[(b.Confidence||'').toLowerCase()] ?? 2);
+        return (order[normalizedConfidenceValue(a).toLowerCase()] ?? 2) - (order[normalizedConfidenceValue(b).toLowerCase()] ?? 2);
       });
 
       const ACTION_GROUPS = [
@@ -3887,14 +3935,13 @@
       const topBar =
         '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;padding:9px 14px;background:#faf8ff;border:1px solid #e0d6f5;border-radius:10px;">' +
           '<div>' +
-            sp(lowN,'Low','#fde8e8','#a51c1c') + sp(medN,'Medium','#fff8d6','#8a6d00') + sp(blankN,'Missing','#f0f3f7','#5a6d82') +
+            sp(lowN,'Low','#fde8e8','#a51c1c') + sp(medN,'Medium','#fff8d6','#8a6d00') +
             '<span style="font-size:0.78rem;color:var(--muted);">' + pool.length + ' ticket' + (pool.length===1?'':'s') + ' need attention</span>' +
           '</div>' +
           '<div id="airConfFlags" style="display:flex;gap:6px;flex-wrap:wrap;">' +
             '<button type="button" data-air-conf="all" style="border:1px solid ' + (airConfidenceFlag === 'all' ? 'var(--intel-blue)' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'all' ? 'var(--intel-blue)' : '#fff') + ';color:' + (airConfidenceFlag === 'all' ? '#fff' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">All</button>' +
             '<button type="button" data-air-conf="low" style="border:1px solid ' + (airConfidenceFlag === 'low' ? '#a51c1c' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'low' ? '#fde8e8' : '#fff') + ';color:' + (airConfidenceFlag === 'low' ? '#a51c1c' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Low</button>' +
             '<button type="button" data-air-conf="medium" style="border:1px solid ' + (airConfidenceFlag === 'medium' ? '#9a6300' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'medium' ? '#fff4de' : '#fff') + ';color:' + (airConfidenceFlag === 'medium' ? '#9a6300' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Medium</button>' +
-            '<button type="button" data-air-conf="missing" style="border:1px solid ' + (airConfidenceFlag === 'missing' ? '#5a6d82' : 'var(--border)') + ';background:' + (airConfidenceFlag === 'missing' ? '#eef2f7' : '#fff') + ';color:' + (airConfidenceFlag === 'missing' ? '#5a6d82' : 'var(--intel-classic)') + ';padding:4px 10px;border-radius:999px;font-size:0.76rem;font-weight:700;cursor:pointer;">Missing</button>' +
           '</div>' +
         '</div>';
 
@@ -3929,7 +3976,10 @@
           });
         });
       }
-      const lowMed = (filtered||[]).filter(e => { const c=(e.Confidence||'').toLowerCase(); return c==='low'||c==='medium'||c===''; }).length;
+      const lowMed = (filtered||[]).filter(e => {
+        const c = normalizedConfidenceValue(e).toLowerCase();
+        return c === 'low' || c === 'medium';
+      }).length;
       $('airSummary').textContent = filtered.length + ' tickets \u00b7 ' + lowMed + ' need improvement';
     }
 
@@ -3963,7 +4013,7 @@
       airLoaded = true;
     } catch (e) {
       loading.style.display = 'none';
-      err.innerHTML = '<h3>Failed to load AI Recommendations</h3><p>' + esc(e.message) + '</p>';
+      err.innerHTML = '<h3>Failed to load AI Recommendation( Preview)</h3><p>' + esc(e.message) + '</p>';
       err.style.display = 'block';
     }
   }
@@ -4065,12 +4115,14 @@
     const curExPct = curTotal ? (curEx * 100 / curTotal) : 0;
     const priorExPct = priorTotal ? (priorEx * 100 / priorTotal) : 0;
 
-    const curAi = curEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
-    const priorAi = priorEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
-    const curHi = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
-    const curMed = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'medium').length;
-    const curLow = curAi.filter(e => (e.Confidence || '').toLowerCase() === 'low').length;
-    const priorHi = priorAi.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
+    const curAi = curEnts.filter(e => hasUsableAiAnalysis(e));
+    const priorAi = priorEnts.filter(e => hasUsableAiAnalysis(e));
+    const curHi = curAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'high').length;
+    const curMed = curAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'medium').length;
+    const curLow = curAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'low').length;
+    const curUnk = curAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'unknown').length;
+    const priorHi = priorAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'high').length;
+    const priorUnk = priorAi.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'unknown').length;
     const curHiPct = curAi.length ? (curHi * 100 / curAi.length) : 0;
     const priorHiPct = priorAi.length ? (priorHi * 100 / priorAi.length) : 0;
 
@@ -4089,7 +4141,7 @@
       clearedNames: cleared, freshNames: fresh,
       curEx, priorEx, curExPct, priorExPct,
       curAiCount: curAi.length, priorAiCount: priorAi.length,
-      curHi, curMed, curLow, priorHi, curHiPct, priorHiPct,
+      curHi, curMed, curLow, curUnk, priorHi, priorUnk, curHiPct, priorHiPct,
       curCov, priorCov
     };
   }
@@ -4189,11 +4241,11 @@
   }
 
   // KPI tile — clean, no arrows, no deltas. Always shows current-WW badge.
-  function smRenderKpis(curWk, priorWk, m, history, topIssue) {
+  function smRenderKpis(curWk, priorWk, m, history, topIssue, lensMode, rangeLabel) {
     const wwBadge = curWk ? ('<span style="font-size:0.7rem;font-weight:600;color:var(--intel-blue);background:#eef5fb;border:1px solid #cfe2f3;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle;white-space:nowrap;">' + esc(formatWW(curWk)) + '</span>') : '';
-    const tile = (label, value, sub, _unused, history, color, helpText) => {
-      const mini = (Array.isArray(history) && history.length >= 2) ? smSparkline(history, color || '#0068b5') : '';
-      const miniLabel = history && history.length >= 2 ? ('last ' + history.length + ' WWs') : '';
+    const tile = (label, value, sub, _unused, historySeries, color, helpText) => {
+      const mini = (Array.isArray(historySeries) && historySeries.length >= 2) ? smSparkline(historySeries, color || '#0068b5') : '';
+      const miniLabel = historySeries && historySeries.length >= 2 ? ('last ' + historySeries.length + ' WWs') : '';
       const help = helpText ? '<span class="kpi-help" title="' + esc(helpText) + '">?</span>' : '';
       return '<div class="sm-kpi tone-flat">' +
         '<div class="kpi-strip"></div>' +
@@ -4206,7 +4258,6 @@
         '</div>';
     };
 
-    // "Top issue" tile — uses a special compact body since the value is a long text label.
     const topIssueTile = () => {
       if (!topIssue || !topIssue.name) {
         return '<div class="sm-kpi tone-flat">' +
@@ -4225,17 +4276,26 @@
         '<div class="kpi-body">' +
           '<div class="label">Top issue &mdash; range</div>' +
           '<div class="kpi-issue-name" title="' + esc(topIssue.name) + '" style="font-size:0.95rem; font-weight:700; color:var(--intel-classic); margin-top:6px; line-height:1.25; word-break:break-word; overflow-wrap:break-word; max-height:2.6em; overflow:hidden;">' + esc(topIssue.name) + '</div>' +
-          '<div class="sub" style="margin-top:4px;"><strong style="color:var(--danger);">' + topIssue.count + ' tix</strong> across range</div>' +
+          '<div class="sub" style="margin-top:4px;"><strong style="color:var(--danger);">' + topIssue.count + ' Tickets</strong> across range</div>' +
           (mini ? '<div class="kpi-mini">' + mini + '<div class="kpi-mini-label">' + esc(miniLabel) + '</div></div>' : '') +
         '</div>' +
       '</div>';
     };
 
     const h = history || {};
+    const rangeText = rangeLabel || 'selected range';
+    const baseCards =
+      tile('Total Tickets', m.curTotal, m.curTotal + ' Tickets in ' + rangeText, null, h.total, '#0068b5', 'Total Tickets in the selected Work Week and Service Offering filters.') +
+      tile('Misrouted Tickets', m.curEx, m.curExPct.toFixed(1) + '% of selected Tickets', null, h.exPct, '#d64545', 'Misrouted Tickets in the selected Work Week and Service Offering filters.');
+
+    if (lensMode === 'poops') {
+      $('smKpis').innerHTML = baseCards;
+      return;
+    }
+
     $('smKpis').innerHTML =
-      tile('Total tickets',        m.curTotal,   m.curTotal + ' incidents resolved this week',                                  null, h.total,  '#0068b5', 'Total incidents resolved in the current work week.') +
-      tile('Misrouted',            m.curEx,      m.curExPct.toFixed(1) + '% of total tickets routed incorrectly',               null, h.exPct,  '#d64545', 'Tickets that were routed to the wrong queue/category.') +
-      tile('AI Confidence mix',    m.curHi + ' / ' + m.curMed + ' / ' + m.curLow, 'High / Medium / Low  ·  of ' + m.curAiCount + ' AI-analyzed', null, h.hiPct, '#2ea36b', 'Distribution of AI confidence levels. Low/Medium means work notes need more detail.') +
+      baseCards +
+      tile('AI Confidence mix', m.curHi + ' / ' + m.curMed + ' / ' + m.curLow + ' / ' + m.curUnk, 'High / Medium / Low / Unknown  ·  of ' + m.curAiCount + ' AI-analyzed', null, h.hiPct, '#2ea36b', 'Distribution of AI confidence levels in the selected slice.') +
       topIssueTile();
   }
 
@@ -4252,8 +4312,8 @@
       cats.push(new Set(ents.filter(e => (e.Category||'') !== 'Excluded').map(e => e.Category || 'Unknown')).size);
       const ex = ents.filter(e => (e.Category||'') === 'Excluded').length;
       exPct.push(ents.length ? (ex * 100 / ents.length) : 0);
-      const ai = ents.filter(e => (e.AIAnalysis || '').trim().length > 0);
-      const hi = ai.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
+      const ai = ents.filter(e => hasUsableAiAnalysis(e));
+      const hi = ai.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'high').length;
       hiPct.push(ai.length ? (hi * 100 / ai.length) : 0);
       cov.push(ents.length ? (ai.length * 100 / ents.length) : 0);
     }
@@ -4467,7 +4527,7 @@
         ' C ' + cx2 + ' ' + (meta.rY + t / 2).toFixed(2) + ', ' + cx1 + ' ' + (meta.lY + t / 2).toFixed(2) + ', ' + x1 + ' ' + (meta.lY + t / 2).toFixed(2) +
         ' Z';
       const lbl = (b.lk === '__other_rc__' ? 'Other causes' : b.lk) + ' \u2192 ' +
-                  (b.rk === '__other_prod__' ? 'Other products' : b.rk) + ': ' + b.count + ' tix';
+                  (b.rk === '__other_prod__' ? 'Other products' : b.rk) + ': ' + b.count + ' Tickets';
       svg += '<path class="sn-link" d="' + path + '" fill="' + edgeColor(b) + '">' +
              '<title>' + esc(lbl) + '</title></path>';
     }
@@ -4481,7 +4541,7 @@
         '<rect x="' + xLeftNode + '" y="' + p.y0.toFixed(2) + '" width="' + NODE_W + '" height="' + p.h.toFixed(2) + '" fill="#3a4858" rx="3" />' +
         '<text class="left" x="' + (xLeftNode - GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) - 2).toFixed(2) + '">' + esc(shown) +
           '<title>' + esc(label) + ' (' + leftTot[id] + ')</title></text>' +
-        '<text class="sn-count left" x="' + (xLeftNode - GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) + 14).toFixed(2) + '">' + leftTot[id] + ' tix</text>' +
+        '<text class="sn-count left" x="' + (xLeftNode - GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) + 14).toFixed(2) + '">' + leftTot[id] + ' Tickets</text>' +
         '</g>';
     }
     // Right nodes + labels
@@ -4494,7 +4554,7 @@
         '<rect x="' + xRightNode + '" y="' + p.y0.toFixed(2) + '" width="' + NODE_W + '" height="' + p.h.toFixed(2) + '" fill="' + color + '" rx="3" />' +
         '<text class="right" x="' + (xRightNode + NODE_W + GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) - 2).toFixed(2) + '">' + esc(shown) +
           '<title>' + esc(label) + ' (' + rightTot[id] + ')</title></text>' +
-        '<text class="sn-count right" x="' + (xRightNode + NODE_W + GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) + 14).toFixed(2) + '">' + rightTot[id] + ' tix</text>' +
+        '<text class="sn-count right" x="' + (xRightNode + NODE_W + GAP_LEFT_RIGHT_LABEL) + '" y="' + ((p.y0 + p.h / 2) + 14).toFixed(2) + '">' + rightTot[id] + ' Tickets</text>' +
         '</g>';
     }
 
@@ -4523,8 +4583,8 @@
       return all.length ? (ex * 100 / all.length) : 0;
     });
     const hiPct   = last8.map(w => {
-      const ai = byWeek[w].filter(e => (e.AIAnalysis || '').trim().length > 0);
-      const hi = ai.filter(e => (e.Confidence || '').toLowerCase() === 'high').length;
+      const ai = byWeek[w].filter(e => hasUsableAiAnalysis(e));
+      const hi = ai.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'high').length;
       return ai.length ? (hi * 100 / ai.length) : 0;
     });
     const prcCnt  = last8.map(w => {
@@ -4696,9 +4756,9 @@
     }
 
     // -- 6. Confidence load (only if material) --
-    const curAi = curEnts.filter(e => (e.AIAnalysis || '').trim().length > 0);
+    const curAi = curEnts.filter(e => hasUsableAiAnalysis(e));
     const lowCnt = curAi.filter(e => {
-      const c = (e.Confidence || '').toLowerCase();
+      const c = normalizedConfidenceValue(e).toLowerCase();
       return c === 'low' || c === 'medium';
     }).length;
     if (curAi.length >= 5 && (lowCnt * 100 / curAi.length) >= 30) {
@@ -4780,7 +4840,7 @@
       const bg = 'linear-gradient(to right, ' + barColor + '33 0%, ' + barColor + '33 ' + pct + '%, transparent ' + pct + '%)';
       return '<div class="sm-row" style="background:' + bg + ';">' +
         '<div class="nm" title="' + esc(r.name) + '">' + esc(r.name) + '</div>' +
-        '<div class="vl">' + r.n + ' tix</div>' +
+        '<div class="vl">' + r.n + ' Tickets</div>' +
         '<div class="dl flat">' + pct + '%</div>' +
         '</div>';
     }).join('');
@@ -4840,9 +4900,9 @@
     const prev   = weeksInRange.length >= 2 ? weeksInRange[weeksInRange.length - 2] : null;
 
     if (ctxEl) {
-      const totalTix = rangeEnts.filter(e => (e.Category || '') !== 'Excluded').length;
+      const totalTickets = rangeEnts.filter(e => (e.Category || '') !== 'Excluded').length;
       ctxEl.innerHTML = 'Showing <strong>' + ranked.length + '</strong> products across <strong>' + weeksInRange.length +
-        '</strong> week(s) &middot; ' + totalTix + ' tickets &middot; ' + esc(formatWW(weeksInRange[0])) +
+        '</strong> week(s) &middot; ' + totalTickets + ' Tickets &middot; ' + esc(formatWW(weeksInRange[0])) +
         ' &rarr; ' + esc(formatWW(latest));
     }
 
@@ -5113,6 +5173,7 @@
         $('smLastUpdated').innerHTML = '&#128197; Data last updated: <strong>' + esc(label) + '</strong>';
       }
 
+      const lensSel = $('smLens');
       const svcSel = $('smService');
       const svcOpts = ['<option value="all">All services</option>']
         .concat(serviceConfigs.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'));
@@ -5219,7 +5280,7 @@
           $('smKpis').innerHTML = ''; $('smMovers').innerHTML = '';
           $('smSankey').innerHTML = ''; $('smSankey').className = 'sm-sankey-wrap sn-empty';
           $('smPareto').innerHTML = ''; $('smPareto').className = 'sm-pareto empty';
-          $('smPpt').innerHTML = ''; $('smForecast').innerHTML = '';
+          $('smPpt').innerHTML = '';
           $('smDrillContext').textContent = ''; $('smDrillProducts').innerHTML = '';
           return;
         }
@@ -5235,39 +5296,44 @@
         const rangeEnts = [];
         for (const w of weeksInRange) rangeEnts.push(...(byWeek[w] || []));
 
-        // KPI cards stay pinned to the latest available WW for this service,
-        // regardless of the From/To week filter.
-        const latestWk = weeks[weeks.length - 1];
-        const latestPriorWk = weeks.length >= 2 ? weeks[weeks.length - 2] : null;
-        const kpiCurEnts = byWeek[latestWk] || [];
-        const kpiPriorEnts = latestPriorWk ? (byWeek[latestPriorWk] || []) : [];
+        const fromIdx = weeks.indexOf(fromWk);
+        const rangeLen = Math.max(1, weeksInRange.length);
+        const priorStart = Math.max(0, fromIdx - rangeLen);
+        const priorWeeks = weeks.slice(priorStart, fromIdx);
+        const priorRangeEnts = [];
+        for (const w of priorWeeks) priorRangeEnts.push(...(byWeek[w] || []));
 
         const rangeLbl = weeksInRange.length === 1
           ? formatWW(curWk)
           : formatWW(fromWk) + ' \u2192 ' + formatWW(toWk) + ' (' + weeksInRange.length + ' WWs)';
+        const lensLabel = lensSel.value === 'poops' ? 'PO/OPS - Default' : 'Engineer View';
         const contextLabel = (svc === 'all' ? 'All services' : svc) +
+          ' &middot; lens <strong>' + lensLabel + '</strong>' +
           ' &middot; range <strong>' + rangeLbl + '</strong>' +
-          ' &middot; KPI cards pinned to latest week <strong>' + formatWW(latestWk) + '</strong>' +
-          (latestPriorWk ? ' vs <strong>' + formatWW(latestPriorWk) + '</strong>' : '') +
           ' &middot; ' + rangeEnts.length + ' tickets in range / ' + filtered.length + ' tracked overall';
         $('smContext').innerHTML = contextLabel;
 
-        // Metrics + 8-WW per-KPI history for the tile sparklines + Top Issue for the range.
-        const metrics = smComputeMetrics(kpiCurEnts, kpiPriorEnts, latestPriorWk);
-        const history = smBuildHistorySeries(filtered, latestWk, 8);
+        const metrics = smComputeMetrics(rangeEnts, priorRangeEnts, priorWeeks.length ? priorWeeks[priorWeeks.length - 1] : null);
+        const history = smBuildHistorySeries(filtered, curWk, 8);
         const topIssue = computeTopIssue(rangeEnts, weeksInRange);
         const topN = parseInt(sankeyTopNSel.value, 10) || 3;
-        smRenderKpis(latestWk, latestPriorWk, metrics, history, topIssue);
+        smRenderKpis(curWk, priorWk, metrics, history, topIssue, lensSel.value, rangeLbl);
+
+        const isPoOps = lensSel.value === 'poops';
+        $('smAiOverallKpi').style.display = isPoOps ? 'none' : '';
+        $('smMoversSection').style.display = isPoOps ? 'none' : '';
+        $('smDrillSection').style.display = isPoOps ? 'none' : '';
+
         smRenderMovers(curEnts, priorEnts, priorWk);
         smRenderPareto(rangeEnts, rangeLbl);
         smRenderSankey(rangeEnts, rangeLbl, topN);
         smRenderPerProductTrend(rangeEnts, weeksInRange);
-        smRenderForecast(filtered, weeks);
         // Drill-down: pick a product, see top 5 root causes for the selected range.
         smRenderProductDrill(rangeEnts, drillProd.value || '__all__', rangeLbl);
       };
 
       // Wire up controls.
+      lensSel.addEventListener('change', render);
       svcSel.addEventListener('change', () => {
         rebuildRangeSelectors();
         rebuildDrillProductOptions();
@@ -5309,10 +5375,48 @@
     }
   }
 
+  // --- Feedback button handler ---
+  $('feedbackBtn').addEventListener('click', () => {
+    const feedbackEmail = '7d20a744.intel.onmicrosoft.com@amer.teams.ms';
+    const subject = encodeURIComponent('[AI Incident Analyzer] Dashboard Feedback');
+    const body = encodeURIComponent(
+      `Dashboard Feedback Report\n` +
+      `================================\n\n` +
+      `Dashboard URL: ${window.location.href}\n` +
+      `Submitted: ${new Date().toLocaleString()}\n\n` +
+      `FEEDBACK CATEGORY\n` +
+      `- [ ] Feature Request\n` +
+      `- [ ] Bug Report\n` +
+      `- [ ] Data Issue\n` +
+      `- [ ] Performance Issue\n` +
+      `- [ ] UI/UX Improvement\n` +
+      `- [ ] Other\n\n` +
+      `ISSUE SUMMARY\n` +
+      `<Provide a clear, concise description of your feedback>\n\n` +
+      `SEVERITY LEVEL\n` +
+      `- [ ] Critical (Blocks Analysis)\n` +
+      `- [ ] High (Significant Impact)\n` +
+      `- [ ] Medium (Minor Impact)\n` +
+      `- [ ] Low (Enhancement)\n\n` +
+      `DETAILED DESCRIPTION\n` +
+      `<Describe what happened, expected behavior, and actual behavior>\n\n` +
+      `STEPS TO REPRODUCE (if applicable)\n` +
+      `1. \n` +
+      `2. \n` +
+      `3. \n\n` +
+      `SCREENSHOTS/ATTACHMENTS\n` +
+      `<Mention any attached files>\n\n` +
+      `ADDITIONAL CONTEXT\n` +
+      `<Any other relevant information>\n\n` +
+      `Submitter: ${document.getElementById('userInfo').textContent || 'Unknown'}\n`
+    );
+    window.location.href = `mailto:${feedbackEmail}?subject=${subject}&body=${body}`;
+  });
+
   // --- Tab navigation ---
-  document.querySelectorAll('.tab').forEach((btn) => {
+  document.querySelectorAll('.tab[data-tab]').forEach((btn) => {
     btn.addEventListener('click', () => {
-      document.querySelectorAll('.tab').forEach(b => b.classList.toggle('active', b === btn));
+      document.querySelectorAll('.tab[data-tab]').forEach(b => b.classList.toggle('active', b === btn));
       const tab = btn.getAttribute('data-tab');
       document.querySelectorAll('.tab-pane').forEach(p => p.classList.remove('active'));
       $('pane-' + tab).classList.add('active');

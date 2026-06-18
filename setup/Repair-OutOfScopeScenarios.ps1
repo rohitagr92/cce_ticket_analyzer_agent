@@ -28,34 +28,34 @@ function Get-OutOfScopeReason {
     param([string]$Text)
 
     if ($Text -match '(?i)github copilot|github enterprise|visual studio|vs code') {
-        return 'Developer tooling request is owned by the GitHub / Visual Studio queue, not Productivity Tools.'
+        return 'MISROUTED: Developer tooling request is owned by the GitHub / Visual Studio queue, not Productivity Tools.'
     }
 
     if ($Text -match '(?i)mailbox|exchange|calendar access|mail doesnt have the license|outlook mail|altera outlook|altera teams') {
-        return 'Mail, mailbox, or account-lifecycle handling belongs to Messaging or identity support, not Productivity Tools.'
+        return 'MISROUTED: Mail, mailbox, or account-lifecycle handling belongs to Messaging or identity support, not Productivity Tools.'
     }
 
     if ($Text -match '(?i)laptop|new os build|taskbar|pc refresh|hardware|badge transition|not supported from it') {
-        return 'The failure is driven by the device or operating system state, which belongs to the PC / endpoint queue.'
+        return 'MISROUTED: The failure is driven by the device or operating system state, which belongs to the PC / endpoint queue.'
     }
 
     if ($Text -match '(?i)shared drive|unc path|dfs|mapped drive|server out of our system') {
-        return 'The issue is a shared-drive or network-share problem, which belongs to Shared File Service support.'
+        return 'MISROUTED: The issue is a shared-drive or network-share problem, which belongs to Shared File Service support.'
     }
 
     if ($Text -match '(?i)sharepoint online access request|sharepoint site|add item button|license request through a sharepoint list|data retrieval for business continuity') {
-        return 'The request is a SharePoint Online access or workflow case, which is explicitly handled outside Productivity Tools.'
+        return 'MISROUTED: The request is a SharePoint Online access or workflow case, which is explicitly handled outside Productivity Tools.'
     }
 
     if ($Text -match '(?i)mobile|phone|from a phone|personal device|non-company-provided desktop') {
-        return 'The request is tied to a mobile, personal-device, or unsupported-device access path rather than a supported Productivity Tools fault.'
+        return 'MISROUTED: The request is tied to a mobile, personal-device, or unsupported-device access path rather than a supported Productivity Tools fault.'
     }
 
     if ($Text -match '(?i)transfer .* presentation and video|file transfer|usb drive|how to|retention|guidance') {
-        return 'The ticket is a usage or guidance request rather than a product failure.'
+        return 'MISROUTED: The ticket is a usage or guidance request rather than a product failure.'
     }
 
-    return 'The ticket does not show a supported Productivity Tools product fault and remains outside the service scope.'
+    return 'MISROUTED: The ticket does not show a supported Productivity Tools product fault and remains outside the service scope.'
 }
 
 function Get-OutOfScopeAnalysis {
@@ -70,7 +70,7 @@ function Get-OutOfScopeAnalysis {
     $sub = ([string]$Row.Subcategory).Trim()
     if ([string]::IsNullOrWhiteSpace($sub) -or $sub -eq 'Out of scope') { $sub = 'Out of scope' }
 
-    return "The ticket remains categorized as Excluded because $Reason The evidence in the work notes points to a different support queue, so Productivity Tools is not the owning service. The canonical out-of-scope labels are preserved to keep the dashboard aligned with the service boundary rules."
+    return "This incident is kept in the Excluded bucket as a MISROUTED ticket, not as an in-scope Productivity Tools failure. $Reason The work notes indicate ownership by another support queue, so the correct action is reroute and prevent repeated misrouting for the same symptom pattern. Canonical Excluded labels are intentionally preserved to keep trend reporting stable while making the misroute reason explicit."
 }
 
 function Get-AllRowsFromTable {
@@ -136,6 +136,11 @@ $errors = 0
 
 foreach ($row in $targets) {
     $checked++
+
+    if ([string]$row.Category -ne 'Excluded') {
+        continue
+    }
+
     $text = Get-SearchText -Row $row
     $reason = Get-OutOfScopeReason -Text $text
 
@@ -148,7 +153,7 @@ foreach ($row in $targets) {
     $newCategory = 'Excluded'
     $newSubcategory = 'Out of scope'
     $newPrc = 'Out-of-scope Service Offering'
-    $newDrc = 'Out-of-scope service offering'
+    $newDrc = 'Misrouted ticket to external service queue'
     $newConfidence = if ($text -match '(?i)explicitly|confirmed|not supported|does not describe|not a Productivity Tools product fault') { 'High' } else { 'Medium' }
     $newAnalysis = Get-OutOfScopeAnalysis -Row $row -Reason $reason
 

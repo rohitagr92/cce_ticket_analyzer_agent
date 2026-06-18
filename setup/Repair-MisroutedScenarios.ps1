@@ -52,7 +52,7 @@ function Get-MisrouteRule {
     if ($Text -match '(?i)office apps|m365 apps|activation|license expired|unlicensed product|quick repair|online repair|install failure|company portal') {
         return [pscustomobject]@{
             Category = 'Microsoft 365 Apps for Enterprise Issues'
-            Subcategory = 'License activation issue'
+            Subcategory = 'Licensing Issues'
             PossibleRootCause = 'Office Activation Failure'
             DetailedRootCause = 'Corrupted Office Identity'
             Confidence = 'Medium'
@@ -138,6 +138,12 @@ $errors = 0
 
 foreach ($row in $targets) {
     $checked++
+
+    if ([string]$row.Category -ne 'Excluded') {
+        $skipped++
+        continue
+    }
+
     $text = Get-SearchText -Row $row
     $rule = Get-MisrouteRule -Text $text -IncidentNumber ([string]$row.RowKey)
 

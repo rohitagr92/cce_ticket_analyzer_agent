@@ -1,6 +1,7 @@
-$key = (Get-AzStorageAccountKey -ResourceGroupName 'OPSW-Ticket-Analyzer' -Name 'opswprodtoolsblob')[0].Value
-$ctx = New-AzStorageContext -StorageAccountName 'opswprodtoolsblob' -StorageAccountKey $key
-Get-AzStorageBlob -Container 'results' -Context $ctx |
-    Sort-Object LastModified -Descending |
-    Select-Object Name, LastModified, @{N = 'SizeKB'; E = { [math]::Round($_.Length / 1024, 1) } } |
-    Format-Table -AutoSize
+﻿# Compatibility wrapper. Forward to new setup structure.
+$target = Join-Path $PSScriptRoot 'inspect\List-Results.ps1'
+if (-not (Test-Path $target)) { throw "Target script not found: $target" }
+$forward = @($MyInvocation.UnboundArguments)
+& $target @forward
+exit $LASTEXITCODE
+

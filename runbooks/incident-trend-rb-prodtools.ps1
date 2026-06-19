@@ -193,6 +193,160 @@ function Get-PromptTemplate {
     }
 }
 
+function Normalize-TemplateText {
+    [CmdletBinding()]
+    param([string]$Raw)
+
+    if ([string]::IsNullOrWhiteSpace($Raw)) { return '' }
+    $text = $Raw
+    $text = $text -replace '[\u2010\u2011\u2012\u2013\u2014\u2015]', '-'
+    $text = $text -replace '\*+', ''
+    $text = $text -replace '^\["\s]+|["\]\s]+$', ''
+    $text = $text -replace '\s+', ' '
+    return $text.Trim().ToLowerInvariant()
+}
+
+function Resolve-TemplateProductKey {
+    [CmdletBinding()]
+    param(
+        [hashtable]$Map,
+        [string]$Product
+    )
+
+    if (-not $Map -or [string]::IsNullOrWhiteSpace($Product)) { return $null }
+    if ($Map.ContainsKey($Product)) { return $Product }
+
+    foreach ($key in $Map.Keys) {
+        if ($key -ieq $Product) { return $key }
+        if ($Product -like "*$key*" -or $key -like "*$Product*") { return $key }
+    }
+
+    $stopWords = @('issues','microsoft','365','for','enterprise','the','and','of','a','an')
+    $tokenize = {
+        param([string]$Value)
+        $trimmed = ($Value -replace '\s*Issues\s*$','').ToLowerInvariant()
+        @([regex]::Split($trimmed, '[^a-z0-9]+') | Where-Object { $_ -and $_ -notin $stopWords })
+    }
+
+    $productTokens = & $tokenize $Product
+    if ($productTokens.Count -eq 0) { return $null }
+
+    $bestKey = $null
+    $bestScore = 0
+    foreach ($key in $Map.Keys) {
+        $keyTokens = & $tokenize $key
+        if ($keyTokens.Count -eq 0) { continue }
+        $shared = @($productTokens | Where-Object { $keyTokens -contains $_ }).Count
+        if ($shared -gt $bestScore) {
+            $bestScore = $shared
+            $bestKey = $key
+        }
+    }
+
+    return $bestKey
+}
+
+function Get-TrendSubcategoryRules {
+    [CmdletBinding()]
+    param()
+
+    if ($Script:TrendSubcategoryRules) { return $Script:TrendSubcategoryRules }
+
+    $templateText = Get-PromptTemplate -TemplateName 'TrendSubCategorisation_ProductivityTools'
+    $rules = @{
+        Allowlists = @{}
+        AliasMap   = @{}
+        AliasesByProduct = @{}
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($templateText)) {
+        $sections = [regex]::Split($templateText, '(?m)^####\s+') | Where-Object { $_ -match '\S' }
+        foreach ($section in $sections) {
+            $lines = $section -split "`r?`n", 2
+            if ($lines.Count -lt 2) { continue }
+
+            $product = $lines[0].Trim()
+            $body = $lines[1]
+            $headers = New-Object System.Collections.Generic.List[string]
+            $aliases = @{}
+            $currentHeader = ''
+
+            foreach ($line in ($body -split "`r?`n")) {
+                $trimmed = ([string]$line).Trim()
+                if (-not $trimmed) { continue }
+
+                if ($trimmed -match '^\*\*(.+?)\*\*\s*$') {
+                    $currentHeader = $matches[1].Trim()
+                    if ($currentHeader -and -not $headers.Contains($currentHeader)) { [void]$headers.Add($currentHeader) }
+                    continue
+                }
+
+                if ($trimmed -match '^\s*[-*]\s+(.+?)\s*$') {
+                    $symptom = ($matches[1].Trim() -replace '\s*\(.+?\)\s*$', '')
+                    if ($currentHeader -and $symptom) {
+                        $symptomKey = Normalize-TemplateText -Raw $symptom
+                        $productKey = ('{0}||{1}' -f (Normalize-TemplateText -Raw $product), $symptomKey)
+                        $rules.AliasMap[$productKey] = $currentHeader
+                        $aliases[$symptomKey] = $currentHeader
+                    }
+                }
+            }
+
+            if ($headers.Count -gt 0) {
+                $rules.Allowlists[$product] = $headers
+                $rules.AliasesByProduct[$product] = $aliases
+            }
+        }
+    }
+
+    $Script:TrendSubcategoryRules = $rules
+    return $rules
+}
+
+function Resolve-TrendSubcategoryHeading {
+    [CmdletBinding()]
+    param(
+        [string]$ParentCategory,
+        [string]$RawSubCategory,
+        [string]$ContextText = ''
+    )
+
+    $rules = Get-TrendSubcategoryRules
+    $productKey = Resolve-TemplateProductKey -Map $rules.Allowlists -Product $ParentCategory
+    if (-not $productKey) {
+        return $RawSubCategory
+    }
+
+    $allowlist = $rules.Allowlists[$productKey]
+    if (-not $allowlist -or $allowlist.Count -eq 0) {
+        return $RawSubCategory
+    }
+
+    $rawKey = Normalize-TemplateText -Raw $RawSubCategory
+    $parentKey = Normalize-TemplateText -Raw $productKey
+    $aliasKey = ('{0}||{1}' -f $parentKey, $rawKey)
+    if ($rawKey -and $rules.AliasMap.ContainsKey($aliasKey)) {
+        return [string]$rules.AliasMap[$aliasKey]
+    }
+
+    foreach ($label in $allowlist) {
+        $labelKey = Normalize-TemplateText -Raw $label
+        if ($label -ieq $RawSubCategory -or $labelKey -eq $rawKey) { return $label }
+        if ($rawKey -and ($rawKey -like "*$labelKey*" -or $labelKey -like "*$rawKey*")) { return $label }
+    }
+
+    $searchText = Normalize-TemplateText -Raw ((@($RawSubCategory, $ContextText) -join ' ').Trim())
+    if ($searchText -and $rules.AliasesByProduct.ContainsKey($productKey)) {
+        foreach ($symptomKey in $rules.AliasesByProduct[$productKey].Keys) {
+            if ($searchText -like "*$symptomKey*") {
+                return [string]$rules.AliasesByProduct[$productKey][$symptomKey]
+            }
+        }
+    }
+
+    return $allowlist[0]
+}
+
 #endregion
 
 #region AI Functions
@@ -559,8 +713,19 @@ function Get-SubCategoryAnalysis {
                 $cleaned = $matches[1].Trim()
             }
 
-            $parsed = $cleaned | ConvertFrom-Json
-            $allSubCategories += $parsed
+            $parsed = @($cleaned | ConvertFrom-Json)
+            foreach ($item in $parsed) {
+                $canonicalSubCategory = Resolve-TrendSubcategoryHeading `
+                    -ParentCategory $ParentCategory `
+                    -RawSubCategory ([string]$item.SubCategory) `
+                    -ContextText ((@([string]$item.Justification, [string]$item.IncidentNumber) -join ' ').Trim())
+
+                $allSubCategories += [PSCustomObject]@{
+                    IncidentNumber = [string]$item.IncidentNumber
+                    SubCategory    = $canonicalSubCategory
+                    Justification  = [string]$item.Justification
+                }
+            }
 
             # Rate limit courtesy
             if ($i + $batchSize -lt $ticketDescriptions.Count) {

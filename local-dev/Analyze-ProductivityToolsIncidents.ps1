@@ -29,6 +29,7 @@ $script:TemplateFileMap = @{
     WorkNotesSummary     = 'templates\new_template\RootCause_WorkNotesSummary.md'
     WorkNotesCleanup     = 'templates\ProductivityTools_WorkNotesCleanup.md'
     TicketCategorisation = 'templates\new_template\RootCause_TicketCategorisation.md'
+    TrendSubCategorisation = 'templates\TrendSubCategorisation_ProductivityTools.md'
     PortfolioSummary     = 'templates\new_template\RootCause_PortfolioSummary.md'
 }
 
@@ -228,6 +229,7 @@ function Get-TemplateBundle {
         WorkNotesSummary = Get-TemplateText -RelativePath $script:TemplateFileMap.WorkNotesSummary
         WorkNotesCleanup = Get-TemplateText -RelativePath $script:TemplateFileMap.WorkNotesCleanup
         TicketCategorisation = Get-TemplateText -RelativePath $script:TemplateFileMap.TicketCategorisation
+        TrendSubCategorisation = Get-TemplateText -RelativePath $script:TemplateFileMap.TrendSubCategorisation
         PortfolioSummary = Get-TemplateText -RelativePath $script:TemplateFileMap.PortfolioSummary
     }
 }
@@ -247,6 +249,175 @@ function Limit-TextLength {
     }
 
     return $Text.Substring(0, $MaxLength)
+}
+
+function Normalize-TemplateText {
+    param([string]$Raw)
+
+    if ([string]::IsNullOrWhiteSpace($Raw)) {
+        return ''
+    }
+
+    $text = $Raw
+    $text = $text -replace '[\u2010\u2011\u2012\u2013\u2014\u2015]', '-'
+    $text = $text -replace '\*+', ''
+    $text = $text -replace '^\["\s]+|["\]\s]+$', ''
+    $text = $text -replace '\s+', ' '
+    return $text.Trim().ToLowerInvariant()
+}
+
+function Resolve-TemplateProductKey {
+    param(
+        [hashtable]$Map,
+        [string]$Product
+    )
+
+    if (-not $Map -or [string]::IsNullOrWhiteSpace($Product)) {
+        return $null
+    }
+
+    if ($Map.ContainsKey($Product)) {
+        return $Product
+    }
+
+    foreach ($key in $Map.Keys) {
+        if ($key -ieq $Product) { return $key }
+        if ($Product -like "*$key*" -or $key -like "*$Product*") { return $key }
+    }
+
+    $stopWords = @('issues','microsoft','365','for','enterprise','the','and','of','a','an')
+    $tokenize = {
+        param([string]$Value)
+        $trimmed = ($Value -replace '\s*Issues\s*$','').ToLowerInvariant()
+        @([regex]::Split($trimmed, '[^a-z0-9]+') | Where-Object { $_ -and $_ -notin $stopWords })
+    }
+
+    $productTokens = & $tokenize $Product
+    if ($productTokens.Count -eq 0) {
+        return $null
+    }
+
+    $bestKey = $null
+    $bestScore = 0
+    foreach ($key in $Map.Keys) {
+        $keyTokens = & $tokenize $key
+        if ($keyTokens.Count -eq 0) { continue }
+        $shared = @($productTokens | Where-Object { $keyTokens -contains $_ }).Count
+        if ($shared -gt $bestScore) {
+            $bestScore = $shared
+            $bestKey = $key
+        }
+    }
+
+    return $bestKey
+}
+
+function Get-StrictSubcategoryRules {
+    if ($script:StrictSubcategoryRules) {
+        return $script:StrictSubcategoryRules
+    }
+
+    $templateText = Get-TemplateText -RelativePath $script:TemplateFileMap.TrendSubCategorisation
+    $rules = @{
+        Allowlists = @{}
+        AliasMap = @{}
+        AliasesByProduct = @{}
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($templateText)) {
+        $sections = [regex]::Split($templateText, '(?m)^####\s+') | Where-Object { $_ -match '\S' }
+        foreach ($section in $sections) {
+            $lines = $section -split "`r?`n", 2
+            if ($lines.Count -lt 2) {
+                continue
+            }
+
+            $product = $lines[0].Trim()
+            $body = $lines[1]
+            $headers = New-Object System.Collections.Generic.List[string]
+            $aliases = @{}
+            $currentHeader = ''
+
+            foreach ($line in ($body -split "`r?`n")) {
+                $trimmed = ([string]$line).Trim()
+                if (-not $trimmed) {
+                    continue
+                }
+
+                if ($trimmed -match '^\*\*(.+?)\*\*\s*$') {
+                    $currentHeader = $matches[1].Trim()
+                    if ($currentHeader -and -not $headers.Contains($currentHeader)) {
+                        [void]$headers.Add($currentHeader)
+                    }
+                    continue
+                }
+
+                if ($trimmed -match '^\s*[-*]\s+(.+?)\s*$') {
+                    $symptom = ($matches[1].Trim() -replace '\s*\(.+?\)\s*$', '')
+                    if ($currentHeader -and $symptom) {
+                        $symptomKey = Normalize-TemplateText -Raw $symptom
+                        $productAliasKey = ('{0}||{1}' -f (Normalize-TemplateText -Raw $product), $symptomKey)
+                        $rules.AliasMap[$productAliasKey] = $currentHeader
+                        $aliases[$symptomKey] = $currentHeader
+                    }
+                }
+            }
+
+            if ($headers.Count -gt 0) {
+                $rules.Allowlists[$product] = $headers
+                $rules.AliasesByProduct[$product] = $aliases
+            }
+        }
+    }
+
+    $script:StrictSubcategoryRules = $rules
+    return $rules
+}
+
+function Convert-ToStrictSubcategoryHeading {
+    param(
+        [string]$ParentCategory,
+        [string]$RawSubCategory,
+        [string]$ContextText = ''
+    )
+
+    $rules = Get-StrictSubcategoryRules
+    $productKey = Resolve-TemplateProductKey -Map $rules.Allowlists -Product $ParentCategory
+    if (-not $productKey) {
+        return $RawSubCategory
+    }
+
+    $allowlist = $rules.Allowlists[$productKey]
+    if (-not $allowlist -or $allowlist.Count -eq 0) {
+        return $RawSubCategory
+    }
+
+    $rawKey = Normalize-TemplateText -Raw $RawSubCategory
+    $aliasKey = ('{0}||{1}' -f (Normalize-TemplateText -Raw $productKey), $rawKey)
+    if ($rawKey -and $rules.AliasMap.ContainsKey($aliasKey)) {
+        return [string]$rules.AliasMap[$aliasKey]
+    }
+
+    foreach ($label in $allowlist) {
+        $labelKey = Normalize-TemplateText -Raw $label
+        if ($label -ieq $RawSubCategory -or $labelKey -eq $rawKey) {
+            return $label
+        }
+        if ($rawKey -and ($rawKey -like "*$labelKey*" -or $labelKey -like "*$rawKey*")) {
+            return $label
+        }
+    }
+
+    $searchText = Normalize-TemplateText -Raw ((@($RawSubCategory, $ContextText) -join ' ').Trim())
+    if ($searchText -and $rules.AliasesByProduct.ContainsKey($productKey)) {
+        foreach ($symptomKey in $rules.AliasesByProduct[$productKey].Keys) {
+            if ($searchText -like "*$symptomKey*") {
+                return [string]$rules.AliasesByProduct[$productKey][$symptomKey]
+            }
+        }
+    }
+
+    return $allowlist[0]
 }
 
 function Get-ServiceNowAccessToken {
@@ -913,129 +1084,102 @@ function Get-StrictProductivitySubCategory {
     )
 
     $t = ((@($RawSubCategory, $IssueSummary, $ShortDescription, $WorkNotes)) -join ' ').ToLowerInvariant()
-
-    switch ($ParentCategory) {
+    $candidate = switch ($ParentCategory) {
         'Microsoft OneDrive Issues' {
-            if ($t -match 'rejoin|removed and added back|re-?added|site collection') { return 'Rejoin access issue' }
-            if ($t -match 'permission not applied|access granted but|permission not effective') { return 'Permission not applied' }
-            if ($t -match 'shared file|shared folder|share point shortcut|sharepoint shortcut|shared site|cannot open the sharepoint|unable to access shared|access shared|shared file access') { return 'Shared file access issue' }
-            if ($t -match 'data migration|new laptop|migrate data|data backup') { return 'Data migration failure' }
-            if ($t -match 'sync conflict|two versions|conflicting') { return 'Sync conflict issue' }
-            if ($t -match 'sync stuck|sync delay|slow sync|sync stalled') { return 'Sync stuck / delayed' }
-            if ($t -match 'sync fail|not syncing|sync error|upload not|unable to upload|backup.*onedrive|sync issue') { return 'OneDrive sync failure' }
-            if ($t -match 'storage quota|quota exceeded|storage full') { return 'Storage quota exceeded' }
-            if ($t -match 'offline files|files offline') { return 'Offline files not available' }
-            if ($t -match 'missing files|files missing|files disappear') { return 'Missing files after refresh' }
-            if ($t -match 'onedrive client|onedrive not running|client crash') { return 'OneDrive client not running' }
-            if ($t -match 'file open|open file|won.t open|cannot open|unable to open|file explorer|copy paste') { return 'File open error (desktop)' }
-            return 'Shared file access issue'
+            if ($t -match 'sync|upload|quota storage issue|long file path') { 'Sync Issues' }
+            elseif ($t -match 'permission|shared|rejoin|former employee|re-share|access denied') { 'Access & Permission Issues' }
+            elseif ($t -match 'refresh|new laptop|new pc|downloads folder') { 'PC Refresh Issues' }
+            elseif ($t -match 'open|desktop|version history|mismatch') { 'File Handling Issues' }
+            elseif ($t -match 'client|login|connect|crash|hang|install') { 'Application / Client Issues' }
+            elseif ($t -match 'storage|quota exceeded|backup|offline') { 'Storage & Backup Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'Access & Permission Issues' }
         }
         'Microsoft Excel Issues' {
-            if ($t -match 'freezing|hanging|hang|not responding|crash') { return 'Excel freezing / hanging' }
-            if ($t -match 'save fail|cannot save|unable to save|save error') { return 'File save failure' }
-            if ($t -match 'add-?in|addin') { return 'Add-in failure' }
-            if ($t -match 'data refresh|refresh data|power query|connection refresh') { return 'Data refresh issue' }
-            if ($t -match 'license|activation') { return 'Excel license issue' }
-            if ($t -match 'large file|performance|slow|big file') { return 'Large file performance issue' }
-            if ($t -match 'file open|open file|won.t open|cannot open|unable to open|file not opening') { return 'File not opening' }
-            return 'File not opening'
+            if ($t -match 'open|blank|corrupt') { 'File Opening Issues' }
+            elseif ($t -match 'slow|performance|hang|crash|large file') { 'Performance Issues' }
+            elseif ($t -match 'save|update|shared.*sync') { 'Data Handling Issues' }
+            elseif ($t -match 'add-?in|refresh') { 'Add-in & Feature Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'File Opening Issues' }
         }
         'Microsoft PowerPoint Issues' {
-            if ($t -match 'crash|freezing|hang|not responding') { return 'PowerPoint crashing / freezing' }
-            if ($t -match 'format') { return 'Formatting issue' }
-            if ($t -match 'corrupt|corruption') { return 'File corruption issue' }
-            if ($t -match 'license|activation') { return 'License activation issue' }
-            if ($t -match 'open|won.t open|cannot open|unable to open') { return 'Presentation not opening' }
-            return 'Presentation not opening'
+            if ($t -match 'open|blank|corrupt') { 'File Opening Issues' }
+            elseif ($t -match 'slow|performance|hang|crash|large file') { 'Performance Issues' }
+            elseif ($t -match 'format|layout|structure|media|addin') { 'Formatting / Feature Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'File Opening Issues' }
         }
         'Microsoft Word Issues' {
-            if ($t -match 'add-?in|addin|ivo') { return 'Add-in failure' }
-            if ($t -match 'crash|freezing|hang|not responding') { return 'Word crashing / freezing' }
-            if ($t -match 'format') { return 'Formatting issue' }
-            if ($t -match 'corrupt|corruption') { return 'File corruption issue' }
-            if ($t -match 'open|won.t open|cannot open|unable to open') { return 'Document not opening' }
-            return 'Document not opening'
-        }
-        'Microsoft Outlook Issues' {
-            if ($t -match 'launch|not launching|won.t start|will not open') { return 'Outlook not launching' }
-            if ($t -match 'mailbox|inbox access') { return 'Mailbox access issue' }
-            if ($t -match 'send|receive') { return 'Email send/receive failure' }
-            if ($t -match 'add-?in|addin') { return 'Add-in missing (Teams/Copilot)' }
-            if ($t -match 'profile|configuration') { return 'Profile configuration issue' }
-            return 'Mailbox access issue'
+            if ($t -match 'open|corrupt') { 'File Access Issues' }
+            elseif ($t -match 'slow|performance|hang|crash') { 'Performance Issues' }
+            elseif ($t -match 'format|layout|structure|addin') { 'Formatting / Feature Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'File Access Issues' }
         }
         'Microsoft 365 Apps for Enterprise Issues' {
-            if ($t -match 'install fail|installation fail|reinstall|company portal|deploy') { return 'Installation failure' }
-            if ($t -match 'crash|instability|not responding') { return 'App crash / instability' }
-            if ($t -match 'update') { return 'Update-related issue' }
-            if ($t -match 'license|activation|sign.?in|authentic|identity|credential|profile corruption') { return 'License activation issue' }
-            if ($t -match 'feature enablement|provisioning|guidance|how to|configuration|setup|access details|environment') { return 'License activation issue' }
-            if ($t -match 'office apps not opening|apps not opening|won.t open|cannot open') { return 'Office apps not opening' }
-            return 'License activation issue'
+            if ($t -match 'open|login|crash') { 'Application Access Issues' }
+            elseif ($t -match 'license|activation|expired|entitlement') { 'Licensing Issues' }
+            elseif ($t -match 'install|missing app') { 'Installation Issues' }
+            elseif ($t -match 'usage|how to|query|entitlement query') { 'Usage Queries' }
+            else { 'General Usage Issues' }
         }
         'Microsoft 365 Copilot Issues' {
-            if ($t -match 'teams facilitator|facilitator agent|facilitator') { return 'Teams facilitator not available' }
-            if ($t -match 'not visible|missing|disappear') { return 'Copilot not visible' }
-            if ($t -match 'license|licensing') { return 'Copilot license missing' }
-            if ($t -match 'partial|partially enabled|some features') { return 'Copilot partially enabled' }
-            if ($t -match 'feature rollout|rollout|enablement') { return 'Feature rollout issue' }
-            if ($t -match 'how to|usage|guidance|query|question') { return 'Usage guidance query' }
-            return 'Copilot not visible'
+            if ($t -match 'license|expired|entitlement') { 'Licensing Issues' }
+            elseif ($t -match 'partial|inconsisten|enabled') { 'Access / Enablement Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            elseif ($t -match 'responding|opening|crash|hang|performance') { 'Application Issues' }
+            else { 'Feature Availability Issues' }
         }
         'Microsoft Forms Issues' {
-            if ($t -match 'polls?|teams poll') { return 'Polls not working (Teams)' }
-            if ($t -match 'creation|create form|cannot create') { return 'Form creation failure' }
-            if ($t -match 'feature disabled|disabled') { return 'Forms feature disabled' }
-            if ($t -match 'not accessible|cannot access|unable to access|access') { return 'Forms not accessible' }
-            return 'Forms not accessible'
+            if ($t -match 'access|ownership') { 'Access Issues' }
+            elseif ($t -match 'feature|poll|disabled') { 'Feature Availability Issues' }
+            else { 'Usage Queries' }
         }
         'Microsoft OneNote Issues' {
-            if ($t -match 'sync fail|sync error|not syncing|sync issue') { return 'Notebook sync failure' }
-            if ($t -match 'missing notes|notes missing|content missing') { return 'Missing notes issue' }
-            if ($t -match 'not responding|hang|crash|freeze') { return 'OneNote not responding' }
-            if ($t -match 'new laptop|new device|device change|data not available|migrate|notebook contents were not visible') { return 'Data not available after device change' }
-            return 'Notebook sync failure'
+            if ($t -match 'sync') { 'Sync Issues' }
+            elseif ($t -match 'missing|loss|refresh|new laptop|new device') { 'Missing Data Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'Application Issues' }
         }
-        'Microsoft Visio Issues' {
-            if ($t -match 'license expired') { return 'License expired issue' }
-            if ($t -match 'activation') { return 'Activation failure' }
-            if ($t -match 'install') { return 'Installation issue' }
-            if ($t -match 'open|save') { return 'File open / save failure' }
-            return 'Installation issue'
+        'Microsoft Visio Professional Client Issues' {
+            if ($t -match 'install') { 'Installation Issues' }
+            elseif ($t -match 'license|trial|activation|expired') { 'Activation Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'Application Issues' }
         }
         'Microsoft Project Issues' {
-            if ($t -match 'license|activation') { return 'License activation issue' }
-            if ($t -match 'install') { return 'Installation failure' }
-            if ($t -match 'open|save') { return 'File open / save failure' }
-            if ($t -match 'schedule|plan corrupt') { return 'Schedule / plan corruption' }
-            if ($t -match 'hang|crash|slow|performance') { return 'Performance / hang issue' }
-            return 'License activation issue'
+            if ($t -match 'license|trial|activation|expired') { 'Activation Issues' }
+            elseif ($t -match 'install') { 'Installation Issues' }
+            elseif ($t -match 'open|save|plan|schedule') { 'File Handling Issues' }
+            elseif ($t -match 'slow|performance|hang|crash') { 'Performance Issues' }
+            elseif ($t -match 'usage|how to|query') { 'Usage Queries' }
+            else { 'Application Issues' }
         }
         'Shared File Service (Share Drives) Issues' {
-            if ($t -match 'mapped|reconnect|mapped network|drive letter|samba|unc') { return 'Mapped drive not connecting' }
-            if ($t -match 'quota|storage') { return 'Quota / storage issue' }
-            if ($t -match 'missing folder|missing file|file not found') { return 'Missing folder / file' }
-            if ($t -match 'sync') { return 'Drive sync failure' }
-            return 'Access permission issue'
+            if ($t -match 'map|mapped|permission|connect|access') { 'Access Issues' }
+            elseif ($t -match 'missing folder|missing file') { 'File Handling Issues' }
+            elseif ($t -match 'quota|storage') { 'Storage Issues' }
+            else { 'Usage Queries' }
         }
         'Microsoft Loop Issues' {
-            if ($t -match 'workspace') { return 'Workspace not loading' }
-            if ($t -match 'integration|m365 group') { return 'Integration issue (M365 group)' }
-            return 'Loop content missing'
+            if ($t -match 'workspace|share|delete|content') { 'Workspace Access Issues' }
+            elseif ($t -match 'integration') { 'Integration Issues' }
+            else { 'Usage Queries' }
         }
         'Smartsheet Issues' {
-            if ($t -match 'external sharing|external user') { return 'External sharing issue' }
-            if ($t -match 'sync') { return 'Data sync issue' }
-            if ($t -match 'import|export') { return 'Import/export failure' }
-            return 'Access permission issue'
+            if ($t -match 'access') { 'Access Issues' }
+            elseif ($t -match 'feature') { 'Feature Availability Issues' }
+            else { 'Usage Queries' }
         }
         'Google Workspace Issues' {
-            if ($t -match 'provision|account') { return 'Account provisioning issue' }
-            if ($t -match 'permission') { return 'Permission issue' }
-            return 'Access issue'
+            if ($t -match 'access|sharing|external|gemini') { 'Access Issues' }
+            else { 'Usage Queries' }
         }
-        default { return $RawSubCategory }
+        default { $RawSubCategory }
     }
+
+    return (Convert-ToStrictSubcategoryHeading -ParentCategory $ParentCategory -RawSubCategory $candidate -ContextText $t)
 }
 
 function Invoke-IncidentAnalysis {
@@ -1702,7 +1846,7 @@ function New-WeeklyDashboardData {
 
         $mapped = Resolve-CategorySubcategory -Incident $incident
         $category = [string]$mapped.Category
-        $subcategory = [string]$mapped.Subcategory
+        $subcategory = Convert-ToStrictSubcategoryHeading -ParentCategory ([string]$mapped.Category) -RawSubCategory ([string]$mapped.Subcategory) -ContextText ([string]$incident.short_description)
         $serviceNowCategory = [string](Get-DisplayValue $incident.category)
         $assignmentGroup = [string](Get-DisplayValue $incident.assignment_group)
         $reassignmentCount = 0

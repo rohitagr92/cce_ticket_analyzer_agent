@@ -328,6 +328,41 @@ if (![string]::IsNullOrWhiteSpace($LogicAppWebHookURL)) {
     Write-Host "  - Skipping: LogicAppSendAIEmailWebHookURL (not provided)" -ForegroundColor Gray
 }
 
+Write-Host "`n--- Reconciliation and Auto-Heal Variables ---" -ForegroundColor Cyan
+
+# Default service scope for reconciliation runbook
+Set-AutomationVariableSafe -Name "PT_BusinessServiceId" `
+                           -Value "a1de2ff2db8f50108062531dd3961911" `
+                           -Description "Productivity Tools business_service sys_id for reconciliation"
+
+Set-AutomationVariableSafe -Name "PT_ServiceOfferingId" `
+                           -Value "fcb18407dbcf50108062531dd39619c4" `
+                           -Description "Productivity Tools service_offering sys_id for reconciliation"
+
+Set-AutomationVariableSafe -Name "PT_TrendTableName" `
+                           -Value "IncidentsCategoryStats" `
+                           -Description "Azure Table name used by dashboard and reconciliation"
+
+Set-AutomationVariableSafe -Name "PT_ReconcileWeeksToCheck" `
+                           -Value "2" `
+                           -Description "How many recent weeks reconciliation checks per run"
+
+Set-AutomationVariableSafe -Name "PT_ReconcileDeltaThreshold" `
+                           -Value "0" `
+                           -Description "Allowed absolute delta before mismatch alert and auto-heal"
+
+Set-AutomationVariableSafe -Name "PT_ReconcileEnableAutoHeal" `
+                           -Value $true `
+                           -Description "Whether reconciliation runbook should auto-heal mismatched weeks"
+
+Set-AutomationVariableSafe -Name "PT_ReconcileMaxHealPerWeekPerDay" `
+                           -Value "1" `
+                           -Description "Max auto-heal attempts per week per UTC day"
+
+Set-AutomationVariableSafe -Name "PT_ReconcileAutoHealState" `
+                           -Value '{"date":"","attempts":{}}' `
+                           -Description "Auto-heal state bag used to prevent repeated heals in one day"
+
 # ============================================================================
 # STEP 10: Verification
 # ============================================================================

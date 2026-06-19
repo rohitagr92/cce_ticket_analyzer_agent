@@ -9,8 +9,9 @@ Your task is to classify each incident into a **sub-category** that captures the
 1. **Read all incidents first** to understand the full landscape of issues in this category.
 2. **Assign a sub-category** to each incident. Sub-categories should be specific enough to be actionable (e.g., "Sync Issues" ) but general enough that similar incidents group together.
 3. **Be consistent** — use the exact same sub-category name for similar incidents. Use the exact labels listed below where they apply.
-4. **Focus on symptoms**, not root cause. For example, if Copilot was missing in Excel because the license was unassigned, sub-categorize it under "Copilot license missing", not under an Excel sub-category.
+4. **Focus on symptoms**, not root cause. For example, if Copilot was missing in Excel because the license was unassigned, sub-categorize it under **"Licensing Issues"**, not under an Excel sub-category.
 5. **Use sub-category labels only** in the JSON output. The grouping headers (e.g., "Sync Issues", "Access & Permission Issues") below are for sub-category value.
+6. **Never return the symptom bullet text itself** as `SubCategory`. For example, return **"Sync Issues"** and not **"OneDrive sync failure"**, and return **"Feature Availability Issues"** and not **"Copilot not visible"**.
 
 ### Sub-Category Guidelines by Parent Category
 
@@ -35,12 +36,9 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Owner re-share required
 - Rejoin access issue
 - Former employee data — within 30 days
-- Former employee data — within 30 days
-- Former employee data - within 30 days
 - Former employee data — beyond 30 days (not recoverable)
 - Former employee data — beyond 30 days
-- Former employee data - beyond 30 days (not recoverable)
-- Former employee data - beyond 30 days
+
 
 **PC Refresh Issues**
 - Missing files after refresh
@@ -368,7 +366,10 @@ Your task is to classify each incident into a **sub-category** that captures the
 #### Excluded
 
 **Out of Scope**
-- Out of scope
+- Visual Studio/Github - Misrouted
+- Teams Facilitator - Misrouted
+- SharePoint Online Access Request - Misrouted
+
 
 ---
 

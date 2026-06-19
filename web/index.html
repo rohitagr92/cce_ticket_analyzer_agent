@@ -410,6 +410,43 @@
     padding: 8px 16px; border-radius: 6px; font-size: 0.9rem; cursor: pointer; font-family: inherit;
   }
   .btn-primary:hover { background: var(--intel-blue); border-color: var(--intel-blue); }
+
+  .data-health-banner {
+    margin-bottom: 16px;
+    padding: 12px 14px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: #ffffff;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.04);
+  }
+  .data-health-banner .title {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--intel-classic);
+  }
+  .data-health-banner .meta {
+    font-size: 0.84rem;
+    color: var(--muted);
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .data-health-banner.status-healthy {
+    border-color: #b9e3cf;
+    background: #f2fbf6;
+  }
+  .data-health-banner.status-mismatch {
+    border-color: #f0b9b9;
+    background: #fff5f5;
+  }
+  .data-health-banner.status-unknown {
+    border-color: #d9e2ee;
+    background: #f7faff;
+  }
 </style>
 </head>
 <body>
@@ -452,6 +489,11 @@
 </header>
 
 <main>
+  <div id="dataHealthBanner" class="data-health-banner status-unknown" role="status" aria-live="polite">
+    <div class="title" id="dhTitle">Data health: loading</div>
+    <div class="meta" id="dhMeta"><span>Waiting for reconciliation status from table.</span></div>
+  </div>
+
   <!-- SUMMARY TAB (management overview, default) -->
   <section class="tab-pane active" id="pane-summary">
     <div id="smLoading" class="loading">Loading summary data</div>
@@ -882,6 +924,18 @@
     catch (e) { return String(d); }
   }
 
+  function fmtAge(isoOrDate) {
+    if (!isoOrDate) return 'n/a';
+    const dt = (isoOrDate instanceof Date) ? isoOrDate : new Date(isoOrDate);
+    if (Number.isNaN(dt.getTime())) return 'n/a';
+    const mins = Math.max(0, Math.floor((Date.now() - dt.getTime()) / 60000));
+    if (mins < 60) return mins + 'm ago';
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 48) return hrs + 'h ago';
+    const days = Math.floor(hrs / 24);
+    return days + 'd ago';
+  }
+
   function renderReportStats() {
     const total = allReports.length;
     const weekly = allReports.filter(r => r.kind === 'report').length;
@@ -937,14 +991,70 @@
   let allEntities = null;
   let aggregated = null;
   let tableLoadPromise = null;
+  let healthStatusByService = {};
+
+  function isEngineerLensActive() {
+    const lens = $('smLens');
+    return !!(lens && lens.value === 'engineer');
+  }
+
+  function renderDataHealthBanner() {
+    const el = $('dataHealthBanner');
+    const titleEl = $('dhTitle');
+    const metaEl = $('dhMeta');
+    if (!el || !titleEl || !metaEl) return;
+
+    const svcSel = $('smService');
+    const selectedService = svcSel ? String(svcSel.value || '').trim() : '';
+    const isProductivityToolsService = selectedService === 'Productivity Tools';
+
+    if (!isEngineerLensActive() || !isProductivityToolsService) {
+      el.style.display = 'none';
+      return;
+    }
+    el.style.display = '';
+
+    const preferred = healthStatusByService['Productivity Tools'];
+    const fallback = Object.values(healthStatusByService)[0];
+    const s = preferred || fallback;
+    if (!s) {
+      el.className = 'data-health-banner status-unknown';
+      titleEl.textContent = 'Data health: checks are still initializing';
+      metaEl.innerHTML = '<span>Health details are not available yet. Please check back after the next reconcile run.</span>';
+      return;
+    }
+
+    const state = String(s.displayState || 'Investigating');
+    const statusClass = (state === 'Healthy') ? 'status-healthy' : ((state === 'Mismatch' || state === 'Delayed') ? 'status-mismatch' : 'status-unknown');
+    const lastIngestion = s.lastSuccessfulIngestionUtc ? new Date(s.lastSuccessfulIngestionUtc) : null;
+    const lastChecked = s.lastCheckedUtc ? new Date(s.lastCheckedUtc) : null;
+    const engineer = s.engineer || {};
+    const week = engineer.latestCheckedWeek || '-';
+    const delta = Number(engineer.latestDelta || 0);
+    const ticketCountStatus = (delta === 0) ? 'Matched' : 'Mismatched';
+    const serviceNowCount = Number(engineer.latestServiceNowCount);
+    const dashboardCount = Number(engineer.latestTableCount);
+    const hasCounts = Number.isFinite(serviceNowCount) && Number.isFinite(dashboardCount);
+
+    el.className = 'data-health-banner ' + statusClass;
+    titleEl.textContent = s.headline || ('Data health: ' + state);
+    metaEl.innerHTML =
+      '<span>' + (s.detailMessage || 'No additional detail available.') + '</span>' +
+      '<span><strong>Last successful ingestion:</strong> ' + (lastIngestion ? fmtDate(lastIngestion) : 'n/a') + ' (' + fmtAge(lastIngestion) + ')</span>' +
+      '<span><strong>Last health check:</strong> ' + (lastChecked ? fmtDate(lastChecked) : 'n/a') + '</span>' +
+      '<span><strong>Latest WW ticket count:</strong> ' + ticketCountStatus + ' (' + week + ')' + (hasCounts ? (' - ServiceNow: ' + serviceNowCount + ', Dashboard: ' + dashboardCount) : '') + '</span>' +
+      '<span><strong>Latest delta:</strong> ' + delta + '</span>';
+  }
 
   async function ensureTableLoaded() {
     if (allEntities) return allEntities;
     if (!tableLoadPromise) {
       tableLoadPromise = (async () => {
         const entities = await fetchTableEntities();
+        await fetchHealthStatusArtifacts();
         allEntities = entities;
         aggregated = aggregate(entities);
+        renderDataHealthBanner();
         return entities;
       })();
     }
@@ -964,13 +1074,32 @@
         const rows = await fetchOneTable(svc);
         // Tag each row with its service (overrides whatever the row carried) so
         // the Service dropdown filter works consistently across both tables.
-        for (const r of rows) r.Service = svc.name;
-        merged.push(...rows);
+        for (const r of rows) {
+          r.Service = svc.name;
+          merged.push(r);
+        }
       } catch (e) {
         console.warn('Failed to load service "' + svc.name + '":', e.message);
       }
     }
     return merged;
+  }
+
+  async function fetchHealthStatusArtifacts() {
+    const out = {};
+    for (const svc of serviceConfigs) {
+      try {
+        if (!svc.reportsContainerBaseUrl || !svc.reportsSas) continue;
+        const url = svc.reportsContainerBaseUrl + '/' + encodeURIComponent('health-status.json') + svc.reportsSas;
+        const res = await fetch(url, { cache: 'no-store' });
+        if (!res.ok) continue;
+        const json = await res.json();
+        out[svc.name] = json;
+      } catch (e) {
+        console.warn('Failed to load health-status for service "' + svc.name + '":', e.message);
+      }
+    }
+    healthStatusByService = out;
   }
 
   async function fetchOneTable(svc) {
@@ -4907,6 +5036,9 @@
     }
 
     // Build the grid markup first (identical structure to tpRenderProductGrid).
+    // Keep ids unique even when different product names normalize to the same token.
+    const cards = [];
+    const idSeen = {};
     let html = '';
     for (const k of ranked) {
       const cur = counts[k][latest] || 0;
@@ -4914,7 +5046,10 @@
       const diff = cur - prv;
       const arrow = diff > 0 ? '&#x2191;' : (diff < 0 ? '&#x2193;' : '&#x2192;');
       const cls = diff > 0 ? 'tp-up' : (diff < 0 ? 'tp-down' : 'tp-flat');
-      const safeId = 'smMini_' + k.replace(/[^A-Za-z0-9]+/g, '_');
+      const baseId = 'smMini_' + k.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '') || 'Unknown';
+      idSeen[baseId] = (idSeen[baseId] || 0) + 1;
+      const safeId = idSeen[baseId] === 1 ? baseId : (baseId + '_' + idSeen[baseId]);
+      cards.push({ key: k, id: safeId });
       html += '<div class="tp-mini-card">' +
         '<h4>' + esc(k) + '</h4>' +
         '<div class="tp-mini-meta"><span>Total: ' + totals[k] + '</span><span class="' + cls + '">' + arrow + ' ' + cur + (prev ? ' (was ' + prv + ')' : '') + '</span></div>' +
@@ -4924,14 +5059,18 @@
     host.innerHTML = html;
     // Then instantiate Chart.js line charts (Chart is globally loaded for Trends+).
     if (typeof Chart === 'undefined') return;
-    for (const k of ranked) {
-      const safeId = 'smMini_' + k.replace(/[^A-Za-z0-9]+/g, '_');
-      const canvas = document.getElementById(safeId);
+    for (const card of cards) {
+      const canvas = document.getElementById(card.id);
       if (!canvas) continue;
+      // Defensive cleanup: if a chart is still attached to this canvas, destroy it first.
+      try {
+        const attached = Chart.getChart && Chart.getChart(canvas);
+        if (attached && attached.destroy) attached.destroy();
+      } catch (e) { /* noop */ }
       const ctx2d = canvas.getContext('2d');
-      const data  = weeksInRange.map(w => counts[k][w] || 0);
-      const color = colorFor(k) || '#0068b5';
-      smPptCharts[safeId] = new Chart(ctx2d, {
+      const data  = weeksInRange.map(w => counts[card.key][w] || 0);
+      const color = colorFor(card.key) || '#0068b5';
+      smPptCharts[card.id] = new Chart(ctx2d, {
         type: 'line',
         data: { labels: labels, datasets: [{ data: data, borderColor: color, backgroundColor: color + '33', fill: true, tension: 0.3, pointRadius: 3, pointBackgroundColor: color, borderWidth: 2 }] },
         options: {
@@ -5333,8 +5472,9 @@
       };
 
       // Wire up controls.
-      lensSel.addEventListener('change', render);
+      lensSel.addEventListener('change', () => { renderDataHealthBanner(); render(); });
       svcSel.addEventListener('change', () => {
+        renderDataHealthBanner();
         rebuildRangeSelectors();
         rebuildDrillProductOptions();
         render();

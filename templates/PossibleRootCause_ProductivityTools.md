@@ -24,7 +24,7 @@
 | 1.6 | **Shared File Permission Denied** | User lacks a valid sharing permission entry on a SharePoint/OneDrive file; owner must remove and re-add. |
 | 1.7 | **Stale or Revoked Share Link** | Share link expired, revoked, or points to content the user no longer has access to after a role change. |
 | 1.8 | **PUID Mismatch** | Rejoined user's new account identity (PUID) does not match old SharePoint/OneDrive permission entries; owner must re-share under the new account or Rejoined user lost OneDrive access to prior content because old permissions did not transfer to the new identity. |
-| 1.8a | **Rejoin Access Issue** | Rejoined user cannot access previously shared OneDrive/SharePoint content because old permissions are tied to the previous identity and need owner re-share or entitlement reapply. |
+| 1.8a | **Rejoin Access Issue** | Rejoined user cannot access previously shared OneDrive/SharePoint site or content because old permissions are tied to the previous identity and need owner re-share or entitlement reapply. |
 | 1.9 | **Prior OneDrive Site Expired** | Previous OneDrive site was not retained within the 30-day post-separation window and is permanently deleted. |
 | 1.10 | **Former Employee Data Request** | File is in a separated employee's OneDrive; access requires a formal IT request within the 30-day retention window. |
 | 1.11 | 
@@ -249,9 +249,9 @@ Use these labels when Category = `Excluded` — the ticket is not a Productivity
 
 | # | Root Cause Label | When to Apply |
 |---|---|---|
-| 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity), SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT, Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT, Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT, AGS group membership — owned by Identity, not PT, Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT, Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT |
+| 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity), SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT, Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT, Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT, AGS group membership — owned by Identity, not PT, Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT, Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT , Visual Studio, Github|
 | 17.1a | **SharePoint Online Access Request** | Ticket is a SharePoint Online site/library access or permission request that belongs to SharePoint Online queue, not Productivity Tools. |
-| 17.2 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product fault; should be redirected to self-service docs or training. |
+| 17.2 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product; should be redirected to self-service docs or training. |
 | 17.3 | **Duplicate / Cancelled Ticket** | Ticket withdrawn, cancelled, duplicate of another INC, or closed without action by the requester. |
 | 17.4 | **Third-Party SaaS Issue** | Non-Microsoft, non-Google SaaS app outside the PT catalog (e.g. vendor portals, custom internal apps). |
 

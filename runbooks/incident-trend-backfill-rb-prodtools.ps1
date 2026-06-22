@@ -80,13 +80,10 @@ $null = Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop
 $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value
 $saCtx      = New-AzStorageContext -StorageAccountName $cfg.StorageAccountName -StorageAccountKey $storageKey
 
-# -------- AzTable module --------
-if (-not (Get-Module -ListAvailable -Name AzTable)) {
-    throw "AzTable module is not installed in this Automation Account. Add it via Modules gallery (AzTable, scope: PowerShell 7.2)."
-}
-Import-Module AzTable -Force
-$tbl        = Get-AzStorageTable -Name $TableName -Context $saCtx -ErrorAction Stop
-$cloudTable = $tbl.CloudTable
+# -------- Native Azure Table SDK --------
+Add-Type -AssemblyName 'Microsoft.WindowsAzure.Storage' -ErrorAction Stop
+$connectionString = 'DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix=core.windows.net' -f $cfg.StorageAccountName, $storageKey
+$cloudTable = [Microsoft.WindowsAzure.Storage.CloudStorageAccount]::Parse($connectionString).CreateCloudTableClient().GetTableReference($TableName)
 
 # -------- Load prompt templates from blob --------
 Write-Step "Loading prompt templates from container '$($cfg.PromptContainerName)'..." 'Yellow'
@@ -121,20 +118,51 @@ Rules:
 '@
 $systemPrompt = $catTemplate + "`n`n" + $envTemplate + $outputFormatInstruction
 
-# -------- Per-partition existing-key cache --------
-$existingByPartition = @{}
 function Get-ExistingRowKeys {
     param([string]$Partition)
-    if ($existingByPartition.ContainsKey($Partition)) { return $existingByPartition[$Partition] }
     $set = [System.Collections.Generic.HashSet[string]]::new()
     try {
-        $rows = Get-AzTableRow -Table $cloudTable -PartitionKey $Partition -ErrorAction Stop
-        foreach ($r in @($rows)) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+        $partitionFilter = [Microsoft.WindowsAzure.Storage.Table.TableQuery]::GenerateFilterCondition(
+            'PartitionKey',
+            [Microsoft.WindowsAzure.Storage.Table.QueryComparisons]::Equal,
+            $Partition
+        )
+        $query = [Microsoft.WindowsAzure.Storage.Table.TableQuery]::new()
+        $query.FilterString = $partitionFilter
+
+        $token = $null
+        do {
+            $segment = $cloudTable.ExecuteQuerySegmentedAsync($query, $token).GetAwaiter().GetResult()
+            foreach ($r in $segment.Results) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+            $token = $segment.ContinuationToken
+        } while ($null -ne $token)
     } catch {
         Write-Warning "Could not load existing keys for ${Partition}: $($_.Exception.Message)"
     }
-    $existingByPartition[$Partition] = $set
     return $set
+}
+
+function Set-CloudTableEntity {
+    param(
+        [Parameter(Mandatory)]$Table,
+        [Parameter(Mandatory)][string]$PartitionKey,
+        [Parameter(Mandatory)][string]$RowKey,
+        [Parameter(Mandatory)][hashtable]$Properties
+    )
+
+    $entity = [Microsoft.WindowsAzure.Storage.Table.DynamicTableEntity]::new($PartitionKey, $RowKey)
+    foreach ($propertyName in $Properties.Keys) {
+        $value = $Properties[$propertyName]
+        if ($value -is [int]) {
+            $entity.Properties[$propertyName] = [Microsoft.WindowsAzure.Storage.Table.EntityProperty]::GeneratePropertyForInt([int]$value)
+        }
+        else {
+            $entity.Properties[$propertyName] = [Microsoft.WindowsAzure.Storage.Table.EntityProperty]::GeneratePropertyForString([string]$value)
+        }
+    }
+
+    $operation = [Microsoft.WindowsAzure.Storage.Table.TableOperation]::InsertOrReplace($entity)
+    $Table.ExecuteAsync($operation).GetAwaiter().GetResult() | Out-Null
 }
 
 # -------- ServiceNow --------
@@ -239,7 +267,7 @@ function New-FallbackAnalysisText {
     if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
     if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
     if ($parts.Count -eq 0) {
-        return "$Category: fallback analysis generated because AI analysis text was missing in backfill output."
+        return "${Category}: fallback analysis generated because AI analysis text was missing in backfill output."
     }
     return "$Category :: " + ($parts -join '. ') + '.'
 }
@@ -296,7 +324,12 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
         }
 
         try {
-            $aiText  = Invoke-Categorize -Incident $inc
+            $aiText = ''
+            try {
+                $aiText = Invoke-Categorize -Incident $inc
+            } catch {
+                Write-Warning "  AI failed for ${num}: $($_.Exception.Message). Continuing with fallback values."
+            }
             $fields  = Get-StructuredFields -Text $aiText
             $category = if ($fields.Category) { $fields.Category } else { 'Unknown' }
             $subcat = $fields.Subcategory
@@ -321,10 +354,9 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 'WeekNumber'     = [int]$yw.WeekNumber
                 'ReportBlobName' = 'incremental-runbook'
             }
-            Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
+            Set-CloudTableEntity -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Properties $props
 
             # Cache so a same-incident appearance in another loop day doesn't double-process
-            [void]$existing.Add([string]$num)
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {

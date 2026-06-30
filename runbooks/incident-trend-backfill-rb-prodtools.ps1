@@ -123,10 +123,11 @@ function Read-TemplateBlob {
 # Note: Read-TemplateBlob will fail if the PromptContainerName is wrong or missing,
 #  or if the storage context lacks permission to read blob content. Upload the
 #  template markdown files using `setup/publish/Upload-TemplateFiles.ps1` or ensure
-#  the container contains `TicketCategorisation_ProductivityTools.md` and
-#  `EnvironmentContext_ProductivityTools.md` as documented in the publisher.
-$catTemplate = Read-TemplateBlob -BlobName 'TicketCategorisation_ProductivityTools.md'
-$envTemplate = Read-TemplateBlob -BlobName 'EnvironmentContext_ProductivityTools.md'
+#  the container contains all four template markdown files documented below.
+$catTemplate    = Read-TemplateBlob -BlobName 'TicketCategorisation_ProductivityTools.md'
+$envTemplate    = Read-TemplateBlob -BlobName 'EnvironmentContext_ProductivityTools.md'
+$subCatTemplate = Read-TemplateBlob -BlobName 'TrendSubCategorisation_ProductivityTools.md'
+$prcTemplate    = Read-TemplateBlob -BlobName 'PossibleRootCause_ProductivityTools.md'
 
 $outputFormatInstruction = @'
 
@@ -136,17 +137,24 @@ $outputFormatInstruction = @'
 You MUST end your response with exactly these four labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
 
 Primary Category: <one of the bold category names defined above, or "Excluded">
-Sub-symptom: <the most specific sub-symptom label from the matching category's bullet list, <= 80 characters>
-Possible Root Cause: <one concise sentence describing the underlying technical cause>
-AI Analysis: <2-3 sentence summary: what happened, what fixed it, and any notable evidence>
+Sub-symptom: <EXACT bold header label from the Sub-symptom reference above for the chosen category — e.g. "Sync Issues", "Licensing Issues". Do NOT invent or paraphrase.>
+Possible Root Cause: <EXACT bold label from the chosen product table in the Possible Root Cause reference above. Copy verbatim. If no label fits, write "Unknown".>
+AI Analysis: <2-3 sentence summary: what happened, what was the root cause, and what fixed it. Be specific about technical details.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
 - Use plain ASCII. No bullets, asterisks, or quotation marks around the values.
+- Sub-symptom MUST be an exact bold header from the Sub-symptom catalog (not a bullet description).
+- Possible Root Cause MUST be an exact bold label from the Possible Root Cause catalog (not a sentence).
 - If unknown, write "Unknown".
 - Keep each value on a single line.
 '@
-$systemPrompt = $catTemplate + "`n`n" + $envTemplate + $outputFormatInstruction
+# Build system prompt from all 4 templates so the AI can ONLY pick labels from the
+# canonical lists — same enforcement as incident-analyzer-rb-prodtools.ps1.
+$systemPrompt = $catTemplate + "`n`n" + $envTemplate + "`n`n" +
+    "## REFERENCE: Sub-symptom Labels`n" + $subCatTemplate + "`n`n" +
+    "## REFERENCE: Possible Root Cause Labels`n" + $prcTemplate +
+    $outputFormatInstruction
 
 function Get-ExistingRowKeys {
     param([string]$Partition)

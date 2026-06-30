@@ -1,17 +1,22 @@
 <#
 .SYNOPSIS
-    Verify WW26 data compliance with strict template standards.
+    Verify incident data compliance with strict template standards for a given YearWeek.
 
 .DESCRIPTION
-    Validates that all 42 WW26 incidents have:
-    - Valid Category per TicketCategorisation_ProductivityTools.md
-    - Valid Subcategory per TrendSubCategorisation_ProductivityTools.md
-    - Valid RootCause per PossibleRootCause_ProductivityTools.md
-    - Non-empty AIAnalysis with meaningful content
-    - No "Unknown" confidence or empty critical fields
+    Validates every incident row in the specified YearWeek partition of the
+    IncidentsCategoryStats Azure Table against the canonical template catalogs:
+      - Category must appear in TicketCategorisation_ProductivityTools.md
+      - Subcategory must be a valid bold header for that category in TrendSubCategorisation_ProductivityTools.md
+      - RootCause must exactly match a bold label in PossibleRootCause_ProductivityTools.md
+      - AIAnalysis must be non-empty and at least 50 characters
+    Prints a full compliance summary and lists every non-compliant incident with reasons.
+
+.PARAMETER YearWeek
+    The week partition to validate (e.g. 2026-W26). Defaults to 2026-W26.
 
 .USAGE
-    .\tools\verify_ww26_compliance.ps1
+    .\tools\verify_ww26_compliance.ps1 -YearWeek '2026-W26'
+    .\tools\verify_ww26_compliance.ps1 -YearWeek '2026-W27'
 
 #>
 

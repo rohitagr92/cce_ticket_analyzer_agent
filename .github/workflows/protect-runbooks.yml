@@ -1,0 +1,51 @@
+name: Protect critical runbooks
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled]
+
+jobs:
+  protect-runbooks:
+    name: Block edits to protected runbooks unless labeled
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate protected runbook edits
+        env:
+          BASE_REF: ${{ github.event.pull_request.base.ref }}
+          EVENT_PATH: ${{ github.event_path }}
+          REQUIRED_LABEL: runbook-update
+        run: |
+          set -eo pipefail
+          PROTECTED=("runbooks/incident-analyzer-rb-prodtools.ps1" "runbooks/incident-trend-backfill-rb-prodtools.ps1")
+          # Attempt to fetch base ref for a reliable diff; fall back if unavailable
+          git fetch origin "$BASE_REF" --depth=1 || true
+          CHANGED=$(git diff --name-only origin/"$BASE_REF"...HEAD || git diff --name-only "$BASE_REF"...HEAD || true)
+          echo "Changed files:" >&2
+          echo "$CHANGED" >&2
+
+          if [ -z "$CHANGED" ]; then
+            echo "No changed files detected. Passing check.";
+            exit 0;
+          fi
+
+          # Read PR labels
+          LABELS="$(jq -r '.pull_request.labels[].name' "$EVENT_PATH" 2>/dev/null || true)"
+
+          for f in "${PROTECTED[@]}"; do
+            if echo "$CHANGED" | grep -xq "$f"; then
+              echo "Protected file changed: $f" >&2
+              if echo "$LABELS" | grep -qx "$REQUIRED_LABEL"; then
+                echo "PR has required label '$REQUIRED_LABEL' — allowing change." >&2
+              else
+                echo "::error file=$f::Editing protected runbook $f is blocked by CI. Add the label '$REQUIRED_LABEL' to this PR or contact maintainers to request the change." >&2
+                exit 1
+              fi
+            fi
+          done
+
+          echo "Protected runbook check passed." >&2

@@ -31,6 +31,16 @@
       PT_ServiceOfferingId   (default fcb18407dbcf50108062531dd39619c4)
       PT_TrendTableName      (default IncidentsCategoryStats)
       PT_TrendLookbackDays   (default 2)
+#
+# Guidance:
+#  - To change the destination table, set the Automation variable `PT_TrendTableName`.
+#    The runbook will create/operate on that table name in the storage account
+#    specified by `Incidents_analyzer_StorageAccountName`.
+#  - Ensure the Automation Account's managed identity has Storage Blob/Data access
+#    to the target storage account (or supply a service principal). Common failures
+#    in Automation: missing permissions, wrong subscription context, or invalid
+#    Automation variable names/values. See inline notes near authentication
+#    and table-write sections for more details.
 #>
 
 [CmdletBinding()]
@@ -75,15 +85,30 @@ Write-Step 'Connecting to Azure with managed identity...' 'Yellow'
 Disable-AzContextAutosave -Scope Process | Out-Null
 $null = Connect-AzAccount -Identity -ErrorAction Stop
 $null = Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop
+# Note: Common failure points here:
+#  - Managed identity not enabled or not assigned to Automation Account.
+#  - Automation Account lacks RBAC permissions for the target subscription/resource group.
+#  - SubscriptionId Automation variable is incorrect or not set.
+#  Troubleshooting: validate managed identity in the Azure Portal and check
+#  `Get-AzContext` output and `Get-AzRoleAssignment -Scope <storage resource>`.
 
 # -------- Storage context --------
 $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value
 $saCtx      = New-AzStorageContext -StorageAccountName $cfg.StorageAccountName -StorageAccountKey $storageKey
+# Note: Storage access failures often occur here.
+#  - Ensure Automation managed identity or the service principal has 'Storage Blob Data Contributor'
+#    or appropriate permissions on the storage account.
+#  - If Get-AzStorageAccountKey fails, check ResourceGroupName and StorageAccountName values.
+#  - Network restrictions (firewall/private endpoints) can block Automation access.
 
 # -------- Native Azure Table SDK --------
 Add-Type -AssemblyName 'Microsoft.WindowsAzure.Storage' -ErrorAction Stop
 $connectionString = 'DefaultEndpointsProtocol=https;AccountName={0};AccountKey={1};EndpointSuffix=core.windows.net' -f $cfg.StorageAccountName, $storageKey
 $cloudTable = [Microsoft.WindowsAzure.Storage.CloudStorageAccount]::Parse($connectionString).CreateCloudTableClient().GetTableReference($TableName)
+# Note: The runbook uses the Microsoft.WindowsAzure.Storage assembly (legacy Table SDK).
+#  - Add-Type may fail if the assembly is not available in the Automation sandbox;
+#    Pubish the assembly or ensure Automation Account supports the .NET types used.
+#  - TableName should be an Azure Table name (alphanumeric); non-conforming names will fail.
 
 # -------- Load prompt templates from blob --------
 Write-Step "Loading prompt templates from container '$($cfg.PromptContainerName)'..." 'Yellow'
@@ -95,6 +120,11 @@ function Read-TemplateBlob {
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     return $txt
 }
+# Note: Read-TemplateBlob will fail if the PromptContainerName is wrong or missing,
+#  or if the storage context lacks permission to read blob content. Upload the
+#  template markdown files using `setup/publish/Upload-TemplateFiles.ps1` or ensure
+#  the container contains `TicketCategorisation_ProductivityTools.md` and
+#  `EnvironmentContext_ProductivityTools.md` as documented in the publisher.
 $catTemplate = Read-TemplateBlob -BlobName 'TicketCategorisation_ProductivityTools.md'
 $envTemplate = Read-TemplateBlob -BlobName 'EnvironmentContext_ProductivityTools.md'
 
@@ -137,6 +167,10 @@ function Get-ExistingRowKeys {
             $token = $segment.ContinuationToken
         } while ($null -ne $token)
     } catch {
+        # Failure note: table queries can fail due to invalid table name, missing
+        # assembly support, or permission issues. We log a warning and return an
+        # empty set to allow the backfill to continue; duplicates may be created
+        # if the table query truly failed.
         Write-Warning "Could not load existing keys for ${Partition}: $($_.Exception.Message)"
     }
     return $set
@@ -161,6 +195,11 @@ function Set-CloudTableEntity {
         }
     }
 
+    # Note: InsertOrReplace is idempotent for a given PartitionKey+RowKey. Table write
+    # failures commonly arise from insufficient permissions, network/endpoint
+    # restrictions, or schema issues with property types. Exceptions here will
+    # bubble up to the caller and are caught in the main loop; the runbook will
+    # report the failure and continue processing other incidents.
     $operation = [Microsoft.WindowsAzure.Storage.Table.TableOperation]::InsertOrReplace($entity)
     $Table.ExecuteAsync($operation).GetAwaiter().GetResult() | Out-Null
 }
@@ -173,6 +212,9 @@ function Get-ServiceNowToken {
         client_secret = $cfg.ServiceNowIncidentsClientSecret
         scope         = $cfg.ServiceNowIncidentsScope
     }
+    # Note: ServiceNow token retrieval can fail for invalid client credentials,
+    # incorrect TokenUrl, or network/auth issues. The runbook will stop on
+    # token retrieval failure because subsequent API calls require a valid token.
     (Invoke-RestMethod -Method Post -Uri $cfg.TokenUrl -Body $body -ContentType 'application/x-www-form-urlencoded').access_token
 }
 
@@ -223,6 +265,9 @@ function Invoke-Categorize {
     } | ConvertTo-Json -Depth 10 -Compress
     $url = "$($cfg.AzureOpenAIBaseUrl)/openai/deployments/$($cfg.AzureOpenAIDeployment)/chat/completions?api-version=$($cfg.AzureOpenAIApiVersion)"
     $headers = @{ 'api-key' = $cfg.AzureOpenAIApiKey; 'Content-Type' = 'application/json' }
+    # Note: AI calls may fail due to invalid API keys, model/deployment name mismatches,
+    # or quota/availability issues. We allow the caller to catch AI failures and
+    # continue with fallback text — this keeps backfills resilient to transient AI errors.
     $resp = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $body -TimeoutSec 180
     return $resp.choices[0].message.content
 }
@@ -378,3 +423,40 @@ Write-Output ("  ---------------------------------------------------------------
 Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={3,3}" -f $totalFetched, $totalSaved, $totalSkipped, $totalErrors)
 Write-Output ''
 Write-Output "Rows newly written: $totalSaved (skipped $totalSkipped already in table)"
+
+# ===== REGENERATE DASHBOARDS FOR AFFECTED WEEKS =====
+if ($totalSaved -gt 0) {
+    Write-Output ''
+    Write-Step 'Regenerating dashboards for backfilled weeks...' 'Cyan'
+    
+    try {
+        $reportScript = ".\setup\reporting\Build-WeeklyReports.ps1"
+        
+        if (Test-Path $reportScript) {
+            # Regenerate dashboards for all affected YearWeeks
+            # Get all unique weeks from backfilled incidents
+            $affectedWeeks = @()
+            foreach ($key in $summary.Keys) {
+                if ($summary[$key].saved -gt 0) {
+                    $dayStr = [DateTime]::ParseExact($key, 'yyyy-MM-dd', $null)
+                    $yw = Get-YearWeekFromDate -Date $dayStr
+                    if ($yw.YearWeek -notin $affectedWeeks) {
+                        $affectedWeeks += $yw.YearWeek
+                    }
+                }
+            }
+            
+            if ($affectedWeeks.Count -gt 0) {
+                Write-Output ("  Regenerating dashboards for {0} week(s): {1}" -f $affectedWeeks.Count, ($affectedWeeks -join ', '))
+                & $reportScript -OnlyWeeks $affectedWeeks
+                Write-Output '  Dashboard regeneration completed successfully'
+            } else {
+                Write-Output '  No new incidents saved, skipping dashboard regeneration'
+            }
+        } else {
+            Write-Warning "Report script not found at $reportScript - skipping dashboard regeneration"
+        }
+    } catch {
+        Write-Warning "Dashboard regeneration failed: $($_.Exception.Message) - continuing"
+    }
+}

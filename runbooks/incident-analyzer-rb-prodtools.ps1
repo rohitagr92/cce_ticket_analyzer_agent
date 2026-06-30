@@ -5,6 +5,17 @@ $Script:IsAzureAutomation = $env:AUTOMATION_ASSET_ACCOUNTID -or $PSPrivateMetada
 if ($Script:IsAzureAutomation) {
     Write-Host "Running in Azure Automation environment" -ForegroundColor Green
     #Requires -Modules Az.Storage, Az.Accounts
+    
+    # AUTO-AUTHENTICATION: Use managed identity - NO SIGN-IN PROMPT
+    Write-Host "Authenticating with managed identity..." -ForegroundColor Yellow
+    try {
+        Connect-AzAccount -Identity -ErrorAction Stop | Out-Null
+        Write-Host "Authenticated successfully" -ForegroundColor Green
+    } catch {
+        Write-Error "Failed to authenticate with managed identity: $_"
+        throw
+    }
+    
     # Import Az modules (use whatever versions are available in Automation Account)
     Import-Module -Name Az.Storage -Force -ErrorAction Stop
     Import-Module -Name Az.Accounts -Force -ErrorAction Stop
@@ -147,6 +158,10 @@ function Initialize-BlobLogging {
     
     try {
         # Create log file name with timestamp
+        # Description: use a sortable timestamp (YYYY-MM-DD_HH-mm-ss) to
+        # produce unique, time-ordered log filenames. This format is used for
+        # blob log file naming so that logs sort correctly in storage and can
+        # be correlated with run artifacts and weekly merges.
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $Script:LogConfig.CurrentLogFile = "$($Script:LogConfig.LogFilePrefix)-$timestamp.log"
         
@@ -502,6 +517,9 @@ function Write-ScriptLog {
     
     if ($Level -eq 'Debug' -and -not $Script:Config.Logging.EnableDebug) { return }
     
+    # Description: log entry timestamp format is controlled by
+    # $Script:Config.Logging.TimestampFormat so logging consumers (console
+    # output, blob logs, and any downstream parsers) see consistent timestamps.
     $timestamp = Get-Date -Format $Script:Config.Logging.TimestampFormat
     $logEntry = "[$timestamp] [$Level] $Message"
     
@@ -1268,10 +1286,19 @@ function Save-RunProcessingArtifact {
     )
 
     try {
+        # Description: create a timestamped artifact filename for run outputs.
+        # The artifact includes `RunGeneratedAtUtc` and `YearWeek` fields so
+        # weekly merge jobs can easily group artifacts by ISO week. The
+        # filename uses the same sortable timestamp format as logs to simplify
+        # cross-referencing artifacts with job logs.
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $fileName = "run_artifact_$timestamp.json"
 
         # Calculate ISO week number for this artifact
+        # Compute ISO-style week number (FirstFourDayWeek, Monday start) so
+        # weekly artifacts align with business reporting windows used by the
+        # trend/backfill runbooks. This YearWeek value is included in the
+        # artifact payload for consistent weekly merging and reporting.
         $artifactWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
             (Get-Date),
             [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
@@ -1513,6 +1540,13 @@ function Filter-IncidentsByResolvedWindow {
         return $Incidents
     }
 
+    # Description: the $LookbackHours parameter controls the sliding window
+    # used to select recently-resolved incidents for the daily job. Default
+    # is 26 (24 hours + 2 hour buffer) to ensure late-arriving resolved
+    # tickets are included in the day's processing. $cutoff is computed from
+    # the current local time and compared against each incident's resolved_at
+    # timestamp. If an incident's date cannot be parsed it is conservatively
+    # kept to avoid accidental data loss.
     $cutoff = (Get-Date).AddHours(-1 * $LookbackHours)
     $filtered = [System.Collections.Generic.List[object]]::new()
 
@@ -2157,10 +2191,16 @@ function New-DetailsTableHtml {
     if ($filteredSummaries.Count -eq 0) { return "" }
     
     $detailRows = foreach ($summary in $filteredSummaries) {
-        $category = $CategoryLookup[$summary.IncidentNumber] ?? "Unknown"
-        $ticketRecord = if ($ProcessedTicketsData.Count -gt 0) {
-            $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
-        } else { $null }
+        if ($CategoryLookup[$summary.IncidentNumber]) {
+            $category = $CategoryLookup[$summary.IncidentNumber]
+        } else {
+            $category = "Unknown"
+        }
+        if ($ProcessedTicketsData.Count -gt 0) {
+            $ticketRecord = $ProcessedTicketsData | Where-Object { $_.Number -eq $summary.IncidentNumber } | Select-Object -First 1
+        } else {
+            $ticketRecord = $null
+        }
 
         # For Excluded tickets, append the exclusion reason below the category in the detail row
         if ($category -eq 'Excluded' -and $ticketRecord -and $ticketRecord.ExclusionReason) {
@@ -2333,8 +2373,28 @@ function Send-ReportWebhook {
 
 #region Configuration
 # Load prompt templates with consolidated logging
-# Productivity Tools: blob/file names carry the _ProductivityTools suffix but
-# the hashtable keys are kept short so existing references in this script work.
+#
+# Description:
+#  The following map defines the prompt/template files used to construct the
+#  large-system prompt that is sent to the AI model. Each entry maps a short
+#  logical key (used throughout this runbook) to the template filename base
+#  (the markdown files live under `templates/` locally or in the configured
+#  blob container in Azure Automation). These templates are the source-of-truth
+#  for allowed labels, example phrasing, and the strict categorization rules.
+#
+#  Template usage summary:
+#    - WorkNotesCleanup:   Cleanup rules applied to work notes before summarizing
+#    - WorkNotesSummary:   Short human-friendly summary of work notes for context
+#    - TicketCategorisation: System prompt + examples for Category/Subcategory
+#    - EnvironmentContext: Runtime/environment info appended to prompts
+#    - TrendSubCategorisation: Guidance for subcategorization used by trend jobs
+#    - PossibleRootCause:   Canonical PRC allowlist (source-of-truth for PRC)
+#    - DetailedRootCause:   Canonical DRC headings (detailed root cause entries)
+#
+#  Note: Get-BlobMarkdownContent will load the named markdown file either from
+#  `./Templates/<name>.md` when running locally, or from the configured blob
+#  container when running in Azure Automation. The parsed contents are later
+#  coerced into canonical allowlists used for dashboard-safe labels.
 $Script:PromptTemplates = @{}
 $templateMap = [ordered]@{
     WorkNotesCleanup       = "WorkNotesCleanup_ProductivityTools"
@@ -2893,7 +2953,11 @@ try {
         # Normalize to a safe array so null API payloads do not fail downstream mandatory binding.
         $incidents = @($incidentsResponse.result)
 
-        $lookbackHours = [int]($Script:Constants.DailyLookbackHours ?? 26)
+        if ($Script:Constants.DailyLookbackHours) {
+            $lookbackHours = [int]$Script:Constants.DailyLookbackHours
+        } else {
+            $lookbackHours = 26
+        }
         $incidents = Filter-IncidentsByResolvedWindow -Incidents $incidents -LookbackHours $lookbackHours
         
         Write-ScriptLog "Retrieved $($incidents.Count) resolved incidents for processing" -Level Success
@@ -3054,14 +3118,15 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     }
 
     # Save per-run artifact for weekly merge (skipped in backfill mode)
-    if (-not $backfillYearWeek -and (($Script:Constants.SaveRunArtifacts ?? $true) -eq $true)) {
+    $saveArtifacts = if ($Script:Constants.SaveRunArtifacts) { $Script:Constants.SaveRunArtifacts } else { $true }
+    if (-not $backfillYearWeek -and ($saveArtifacts -eq $true)) {
         Save-RunProcessingArtifact -DetailedSummaries $allsummarisednotes -ReportPeriod $Script:reportperiod -DataSource $dataSource | Out-Null
     }
 
     # Always merge all current week's artifacts to build cumulative weekly report
     # Each daily run adds its artifact, then the full week is merged and the report is overwritten
     # (skipped in backfill mode so historical runs use only the current cohort)
-    $lookbackDays = [int]($Script:Constants.WeeklyMergeLookbackDays ?? 7)
+    $lookbackDays = [int](if ($Script:Constants.WeeklyMergeLookbackDays) { $Script:Constants.WeeklyMergeLookbackDays } else { 7 })
     $mergedData = if ($backfillYearWeek) { @{ ProcessedTickets = @(); DetailedSummaries = @(); YearWeek = $backfillYearWeek } } else { Get-MergedWeeklyRunData -LookbackDays $lookbackDays }
     if ($mergedData.ProcessedTickets.Count -gt 0) {
         $Script:ProcessedTickets = $mergedData.ProcessedTickets
@@ -3182,6 +3247,11 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     
     # Monitoring heartbeat: job completed
     Send-LogAnalyticsHeartbeat -Status 'Completed' -ProcessedCount $totalProcessedTickets -Message "Execution completed successfully ($dataSource)"
+
+    # ===== REGENERATE DASHBOARD =====
+    # TODO: Optimize dashboard generation - currently disabled to prevent timeout
+    # Will be re-enabled after performance tuning
+    Write-ScriptLog "Dashboard regeneration temporarily disabled for performance optimization" -Level Info
 
     # Complete logging with success message
     Complete-BlobLogging -FinalMessage "Execution completed successfully - $totalProcessedTickets incidents processed ($dataSource)"

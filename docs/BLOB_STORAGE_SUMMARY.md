@@ -6,17 +6,15 @@ Added blob storage support for "data" and "results" containers to enable Azure A
 ## Changes Made
 
 ### 1. Files Modified
-- ✅ **incident-analyzer-rb-debug.ps1** (Debug version with verbose logging)
-- ✅ **incident-analyzer-rb.ps1** (Production version)
-
-### 2. New Helper Scripts Created
-- ✅ **Add-BlobStorageVariables.ps1** - Adds automation variables for container names
-- ✅ **Create-BlobContainers.ps1** - Creates the blob containers in storage account
-
-## Technical Changes
-
-### A. Blob Configuration (Both Files)
+.\Publish-runbook.ps1 -SourceFile incident-analyzer-rb-debug.ps1
 **Location:** Line ~20-27 (BlobConfig section)
+
+For the daily reconciliation/auto-heal flow, use:
+```powershell
+.\publish\Publish-ReconcileRunbook.ps1
+```
+
+That publisher republishes `incident-reconcile-rb-prodtools`, links the daily schedule, and attempts to grant the Automation Account managed identity the permission needed to start the backfill runbook during auto-heal.
 
 **Added:**
 ```powershell
@@ -30,7 +28,9 @@ $Script:BlobConfig = @{
 }
 ```
 
-### B. New Helper Function: Get-StorageContext
+
+### Daily Reconcile
+4. ✅ **Run daily reconcile:** `\.\publish\Publish-ReconcileRunbook.ps1`
 **Location:** Added at start of Core Utility Functions region
 
 **Purpose:** 
@@ -204,17 +204,8 @@ Run the helper script to create the containers in your storage account:
 ```
 
 **What it does:**
-- Authenticates to Azure (device code if needed)
-- Selects subscription (if multiple)
-- Gets storage account key
-- Creates "data" container (Private access)
-- Creates "results" container (Private access)
-- Lists all incident-related containers
 
 **Container Access Level:** Private (Off)
-- Only accessible via storage account key or SAS token
-- Managed identity has access through key retrieval
-- Not publicly accessible
 
 ### Step 3: Republish Runbook
 Publish the updated runbook to Azure Automation:
@@ -228,6 +219,13 @@ Or for debug version:
 .\Publish-runbook.ps1 -SourceFile incident-analyzer-rb-debug.ps1
 ```
 
+For the daily reconciliation/auto-heal flow, use:
+```powershell
+.\publish\Publish-ReconcileRunbook.ps1
+```
+
+That publisher republishes `incident-reconcile-rb-prodtools`, links the daily schedule, and attempts to grant the Automation Account managed identity the permission needed to start the backfill runbook during auto-heal.
+
 ### Step 4: Test in Azure Automation
 1. Navigate to Azure Portal → Automation Account → Runbooks
 2. Select incident-analyzer-rb
@@ -240,6 +238,13 @@ Or for debug version:
 - ✅ HTML report saved to "results" container (if no webhook)
 - ✅ Execution logs saved to "logs" container
 - ✅ No errors related to blob storage
+
+### Daily Reconcile
+Run the reconcile publisher after the runbook has been imported:
+
+```powershell
+.\publish\Publish-ReconcileRunbook.ps1
+```
 
 ## Verification
 

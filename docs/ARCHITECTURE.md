@@ -14,11 +14,13 @@ flowchart LR
     AA[Daily Runbook<br/>incident-analyzer-rb-prodtools]
     TR[Daily Runbook<br/>incident-trend-rb-prodtools]
     BF[Daily Runbook<br/>incident-trend-backfill-rb-prodtools]
+    RC[Daily Runbook<br/>incident-reconcile-rb-prodtools]
   end
 
   AA -->|3 LLM calls per incident| AOAI[Azure OpenAI<br/>opsw-ticket-analyzer-foundary<br/>gpt-5.4-mini]
   TR --> AOAI
   BF --> AOAI
+  RC -->|reconcile counts and auto-heal| BF
 
   subgraph StoragePT[Storage Account: opswprodtoolsblob &nbsp;Productivity Tools]
     TPL[(templates/<br/>AI prompts)]
@@ -121,6 +123,7 @@ Resource Group: `OPSW-Ticket-Analyzer`
 | `incident-analyzer-rb-prodtools` | Daily | `DailyLookbackHours=26` | `data/run_artifact_*.json`, `results/EUC_Weekly_Report_YYYY-Wxx.html`, table rows |
 | `incident-trend-backfill-rb-prodtools` | Daily | `LookbackDays=2` | Table rows (only for incidents not yet stored) — idempotent |
 | `incident-trend-rb-prodtools` | Daily (after analyzer) | None | `results/EUC_Trend_Analysis_YYYY-Wxx.html` |
+| `incident-reconcile-rb-prodtools` | Daily | None | `results/health-status.json`, auto-heal trigger for backfill |
 
 ---
 

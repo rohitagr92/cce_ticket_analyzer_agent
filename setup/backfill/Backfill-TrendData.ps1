@@ -45,7 +45,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot = Split-Path -Parent $PSScriptRoot
+# Make repo root the parent of the setup folder (script is in setup\backfill)
+$repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Set-Location $repoRoot
 
 # -------- Load config + secrets --------
@@ -226,19 +227,22 @@ function New-FallbackAnalysisText {
     if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
     if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
     if ($parts.Count -eq 0) {
-        return "$Category: fallback analysis generated because AI analysis text was missing in backfill output."
+        return "${Category}: fallback analysis generated because AI analysis text was missing in backfill output."
     }
-    return "$Category :: " + ($parts -join '. ') + '.'
+    return "${Category} :: " + ($parts -join '. ') + '.'
 }
 
 function Get-YearWeekFromDate {
     param([DateTime]$Date)
-    $cal = [System.Globalization.CultureInfo]::CurrentCulture.Calendar
-    $wn  = $cal.GetWeekOfYear($Date, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
+    # Use Intel convention: IST week Sun->Sat. Compute YearWeek like other scripts.
+    $yyy = $Date.Year
+    $jan1 = (Get-Date -Year $yyy -Month 1 -Day 1).Date
+    $week1Sun = $jan1.AddDays(-1 * [int]$jan1.DayOfWeek)
+    $wkn = [int]([Math]::Floor((($Date.Date - $week1Sun).TotalDays)/7) + 1)
     return [PSCustomObject]@{
-        Year       = $Date.Year
-        WeekNumber = $wn
-        YearWeek   = ('{0:D4}-W{1:D2}' -f $Date.Year, $wn)
+        Year = $yyy
+        WeekNumber = $wkn
+        YearWeek = ('{0:D4}-W{1}' -f $yyy, $wkn)
     }
 }
 

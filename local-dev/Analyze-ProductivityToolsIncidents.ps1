@@ -25,12 +25,14 @@ if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
 }
 
 $script:TemplateFileMap = @{
-    Environment          = 'templates\new_template\RootCause_EnvironmentContext.md'
-    WorkNotesSummary     = 'templates\new_template\RootCause_WorkNotesSummary.md'
-    WorkNotesCleanup     = 'templates\ProductivityTools_WorkNotesCleanup.md'
-    TicketCategorisation = 'templates\new_template\RootCause_TicketCategorisation.md'
+    Environment          = 'templates\EnvironmentContext_ProductivityTools.md'
+    WorkNotesSummary     = 'templates\WorkNotesSummary_ProductivityTools.md'
+    WorkNotesCleanup     = 'templates\WorkNotesCleanup_ProductivityTools.md'
+    TicketCategorisation = 'templates\TicketCategorisation_ProductivityTools.md'
     TrendSubCategorisation = 'templates\TrendSubCategorisation_ProductivityTools.md'
-    PortfolioSummary     = 'templates\new_template\RootCause_PortfolioSummary.md'
+    PossibleRootCause    = 'templates\PossibleRootCause_ProductivityTools.md'
+    DetailedRootCause    = 'templates\DetailedRootCause_ProductivityTools.md'
+    PortfolioSummary     = 'templates\WorkNotesSummary_ProductivityTools.md'
 }
 
 function Write-Step {
@@ -230,6 +232,8 @@ function Get-TemplateBundle {
         WorkNotesCleanup = Get-TemplateText -RelativePath $script:TemplateFileMap.WorkNotesCleanup
         TicketCategorisation = Get-TemplateText -RelativePath $script:TemplateFileMap.TicketCategorisation
         TrendSubCategorisation = Get-TemplateText -RelativePath $script:TemplateFileMap.TrendSubCategorisation
+        PossibleRootCause = Get-TemplateText -RelativePath $script:TemplateFileMap.PossibleRootCause
+        DetailedRootCause = Get-TemplateText -RelativePath $script:TemplateFileMap.DetailedRootCause
         PortfolioSummary = Get-TemplateText -RelativePath $script:TemplateFileMap.PortfolioSummary
     }
 }
@@ -1203,6 +1207,14 @@ function Invoke-IncidentAnalysis {
     if ($TemplateBundle -and -not [string]::IsNullOrWhiteSpace([string]$TemplateBundle.TicketCategorisation)) {
         $instructionsParts.Add((Limit-TextLength -Text $TemplateBundle.TicketCategorisation -MaxLength 3500))
     }
+    if ($TemplateBundle -and -not [string]::IsNullOrWhiteSpace([string]$TemplateBundle.PossibleRootCause)) {
+        $instructionsParts.Add((Limit-TextLength -Text $TemplateBundle.PossibleRootCause -MaxLength 3000))
+    }
+    if ($TemplateBundle -and -not [string]::IsNullOrWhiteSpace([string]$TemplateBundle.DetailedRootCause)) {
+        $instructionsParts.Add('The following is the Detailed Root Cause catalog. When selecting a probable root cause, return the exact heading (verbatim) from this catalog in the "probable_root_cause" field.')
+        $instructionsParts.Add((Limit-TextLength -Text $TemplateBundle.DetailedRootCause -MaxLength 4000))
+    }
+    $instructionsParts.Add('Important: `probable_root_cause` must be an exact heading from the Detailed Root Cause catalog above. `quick_look` must be a concise, descriptive 1-2 sentence rationale linking evidence to the chosen root cause.')
     $instructionsParts.Add(@'
 Return this exact JSON shape:
 {

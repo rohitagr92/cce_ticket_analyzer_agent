@@ -425,6 +425,8 @@ Write-Host "   - ProductivityTools_EnvironmentContext.md" -ForegroundColor Gray
 Write-Host "   - ProductivityTools_PortfolioSummary.md" -ForegroundColor Gray
 Write-Host ""
 Write-Host "2. Import the incident-analyzer-rb.ps1 runbook to your Automation Account" -ForegroundColor Yellow
+Write-Host "   - Also import and schedule incident-reconcile-rb-prodtools for daily auto-heal" -ForegroundColor Gray
+Write-Host "   - Use .\Publish-ReconcileRunbook.ps1 to publish the reconcile runbook and link its daily schedule" -ForegroundColor Gray
 Write-Host ""
 Write-Host "3. Ensure the Automation Account has required modules:" -ForegroundColor Yellow
 Write-Host "   - Az.Storage (version 8.0.0 or higher)" -ForegroundColor Gray

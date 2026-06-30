@@ -113,6 +113,30 @@ try {
     if ($j.Exception) { Write-Host "Exception: $($j.Exception)" -ForegroundColor Red }
     $color = if ($j.Status -eq 'Completed') { 'Green' } else { 'Red' }
     Write-Host "Runbook final status: $($j.Status)" -ForegroundColor $color
+
+        # --- Post-run validation: check the YearWeek partition and retry backfill if empty ---
+        if ($j.Status -eq 'Completed') {
+            Write-Host "Running post-run validation for $YearWeek..." -ForegroundColor Cyan
+            $pvCandidates = @(
+                (Join-Path $setupRoot 'PostRunValidation.ps1'),
+                (Join-Path $PSScriptRoot 'PostRunValidation.ps1')
+            )
+            $found = $false
+            foreach ($pv in $pvCandidates) {
+                if (Test-Path $pv) {
+                    try {
+                        & $pv -YearWeek $YearWeek
+                        $found = $true
+                        break
+                    } catch {
+                        Write-Warning ([string]::Format('Post-run validation script failed at {0}: {1}', $pv, $_.Exception.Message))
+                    }
+                }
+            }
+            if (-not $found) { Write-Host "PostRunValidation.ps1 not found in expected locations, skipping validation." -ForegroundColor Yellow }
+        } else {
+            Write-Host "Job did not complete successfully; skipping post-run validation." -ForegroundColor Yellow
+        }
 }
 finally {
     # -------- Always restore the original Automation Variables --------

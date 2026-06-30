@@ -68,10 +68,26 @@ $base = "https://$StorageAccount.table.core.windows.net/$TableName()?$sas"
 $rows = @()
 $url = $base
 while ($url) {
-    $resp = Invoke-WebRequest -Uri $url -Headers @{ Accept = 'application/json;odata=nometadata' } -UseBasicParsing
-    $rows += ($resp.Content | ConvertFrom-Json).value
-    $npk = $resp.Headers['x-ms-continuation-NextPartitionKey']
-    $nrk = $resp.Headers['x-ms-continuation-NextRowKey']
+  $resp = Invoke-WebRequest -Uri $url -Headers @{ Accept = 'application/json;odata=nometadata' } -UseBasicParsing
+  $raw = $resp.Content
+  if ($raw -match '"SubCategory"' -and $raw -match '"Subcategory"') {
+    $raw = $raw -replace '"SubCategory"','"SubCategory_legacy"'
+  }
+  $json = $raw | ConvertFrom-Json
+  if ($json.value) {
+    foreach ($it in $json.value) {
+      if ($it.PSObject.Properties.Name -contains 'SubCategory_legacy') {
+        $val = $it.SubCategory_legacy
+        $it | Add-Member -NotePropertyName 'Subcategory' -NotePropertyValue $val -Force
+      } elseif ($it.PSObject.Properties.Name -contains 'SubCategory') {
+        $val = $it.SubCategory
+        $it | Add-Member -NotePropertyName 'Subcategory' -NotePropertyValue $val -Force
+      }
+      $rows += $it
+    }
+  }
+  $npk = $resp.Headers['x-ms-continuation-NextPartitionKey']
+  $nrk = $resp.Headers['x-ms-continuation-NextRowKey']
     if ($npk) {
         $url = $base + '&NextPartitionKey=' + [Uri]::EscapeDataString([string]$npk)
         if ($nrk) { $url += '&NextRowKey=' + [Uri]::EscapeDataString([string]$nrk) }

@@ -1004,15 +1004,9 @@
     const metaEl = $('dhMeta');
     if (!el || !titleEl || !metaEl) return;
 
-    const svcSel = $('smService');
-    const selectedService = svcSel ? String(svcSel.value || '').trim() : '';
-    const isProductivityToolsService = selectedService === 'Productivity Tools';
-
-    if (!isEngineerLensActive() || !isProductivityToolsService) {
-      el.style.display = 'none';
-      return;
-    }
-    el.style.display = '';
+    // Removed: hide the data health banner across all tabs (user requested).
+    el.style.display = 'none';
+    return;
 
     const preferred = healthStatusByService['Productivity Tools'];
     const fallback = Object.values(healthStatusByService)[0];
@@ -1040,7 +1034,6 @@
     titleEl.textContent = s.headline || ('Data health: ' + state);
     metaEl.innerHTML =
       '<span>' + (s.detailMessage || 'No additional detail available.') + '</span>' +
-      '<span><strong>Last successful ingestion:</strong> ' + (lastIngestion ? fmtDate(lastIngestion) : 'n/a') + ' (' + fmtAge(lastIngestion) + ')</span>' +
       '<span><strong>Last health check:</strong> ' + (lastChecked ? fmtDate(lastChecked) : 'n/a') + '</span>' +
       '<span><strong>Latest WW ticket count:</strong> ' + ticketCountStatus + ' (' + week + ')' + (hasCounts ? (' - ServiceNow: ' + serviceNowCount + ', Dashboard: ' + dashboardCount) : '') + '</span>' +
       '<span><strong>Latest delta:</strong> ' + delta + '</span>';

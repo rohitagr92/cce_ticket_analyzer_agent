@@ -662,7 +662,29 @@ function Get-SubCategoryAnalysis {
         [array]$DetailedSummaries
     )
 
-    $promptTemplate = Get-PromptTemplate -TemplateName "TrendSubCategorisation_ProductivityTools"
+    # Build combined system prompt from all 4 canonical templates — same enforcement
+    # pattern as incident-trend-backfill-rb-prodtools.ps1. Ensures SubCategory output
+    # uses only EXACT bold-label headings from the Sub-symptom catalog, not free-form text.
+    $subCatOutputFormat = @'
+
+
+## REQUIRED OUTPUT FORMAT (STRICT)
+
+Return ONLY a valid JSON array — no markdown, no commentary outside the array.
+Each element must have exactly these three fields:
+  "IncidentNumber": the incident number exactly as given
+  "SubCategory":    an EXACT bold header label from the Sub-symptom catalog above for the given ParentCategory. Do NOT invent or paraphrase.
+  "Justification":  1-2 sentence explanation of why this sub-category applies.
+
+Rules:
+- SubCategory MUST be an exact bold heading from the Sub-symptom catalog (e.g., "Sync Issues", "Licensing Issues").
+- Do NOT use bullet-level symptom text as SubCategory (e.g., do NOT write "OneDrive sync failure" — write "Sync Issues").
+- If no catalog label fits, write "Other".
+'@
+    $promptTemplate = $Script:TrendCatTemplate + "`n`n" + $Script:TrendEnvTemplate + "`n`n" +
+        "## REFERENCE: Sub-symptom Labels`n" + $Script:TrendSubCatTemplate + "`n`n" +
+        "## REFERENCE: Possible Root Cause Labels`n" + $Script:TrendPrcTemplate +
+        $subCatOutputFormat
 
     # Build a concise representation of each ticket for the AI
     $summaryLookup = @{}
@@ -1119,6 +1141,18 @@ function Get-PreviousTrendArtifact {
 try {
     Write-ScriptLog "=== EUC ROLLING 7-DAY TREND ANALYSIS STARTING ===" -Level Info
     Write-ScriptLog "Significance Threshold: $($Script:TrendConfig.SignificanceThresholdPercent)%, Min Incidents: $($Script:TrendConfig.MinIncidentCount)" -Level Info
+
+    # Load all 4 canonical prompt templates from blob at startup.
+    # Stored as script-scoped variables so every AI call in this runbook
+    # uses the same catalog (TicketCategorisation, EnvironmentContext,
+    # TrendSubCategorisation, PossibleRootCause) — same pattern as
+    # incident-trend-backfill-rb-prodtools.ps1.
+    Write-ScriptLog "Loading prompt templates from container '$($Script:BlobConfig.PromptContainerName)'..." -Level Info
+    $Script:TrendCatTemplate    = Get-PromptTemplate -TemplateName 'TicketCategorisation_ProductivityTools'
+    $Script:TrendEnvTemplate    = Get-PromptTemplate -TemplateName 'EnvironmentContext_ProductivityTools'
+    $Script:TrendSubCatTemplate = Get-PromptTemplate -TemplateName 'TrendSubCategorisation_ProductivityTools'
+    $Script:TrendPrcTemplate    = Get-PromptTemplate -TemplateName 'PossibleRootCause_ProductivityTools'
+    Write-ScriptLog "All 4 prompt templates loaded." -Level Info
 
     # Step 1: Define rolling 7-day windows
     $today = (Get-Date).Date

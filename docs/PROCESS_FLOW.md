@@ -2,12 +2,14 @@
 
 This document describes the end-to-end process flow for the two main runbooks:
 
-1. **incident-analyzer-rb.ps1** — Daily incident categorization and weekly report generation
-2. **incident-trend-rb.ps1** — Rolling 7-day trend analysis with AI sub-categorization
+1. **incident-analyzer-rb-prodtools.ps1** — Daily incident categorization and weekly report generation
+2. **incident-trend-rb-prodtools.ps1** — Rolling 7-day trend analysis with AI sub-categorization
+3. **incident-trend-backfill-rb-prodtools.ps1** — Daily incremental backfill for the `IncidentsCategoryStats` table
+4. **incident-reconcile-rb-prodtools.ps1** — Daily count reconciliation: ServiceNow vs table, with auto-heal
 
 ---
 
-## 1. incident-analyzer-rb.ps1
+## 1. incident-analyzer-rb-prodtools.ps1
 
 ### Purpose
 
@@ -184,11 +186,12 @@ The script supports two AI backends, selected via the `UseClaudeModel` configura
 
 | Template | Used In |
 |---|---|
-| `ProductivityTools_WorkNotesCleanup.md` | Cleaning raw work notes |
-| `ProductivityTools_WorkNotesSummary.md` | Summarizing cleaned notes |
-| `ProductivityTools_TicketCategorisation.md` | Strict category assignment |
-| `ProductivityTools_EnvironmentContext.md` | Appended to summary & categorization prompts as domain context |
-| `ProductivityTools_PortfolioSummary.md` | Portfolio-level trend/insight summary |
+| `WorkNotesCleanup_ProductivityTools.md` | Cleaning raw work notes |
+| `WorkNotesSummary_ProductivityTools.md` | Summarizing cleaned notes |
+| `TicketCategorisation_ProductivityTools.md` | Strict category + subcategory label assignment |
+| `EnvironmentContext_ProductivityTools.md` | Bundled into summary + categorization prompts as domain context |
+| `TrendSubCategorisation_ProductivityTools.md` | Sub-symptom labels catalog (also used by trend + backfill runbooks) |
+| `PossibleRootCause_ProductivityTools.md` | Root cause labels catalog (also used by trend + backfill runbooks) |
 
 ### Data Artifacts
 
@@ -200,7 +203,7 @@ The script supports two AI backends, selected via the `UseClaudeModel` configura
 
 ---
 
-## 2. incident-trend-rb.ps1
+## 2. incident-trend-rb-prodtools.ps1
 
 ### Purpose
 
@@ -268,7 +271,8 @@ Compares the most recent 7-day window of incidents against the previous 7-day wi
 │  ┌──────────────────────────────────────┐    │
 │  │ 1. Gather current-period tickets     │    │
 │  │ 2. Send to AI in batches of 30       │    │
-│  │    Prompt: ProductivityTools_PortfolioSummary.md  │    │
+  │  │    System: all 4 templates combined  │    │
+  │  │    (Cat+Env+SubCat+PRC catalogs)     │    │
 │  │    → assigns a sub-category +        │    │
 │  │      justification per ticket        │    │
 │  │ 3. Repeat for previous-period        │    │
@@ -317,7 +321,7 @@ Compares the most recent 7-day window of incidents against the previous 7-day wi
 | `Get-MergedDateRangeData` | Loads and merges run artifacts whose date falls within a specified range; deduplicates by incident number |
 | `Compare-WeeklyCategories` | Groups tickets by category, computes count/change/percent for each |
 | `Get-SignificantIncreases` | Filters to categories meeting the threshold and minimum count |
-| `Get-SubCategoryAnalysis` | Sends ticket batches to AI with `TrendSubCategorisation` prompt; returns sub-category + justification per ticket |
+| `Get-SubCategoryAnalysis` | Sends ticket batches to AI using all 4 combined templates; returns sub-category + justification per ticket |
 | `Compare-SubCategories` | Compares sub-category counts between current and previous periods |
 | `New-TrendReportHtml` | Builds the full HTML trend report with tables, badges, and key-driver highlights |
 | `Save-TrendArtifact` | Persists trend results as JSON for later reuse |
@@ -334,7 +338,7 @@ Compares the most recent 7-day window of incidents against the previous 7-day wi
 
 ### Data Dependencies
 
-The trend script **does not call ServiceNow directly**. It relies entirely on `run_artifact_*.json` files produced by the daily runs of `incident-analyzer-rb.ps1`. Each artifact contains:
+The trend script **does not call ServiceNow directly**. It relies entirely on `run_artifact_*.json` files produced by the daily runs of `incident-analyzer-rb-prodtools.ps1`. Each artifact contains:
 
 - `RunGeneratedAtUtc` — timestamp for date-range filtering
 - `ProcessedTickets[]` — categorized ticket objects (Number, Category, Reasoning, etc.)
@@ -342,52 +346,67 @@ The trend script **does not call ServiceNow directly**. It relies entirely on `r
 
 ---
 
-## How the Two Scripts Work Together
+## How All Four Runbooks Work Together
 
 ```
-                    ┌──────────────────────────────┐
-                    │   ServiceNow API             │
-                    │   (resolved incidents)        │
-                    └──────────────┬───────────────┘
-                                   │
-                                   ▼
-  ┌─────────────────────────────────────────────────────┐
-  │          incident-analyzer-rb.ps1  (daily)          │
-  │                                                     │
-  │  • Fetches & processes incidents                    │
-  │  • AI categorization per ticket                     │
-  │  • Saves run_artifact_*.json                        │
-  │  • Merges week's artifacts → weekly HTML report     │
-  │  • Saves statistics to Azure Table                  │
-  └──────────────────────┬──────────────────────────────┘
-                         │ produces
-                         ▼
-              run_artifact_*.json files
-                         │
-                         │ consumed by
-                         ▼
-  ┌─────────────────────────────────────────────────────┐
-  │          incident-trend-rb.ps1  (daily/weekly)      │
-  │                                                     │
-  │  • Loads artifacts for two 7-day windows            │
-  │  • Compares category counts                         │
-  │  • AI sub-categorizes significant increases         │
-  │  • Generates trend analysis HTML report             │
-  │  • Saves trend_artifact_*.json for caching          │
-  └─────────────────────────────────────────────────────┘
+                    ┌──────────────────────────────────────────────────┐
+                    │   ServiceNow API  (resolved incidents)           │
+                    └──────────────────────────┬───────────────────────┘
+                                               │
+                                               ▼
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  incident-analyzer-rb-prodtools.ps1  (daily ~06:00 UTC)          │
+  │                                                                  │
+  │  • Fetches & processes incidents (26h lookback)                  │
+  │  • AI categorization per ticket (3 LLM calls each)              │
+  │  • Saves run_artifact_*.json                                     │
+  │  • Merges week's artifacts → weekly HTML report                  │
+  │  • Saves per-incident rows to Azure Table                        │
+  └──────────────────────────┬───────────────────────────────────────┘
+                             │ produces
+                             ▼
+              run_artifact_*.json files  +  table rows
+                             │
+              ┌──────────────┴──────────────┐
+              │                             │
+              ▼                             ▼
+  ┌───────────────────────┐   ┌─────────────────────────────────────┐
+  │ incident-trend-rb-    │   │ incident-trend-backfill-rb-          │
+  │ prodtools.ps1         │   │ prodtools.ps1  (daily ~03:00 UTC)    │
+  │ (after analyzer)      │   │                                     │
+  │                       │   │ Checks last 2 days in SN,           │
+  │ Loads run artifacts   │   │ skips already-stored rows,          │
+  │ for two 7-day windows,│   │ AI-categorizes new ones.            │
+  │ compares categories,  │   │ Idempotent / cheap.                 │
+  │ AI sub-categorizes    │   └─────────────────────────────────────┘
+  │ significant rises,    │
+  │ generates trend HTML. │                   ▲
+  └───────────────────────┘      triggers if gap found
+                                             │
+  ┌──────────────────────────────────────────────────────────────────┐
+  │  incident-reconcile-rb-prodtools.ps1  (daily ~07:00 UTC)         │
+  │                                                                  │
+  │  Queries SN count per week vs table row count.                   │
+  │  If mismatch ≥ threshold → starts backfill runbook.              │
+  │  Writes health-status artifact for dashboard.                    │
+  └──────────────────────────────────────────────────────────────────┘
 ```
 
-### Execution Order
+### Execution Order (UTC)
 
-1. **incident-analyzer-rb.ps1** runs first (typically daily via Azure Automation schedule).
-2. **incident-trend-rb.ps1** runs after the analyzer completes, consuming the freshly produced `run_artifact_*.json`.
+| Time | Runbook | Purpose |
+|---|---|---|
+| 03:00 | `incident-trend-backfill-rb-prodtools` | Incremental fill — cheap, idempotent |
+| 06:00 | `incident-analyzer-rb-prodtools` | Full daily ingest + weekly report |
+| 07:00 | `incident-reconcile-rb-prodtools` | Count check; auto-heal if gap found |
+| After analyzer | `incident-trend-rb-prodtools` | Trend report using fresh run artifacts |
 
 ### Storage Layout
 
 | Container / Folder | Contents |
 |---|---|
+| `templates/` (blob or local) | Markdown prompt files used by all AI calls |
 | `data/` (blob or local) | `incidents_*.json`, `run_artifact_*.json`, `trend_artifact_*.json` |
 | `results/` (blob or local) | `EUC_Weekly_Report_YYYY-Wnn.html`, `EUC_Trend_Analysis_YYYY-Wnn.html` |
-| `prompt-templates/` (blob) or `Templates/` (local) | Markdown prompt files used by AI calls |
 | `logs/` (blob, Azure only) | Timestamped execution logs |
-| Azure Table `IncidentsCategoryStats` | Per-incident rows keyed by YearWeek + Incident Number |
+| Azure Table `IncidentsCategoryStats` | Per-incident rows: PK=YearWeek, RK=IncidentNumber |

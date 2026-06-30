@@ -14,6 +14,7 @@ flowchart LR
     AA[Daily Runbook<br/>incident-analyzer-rb-prodtools]
     TR[Daily Runbook<br/>incident-trend-rb-prodtools]
     BF[Daily Runbook<br/>incident-trend-backfill-rb-prodtools]
+    RC[Daily Runbook<br/>incident-reconcile-rb-prodtools]
   end
 
   AA -->|3 LLM calls per incident| AOAI[Azure OpenAI<br/>opsw-ticket-analyzer-foundary<br/>gpt-5.4-mini]
@@ -43,6 +44,8 @@ flowchart LR
   AA -->|upsert per-incident row| TBL
   TR -->|upload trend HTML| RES
   BF -->|upsert| TBL
+  RC -->|compare count| TBL
+  RC -->|query count| SN
 
   EC[E and C team runbook<br/>same pattern, their tenant scope] --> TBL2
   EC --> RES2
@@ -116,10 +119,11 @@ Resource Group: `OPSW-Ticket-Analyzer`
 
 ## 4. Runbooks (Scheduled Daily)
 
-| Runbook | Schedule | Inputs | Outputs |
+| Runbook | Schedule (UTC) | Inputs | Outputs |
 |---|---|---|---|
-| `incident-analyzer-rb-prodtools` | Daily | `DailyLookbackHours=26` | `data/run_artifact_*.json`, `results/EUC_Weekly_Report_YYYY-Wxx.html`, table rows |
-| `incident-trend-backfill-rb-prodtools` | Daily | `LookbackDays=2` | Table rows (only for incidents not yet stored) — idempotent |
+| `incident-trend-backfill-rb-prodtools` | Daily ~03:00 | `LookbackDays=2` | Table rows (only for incidents not yet stored) — idempotent |
+| `incident-analyzer-rb-prodtools` | Daily ~06:00 | `DailyLookbackHours=26` | `data/run_artifact_*.json`, `results/EUC_Weekly_Report_YYYY-Wxx.html`, table rows |
+| `incident-reconcile-rb-prodtools` | Daily ~07:00 | `WeeksToCheck=2` | Reconciles SN count vs table row count per week; triggers backfill if gap exceeds threshold |
 | `incident-trend-rb-prodtools` | Daily (after analyzer) | None | `results/EUC_Trend_Analysis_YYYY-Wxx.html` |
 
 ---
@@ -128,13 +132,13 @@ Resource Group: `OPSW-Ticket-Analyzer`
 
 | Template | Used by | Purpose |
 |---|---|---|
-| `ProductivityTools_WorkNotesCleanup.md` | analyzer | Strip noise from worklog |
-| `ProductivityTools_WorkNotesSummary.md` | analyzer | Concise problem + resolution summary |
-| `ProductivityTools_EnvironmentContext.md` | analyzer | Domain knowledge bundled with other prompts |
-| `ProductivityTools_TicketCategorisation.md` | analyzer | Strict category + subcategory assignment |
-| `ProductivityTools_PossibleRootCause.md` | analyzer | Root cause taxonomy |
-| `ProductivityTools_DetailedRootCause.md` | reference | Detailed RCA guide |
-| `ProductivityTools_TrendSubCategorisation.md` | trend-backfill | Sub-category for trend drivers |
+| `WorkNotesCleanup_ProductivityTools.md` | analyzer | Strip noise from raw work notes |
+| `WorkNotesSummary_ProductivityTools.md` | analyzer | Concise problem + resolution summary |
+| `EnvironmentContext_ProductivityTools.md` | analyzer, trend, backfill | Domain knowledge — bundled into every AI system prompt |
+| `TicketCategorisation_ProductivityTools.md` | analyzer, trend, backfill | Strict category + subcategory labels |
+| `TrendSubCategorisation_ProductivityTools.md` | analyzer, trend, backfill | Sub-symptom labels catalog (bold header format) |
+| `PossibleRootCause_ProductivityTools.md` | analyzer, trend, backfill | Root cause labels catalog (bold header format) |
+| `DetailedRootCause_ProductivityTools.md` | reference only | Extended RCA descriptions — not used in AI system prompt |
 
 ---
 

@@ -24,7 +24,7 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$repoRoot   = Split-Path -Parent $PSScriptRoot
+$repoRoot   = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $scriptPath = Join-Path $repoRoot "runbooks\$RunbookName.ps1"
 if (-not (Test-Path $scriptPath)) { throw "Runbook source not found: $scriptPath" }
 

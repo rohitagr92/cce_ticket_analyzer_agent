@@ -63,6 +63,48 @@ Defines the allowed root cause labels for AI analysis. The AI must output only t
 
 ---
 
+### SharePoint Platform Health
+
+| Bold Label | Description |
+|---|---|
+| **Server Resource Exhaustion** | CPU, memory, or disk threshold exceeded on SharePoint farm server. |
+| **Planned Maintenance / Restart** | Host shutdown was scheduled or triggered by patching/maintenance process. |
+| **Farm Configuration Issue** | SharePoint farm or IIS configuration caused service disruption. |
+| **Network Infrastructure Issue** | Network problem between SharePoint servers or clients. |
+
+---
+
+### Microsoft Teams & M365 Collaboration
+
+| Bold Label | Description |
+|---|---|
+| **Teams Add-in Not Deployed** | Teams COM add-in not installed or disabled by policy in Outlook. |
+| **Teams Client Software Bug** | Defect or regression in Teams desktop/web client. |
+| **M365 Service Outage** | Microsoft-side service disruption affecting Teams or M365 apps. |
+| **Outlook-Teams Integration Misconfiguration** | Integration between Outlook and Teams incorrectly configured at device or tenant level. |
+
+---
+
+### SharePoint Online Administration
+
+| Bold Label | Description |
+|---|---|
+| **Incorrect Permission Assignment** | User assigned wrong role or missing from required SPO group. |
+| **Self-Service Request** | User requesting an admin action they cannot perform themselves. |
+| **Deleted Content Not Recoverable** | Item past recycle bin retention period or permanently deleted. |
+| **SPO Tenant Policy Restriction** | Action blocked by tenant-level governance or DLP policy. |
+
+---
+
+### How Do I / User Education
+
+| Bold Label | Description |
+|---|---|
+| **Lack of User Training** | User unfamiliar with product feature — needs documentation or guidance. |
+| **Documentation Gap** | Existing self-help docs missing or insufficient for the user's question. |
+
+---
+
 ### Unknown / Unclear
 
 | Bold Label | Description |

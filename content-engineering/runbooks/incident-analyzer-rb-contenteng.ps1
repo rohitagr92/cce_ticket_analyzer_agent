@@ -8,6 +8,7 @@ if ($Script:IsAzureAutomation) {
     # Import Az modules (use whatever versions are available in Automation Account)
     Import-Module -Name Az.Storage -Force -ErrorAction Stop
     Import-Module -Name Az.Accounts -Force -ErrorAction Stop
+    Import-Module -Name Az.KeyVault -Force -ErrorAction SilentlyContinue
 
     # Set your log file name prefix - this will be used as: "{LogFilePrefix}-{timestamp}.log"
     $Script:LogFilePrefix = "AI-ResolvedIncidents-StrictCategorization"
@@ -26,15 +27,40 @@ if ($Script:IsAzureAutomation) {
         SubscriptionId = Get-AutomationVariable -Name "ContentEng_SubscriptionId"
         StatisticsTableName = "IncidentsCategoryStats"  # Azure Table for statistics
         }
-    # Azure Automation - use automation variables
+    function Get-ContentEngSecretOrVar {
+        param(
+            [Parameter(Mandatory = $true)][string]$LegacyVariableName,
+            [Parameter(Mandatory = $true)][string]$SecretNameVariable,
+            [string]$DefaultSecretName
+        )
+
+        $vaultName = Get-AutomationVariable -Name 'ContentEng_KeyVaultName' -ErrorAction SilentlyContinue
+        $secretName = Get-AutomationVariable -Name $SecretNameVariable -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($secretName)) { $secretName = $DefaultSecretName }
+
+        if (-not [string]::IsNullOrWhiteSpace($vaultName) -and -not [string]::IsNullOrWhiteSpace($secretName)) {
+            try {
+                $secretObj = Get-AzKeyVaultSecret -VaultName $vaultName -Name $secretName -ErrorAction Stop
+                if ($secretObj -and $secretObj.SecretValue) {
+                    return ($secretObj.SecretValue | ConvertFrom-SecureString -AsPlainText)
+                }
+            } catch {
+                Write-Host "Key Vault read failed for $secretName, falling back to automation variable $LegacyVariableName" -ForegroundColor Yellow
+            }
+        }
+
+        return (Get-AutomationVariable -Name $LegacyVariableName -ErrorAction SilentlyContinue)
+    }
+
+    # Azure Automation - use automation variables / key vault secrets
     $Script:Constants = @{
         ContentEng_ServiceNowClientID = Get-AutomationVariable -Name "ContentEng_ServiceNowClientID"
-        ContentEng_ServiceNowClientSecret = Get-AutomationVariable -Name "ContentEng_ServiceNowClientSecret"
+        ContentEng_ServiceNowClientSecret = Get-ContentEngSecretOrVar -LegacyVariableName 'ContentEng_ServiceNowClientSecret' -SecretNameVariable 'ContentEng_ServiceNowClientSecretName' -DefaultSecretName 'ContentEng-ServiceNowClientSecret'
         ContentEng_ServiceNowScope = Get-AutomationVariable -Name "ContentEng_ServiceNowScope"
         TokenUrl = Get-AutomationVariable -Name "ContentEng_TokenUrl"
         AzureOpenAIBaseUrl = Get-AutomationVariable -Name "ContentEng_AzureOpenAIBaseUrl"
         AzureOpenAIDeployment = Get-AutomationVariable -Name "ContentEng_AzureOpenAIDeployment"
-        AzureOpenAIApiKey = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiKey"
+        AzureOpenAIApiKey = Get-ContentEngSecretOrVar -LegacyVariableName 'ContentEng_AzureOpenAIApiKey' -SecretNameVariable 'ContentEng_AzureOpenAIApiKeySecretName' -DefaultSecretName 'ContentEng-AzureOpenAIApiKey'
         AzureOpenAIApiVersion = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiVersion"
         ServicenowIncidentsURL = Get-AutomationVariable -Name "ContentEng_ServiceNowIncidentsURL"
         ServicenowRequestsURL = Get-AutomationVariable -Name "ContentEng_ServiceNowRequestsURL"

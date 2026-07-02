@@ -66,6 +66,42 @@ Defines the allowed sub-symptom labels for trend analysis. The AI must use only 
 
 ---
 
+### SharePoint Platform Health
+
+**CPU Saturation Alert**
+**Disk Space Warning**
+**Host Graceful Shutdown**
+**Network Connectivity Issue**
+**Service Performance Degradation**
+
+---
+
+### Microsoft Teams & M365 Collaboration
+
+**Teams Add-in Missing**
+**Teams Client Not Working**
+**Outlook-Teams Scheduling Broken**
+**M365 App Functional Issue**
+
+---
+
+### SharePoint Online Administration
+
+**SPO Permission Denied**
+**Site Admin Change Request**
+**File / Item Recovery**
+**SPO User Education Query**
+
+---
+
+### How Do I / User Education
+
+**Teams How-To Query**
+**SharePoint How-To Query**
+**General M365 How-To**
+
+---
+
 ### Unknown / Unclear
 
 **Insufficient Ticket Detail**

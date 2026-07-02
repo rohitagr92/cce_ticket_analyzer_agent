@@ -50,8 +50,40 @@ Users cannot access content or authoring systems.
 - **Onboarding / Role Assignment** — New user not provisioned to the correct group.
 - **Broken SSO** — Single sign-on failing for authoring or delivery platforms.
 
+### **SharePoint Platform Health**
+Infrastructure and operational health events for SharePoint on-premises farms.
+
+- **CPU Saturation** — SharePoint server CPU utilisation exceeded threshold.
+- **Low Disk Space** — SharePoint server disk space below safe threshold.
+- **Host Gracefully Shutdown** — SharePoint host or service process shut down cleanly (planned or auto-restart).
+- **Network Problem** — Network connectivity issue affecting SharePoint farm.
+- **SharePoint Service Degradation** — General performance degradation or service slowness on SharePoint farm.
+
+### **Microsoft Teams & M365 Collaboration**
+Issues with Microsoft Teams client, add-ins, and integrated M365 collaboration tools.
+
+- **Teams Add-in Missing in Outlook** — Teams add-in not visible or loaded in Outlook client.
+- **Teams Client Functional Issue** — Teams messaging, chat, calling, or UI not working correctly.
+- **Outlook-Teams Integration Issue** — Teams meetings or scheduling broken within Outlook.
+- **M365 Planner / Other App Issue** — Issues with Planner, OneDrive, OneNote, or other M365 apps.
+
+### **SharePoint Online Administration**
+User-facing requests and incidents on SharePoint Online sites and permissions.
+
+- **Permission Denied (SPO)** — User cannot access a SharePoint Online site, list, or document.
+- **Site Administration Request** — Request to change site name, ownership, settings, or quota.
+- **Recycle Bin / File Recovery** — User requesting restore of deleted files or items.
+- **User Education — SPO** — How-to query about SharePoint Online features (not a break/fix).
+
+### **How Do I / User Education**
+Non-break/fix queries where the user needs guidance on using a tool or feature.
+
+- **Teams Usage Query** — How-to question about Microsoft Teams features.
+- **SharePoint Usage Query** — How-to question about SharePoint or document management.
+- **General M365 Query** — How-to question about any other M365 product.
+
 ### **Unknown / Unclear**
 Use only when no other category fits after careful review.
 
 - **Insufficient Information** — Ticket lacks enough detail to categorize.
-- **Out of Scope** — Incident does not belong to Content Engineering.
+- **Out of Scope** — Incident does not belong to Content Engineering's supported scope.

@@ -35,8 +35,9 @@ $ErrorActionPreference = 'Stop'
 # ── Constants ─────────────────────────────────────────────────────────────────
 $SubscriptionId          = '1c6d384e-bc83-4b02-859c-76eeb87f7676'
 $ResourceGroupName       = 'OPSW-Ticket-Analyzer'
-$AutomationAccountName   = 'OPSW-ProductivityTools-account'
+$AutomationAccountName   = 'OPSW-contentengg-account'
 $StorageAccountName      = 'opswcontentenggblob'
+$KeyVaultName           = 'OPSWcontentenggkey'
 $StorageRegion           = 'eastus'
 
 $BusinessServiceId       = 'a1de2ff2db8f50108062531dd3961911'   # End-User Collaboration (shared with PT)
@@ -50,10 +51,45 @@ $AzureOpenAIDeployment   = 'gpt-5.4-mini'
 $AzureOpenAIApiVersion   = '2025-04-01-preview'
 
 $TokenUrl                = 'https://apis.intel.com/v1/auth/token'
+$ServiceNowClientId      = '6e7adbde-53d8-4993-8740-f658cba16a8b'
+$ServiceNowScope         = 'api://71c9ae16-9d10-45b7-9c1d-30925311dabf/.default'
+
+$ServiceNowClientSecretName = 'ContentEng-ServiceNowClientSecret'
+$AzureOpenAIApiKeySecretName = 'ContentEng-AzureOpenAIApiKey'
 
 # ServiceNow incidents URL scoped to Content Engineering (business_service + service_offering)
 $ServiceNowIncidentsURL  = "https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=business_service=a1de2ff2db8f50108062531dd3961911^service_offering=ce614555dbeb5c105447610ed39619f8^stateIN6,7^ORDERBYDESCresolved_at&sysparm_display_value=true&sysparm_limit=1000"
 $ServiceNowRequestsURL   = "https://apis.intel.com/itsm/api/now/table/sc_task?sysparm_query=business_service=$BusinessServiceId^service_offering=$ServiceOfferingId^stateIN6,7^ORDERBYDESCresolved_at&sysparm_display_value=true&sysparm_limit=1000"
+
+# Content Engineering runbooks/scripts source-of-truth
+$ContentEngRunbooks = @(
+    [PSCustomObject]@{
+        SourceFile   = '..\\..\\content-engineering\\runbooks\\incident-trend-backfill-rb-contenteng.ps1'
+        RunbookName  = 'incident-trend-backfill-rb-contenteng'
+        ScheduleUtc  = '03:30 UTC'
+    },
+    [PSCustomObject]@{
+        SourceFile   = '..\\..\\content-engineering\\runbooks\\incident-analyzer-rb-contenteng.ps1'
+        RunbookName  = 'incident-analyzer-rb-contenteng'
+        ScheduleUtc  = '06:30 UTC'
+    },
+    [PSCustomObject]@{
+        SourceFile   = '..\\..\\content-engineering\\runbooks\\incident-trend-rb-contenteng.ps1'
+        RunbookName  = 'incident-trend-rb-contenteng'
+        ScheduleUtc  = 'Manual/On-demand'
+    }
+)
+
+# Keep CE scheduling aligned with ProdTools: only 2 scheduled jobs.
+$ContentEngScheduledRunbooks = @()
+$ContentEngScheduledRunbooks += $ContentEngRunbooks | Where-Object { $_.RunbookName -eq 'incident-trend-backfill-rb-contenteng' }
+$ContentEngScheduledRunbooks += $ContentEngRunbooks | Where-Object { $_.RunbookName -eq 'incident-analyzer-rb-contenteng' }
+
+$ContentEngScripts = @(
+    [PSCustomObject]@{ Name = 'Upload templates'; Path = '.\\setup\\publish\\Upload-TemplateFiles.ps1' },
+    [PSCustomObject]@{ Name = 'Publish runbook';   Path = '.\\setup\\publish\\Publish-runbook.ps1' },
+    [PSCustomObject]@{ Name = 'Deploy web';        Path = '.\\setup\\publish\\Deploy-Web.ps1' }
+)
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 function Write-Step { param([string]$Msg) Write-Host "`n=== $Msg ===" -ForegroundColor Cyan }
@@ -105,12 +141,78 @@ function Set-AutoVarSecure {
     }
 }
 
+function Set-KeyVaultSecret {
+    param(
+        [Parameter(Mandatory = $true)][string]$VaultName,
+        [Parameter(Mandatory = $true)][string]$SecretName,
+        [Parameter(Mandatory = $true)][securestring]$SecretValue
+    )
+
+    if ($DryRun) {
+        Write-Skip "DRY-RUN  Set-AzKeyVaultSecret  $SecretName in $VaultName"
+        return
+    }
+
+    Set-AzKeyVaultSecret -VaultName $VaultName -Name $SecretName -SecretValue $SecretValue -ErrorAction Stop | Out-Null
+    Write-Ok "Stored secret '$SecretName' in Key Vault '$VaultName'"
+}
+
+function Import-AzModuleBestEffort {
+    param(
+        [Parameter(Mandatory = $true)][string]$ModuleName,
+        [version]$MinimumVersion
+    )
+
+    $candidates = Get-Module -ListAvailable -Name $ModuleName | Sort-Object Version -Descending
+    if (-not $candidates) {
+        throw "Required module '$ModuleName' is not installed."
+    }
+
+    if ($MinimumVersion) {
+        $candidates = @($candidates | Where-Object { $_.Version -ge $MinimumVersion })
+        if (-not $candidates) {
+            throw "No installed '$ModuleName' version satisfies minimum version $MinimumVersion."
+        }
+    }
+
+    foreach ($candidate in $candidates) {
+        try {
+            Import-Module -Name $candidate.Path -Force -ErrorAction Stop | Out-Null
+            Write-Ok "Loaded $ModuleName $($candidate.Version)"
+            return
+        } catch {
+            Write-Skip "Failed loading $ModuleName $($candidate.Version). Trying next available version."
+            Write-Info "Reason: $($_.Exception.Message)"
+        }
+    }
+
+    throw "Unable to load module '$ModuleName' from installed versions."
+}
+
 # ── Azure connection ───────────────────────────────────────────────────────────
 Write-Step 'Connecting to Azure'
-$ctx = Get-AzContext -ErrorAction SilentlyContinue
+
+# Ensure compatible Az modules in this host (try best available versions).
+Import-AzModuleBestEffort -ModuleName 'Az.Accounts' -MinimumVersion ([version]'2.0.0')
+Import-AzModuleBestEffort -ModuleName 'Az.Resources' -MinimumVersion ([version]'2.0.0')
+
+# Some environments throw a TypeLoadException in Get-AzContext because of
+# incompatible Az module versions. Fall back to direct sign-in.
+$ctx = $null
+try {
+    $ctx = Get-AzContext -ErrorAction Stop
+} catch {
+    Write-Skip "Get-AzContext failed in this session. Falling back to direct sign-in."
+    Write-Info "Error: $($_.Exception.Message)"
+}
+
 if (-not $ctx) {
     Connect-AzAccount -ErrorAction Stop | Out-Null
-    $ctx = Get-AzContext
+    try {
+        $ctx = Get-AzContext -ErrorAction Stop
+    } catch {
+        throw "Connected to Azure, but Get-AzContext is still failing. Fix Az module installation in this shell (Az.Accounts/Az.Resources version mismatch)."
+    }
 }
 Write-Ok "Signed in as $($ctx.Account.Id)"
 Set-AzContext -SubscriptionId $SubscriptionId -ErrorAction Stop | Out-Null
@@ -121,7 +223,7 @@ Write-Step 'Phase 1 — Storage Account'
 
 $sa = Get-AzStorageAccount -ResourceGroupName $ResourceGroupName -Name $StorageAccountName -ErrorAction SilentlyContinue
 if ($sa) {
-    Write-Skip "Storage account '$StorageAccountName' already exists — skipped"
+    Write-Skip "Storage account '$StorageAccountName' already exists - skipped"
 } elseif ($DryRun) {
     Write-Skip "DRY-RUN  New-AzStorageAccount  $StorageAccountName"
 } else {
@@ -169,7 +271,7 @@ if ($DryRun) {
 } else {
     $existingTable = Get-AzStorageTable -Name $TableName -Context $saCtx -ErrorAction SilentlyContinue
     if ($existingTable) {
-        Write-Skip "Table '$TableName' already exists — skipped"
+        Write-Skip "Table '$TableName' already exists - skipped"
     } else {
         New-AzStorageTable -Name $TableName -Context $saCtx -ErrorAction Stop | Out-Null
         Write-Ok "Created table '$TableName'"
@@ -214,9 +316,14 @@ Set-AutoVar 'ContentEng_SubscriptionId'               $SubscriptionId
 Set-AutoVar 'ContentEng_DataContainerName'            'data'
 Set-AutoVar 'ContentEng_ResultsContainerName'         'results'
 Set-AutoVar 'ContentEng_TokenUrl'                     $TokenUrl
+Set-AutoVar 'ContentEng_ServiceNowClientID'           $ServiceNowClientId
+Set-AutoVar 'ContentEng_ServiceNowScope'              $ServiceNowScope
 Set-AutoVar 'ContentEng_AzureOpenAIBaseUrl'           $AzureOpenAIBaseUrl
 Set-AutoVar 'ContentEng_AzureOpenAIDeployment'        $AzureOpenAIDeployment
 Set-AutoVar 'ContentEng_AzureOpenAIApiVersion'        $AzureOpenAIApiVersion
+Set-AutoVar 'ContentEng_KeyVaultName'                 $KeyVaultName
+Set-AutoVar 'ContentEng_ServiceNowClientSecretName'   $ServiceNowClientSecretName
+Set-AutoVar 'ContentEng_AzureOpenAIApiKeySecretName'  $AzureOpenAIApiKeySecretName
 Set-AutoVar 'ContentEng_ServiceNowIncidentsURL'       $ServiceNowIncidentsURL
 Set-AutoVar 'ContentEng_ServiceNowRequestsURL'        $ServiceNowRequestsURL
 
@@ -231,30 +338,40 @@ Set-AutoVar 'ContentEng_ReconcileEnableAutoHeal'      $true
 Set-AutoVar 'ContentEng_ReconcileMaxHealPerWeekPerDay' 1
 Set-AutoVar 'ContentEng_ReconcileDelayHours'          30
 
-Write-Step 'Phase 3 — Automation Variables (secrets — you will be prompted)'
+Write-Step 'Phase 3 — Automation Variables (secrets — loaded from local config)'
 
-# ServiceNow credentials
-Write-Host "`n  Enter the ServiceNow OAuth Client ID for Content Engineering:" -ForegroundColor Yellow
-Write-Info "(Check the API gateway app registration, or reuse the PT client ID: 6e7adbde-53d8-4993-8740-f658cba16a8b)"
-$snClientId = Read-Host "  ContentEng_ServiceNowClientID"
-if (-not [string]::IsNullOrWhiteSpace($snClientId)) {
-    Set-AutoVar 'ContentEng_ServiceNowClientID' $snClientId
+# Load secrets automatically from local config files (no interactive prompts).
+# LocalSecrets-ContentEngineering.psd1 takes priority; falls back to LocalSecrets-ProductivityTools.psd1.
+$_scriptRoot = $PSScriptRoot
+if ([string]::IsNullOrWhiteSpace($_scriptRoot)) { $_scriptRoot = Split-Path -Parent $MyInvocation.MyCommand.Path }
+$_ceSecretsPath = Join-Path $_scriptRoot '..\config\LocalSecrets-ContentEngineering.psd1'
+$_ptSecretsPath = Join-Path $_scriptRoot '..\..\config\LocalSecrets-ProductivityTools.psd1'
+
+$_snSecret = $null
+$_oaiKey   = $null
+
+if (Test-Path $_ceSecretsPath) {
+    $s = Import-PowerShellDataFile -Path $_ceSecretsPath
+    if ($s.ServiceNowClientSecret -and $s.ServiceNowClientSecret -ne '<SET_IN_LOCAL_ONLY>') { $_snSecret = $s.ServiceNowClientSecret }
+    if ($s.AzureOpenAIApiKey      -and $s.AzureOpenAIApiKey      -ne '<SET_IN_LOCAL_ONLY>') { $_oaiKey   = $s.AzureOpenAIApiKey }
+}
+if ((-not $_snSecret -or -not $_oaiKey) -and (Test-Path $_ptSecretsPath)) {
+    $p = Import-PowerShellDataFile -Path $_ptSecretsPath
+    if (-not $_snSecret -and $p.ServiceNowIncidentsClientSecret) { $_snSecret = $p.ServiceNowIncidentsClientSecret }
+    if (-not $_oaiKey   -and $p.AzureOpenAIApiKey)               { $_oaiKey   = $p.AzureOpenAIApiKey }
 }
 
-Write-Host "`n  Enter the ServiceNow OAuth Scope for Content Engineering:" -ForegroundColor Yellow
-Write-Info "(Default PT scope: api://71c9ae16-9d10-45b7-9c1d-30925311dabf/.default)"
-$snScope = Read-Host "  ContentEng_ServiceNowScope"
-if ([string]::IsNullOrWhiteSpace($snScope)) { $snScope = 'api://71c9ae16-9d10-45b7-9c1d-30925311dabf/.default' }
-Set-AutoVar 'ContentEng_ServiceNowScope' $snScope
-
-Write-Host "`n  Enter the ServiceNow OAuth Client Secret (input hidden):" -ForegroundColor Yellow
-$snSecret = Read-Host "  ContentEng_ServiceNowClientSecret" -AsSecureString
-Set-AutoVarSecure 'ContentEng_ServiceNowClientSecret' $snSecret
-
-Write-Host "`n  Enter the Azure OpenAI API Key (input hidden):" -ForegroundColor Yellow
-Write-Info "(Reuse the same key as Productivity Tools if sharing the same deployment)"
-$oaiKey = Read-Host "  ContentEng_AzureOpenAIApiKey" -AsSecureString
-Set-AutoVarSecure 'ContentEng_AzureOpenAIApiKey' $oaiKey
+if ($DryRun) {
+    Write-Skip 'DRY-RUN  Skipping Key Vault secret writes'
+    Set-KeyVaultSecret -VaultName $KeyVaultName -SecretName $ServiceNowClientSecretName -SecretValue (ConvertTo-SecureString 'DRYRUN' -AsPlainText -Force)
+    Set-KeyVaultSecret -VaultName $KeyVaultName -SecretName $AzureOpenAIApiKeySecretName -SecretValue (ConvertTo-SecureString 'DRYRUN' -AsPlainText -Force)
+} else {
+    if (-not $_snSecret) { throw "ServiceNow Client Secret not found in CE or PT local secrets files. Populate LocalSecrets-ContentEngineering.psd1." }
+    if (-not $_oaiKey)   { throw "Azure OpenAI API Key not found in CE or PT local secrets files. Populate LocalSecrets-ContentEngineering.psd1." }
+    Set-KeyVaultSecret -VaultName $KeyVaultName -SecretName $ServiceNowClientSecretName  -SecretValue (ConvertTo-SecureString $_snSecret -AsPlainText -Force)
+    Set-KeyVaultSecret -VaultName $KeyVaultName -SecretName $AzureOpenAIApiKeySecretName -SecretValue (ConvertTo-SecureString $_oaiKey   -AsPlainText -Force)
+    Write-Ok "Secrets loaded from local config and stored in Key Vault '$KeyVaultName'"
+}
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 Write-Host "`n`n========================================" -ForegroundColor Cyan
@@ -264,25 +381,26 @@ Write-Host ""
 Write-Host " Storage account : $StorageAccountName" -ForegroundColor White
 Write-Host " Containers      : $($Containers -join ', ')" -ForegroundColor White
 Write-Host " Table           : $TableName" -ForegroundColor White
-Write-Host " Automation vars : ContentEng_* (22 variables)" -ForegroundColor White
+Write-Host " Automation vars : ContentEng_* (25 variables)" -ForegroundColor White
+Write-Host " Runbooks        : $($ContentEngRunbooks.Count) defined (Content Engineering)" -ForegroundColor White
+Write-Host " Schedules       : $($ContentEngScheduledRunbooks.Count) enabled (ProdTools-like model)" -ForegroundColor White
 Write-Host ""
 Write-Host " Next steps:" -ForegroundColor Yellow
 Write-Host "  1. Upload templates to storage:"  -ForegroundColor Gray
 Write-Host "     cd setup\publish" -ForegroundColor Gray
 Write-Host "     .\Upload-TemplateFiles.ps1 -StorageAccountName $StorageAccountName -LocalTemplatesFolder '..\..\content-engineering\templates' -FilterPattern '*_ContentEngineering*'" -ForegroundColor Gray
 Write-Host ""
-Write-Host "  2. Publish the 4 CE runbooks:"  -ForegroundColor Gray
+Write-Host "  2. Publish the CE runbooks:"  -ForegroundColor Gray
 Write-Host "     cd setup\publish" -ForegroundColor Gray
-Write-Host "     .\Publish-runbook.ps1 -SourceFile '..\..\content-engineering\runbooks\incident-trend-backfill-rb-contenteng.ps1'" -ForegroundColor Gray
-Write-Host "     .\Publish-runbook.ps1 -SourceFile '..\..\content-engineering\runbooks\incident-analyzer-rb-contenteng.ps1'" -ForegroundColor Gray
-Write-Host "     .\Publish-runbook.ps1 -SourceFile '..\..\content-engineering\runbooks\incident-reconcile-rb-contenteng.ps1'" -ForegroundColor Gray
-Write-Host "     .\Publish-runbook.ps1 -SourceFile '..\..\content-engineering\runbooks\incident-trend-rb-contenteng.ps1'" -ForegroundColor Gray
+foreach ($rb in $ContentEngRunbooks) {
+    Write-Host "     .\Publish-runbook.ps1 -SourceFile '$($rb.SourceFile)' -RunbookName '$($rb.RunbookName)' -AutomationAccountName '$AutomationAccountName'" -ForegroundColor Gray
+}
 Write-Host ""
-Write-Host "  3. Create 4 schedules in Azure Portal (staggered +30 min from PT):" -ForegroundColor Gray
-Write-Host "     03:30 UTC  -> incident-trend-backfill-rb-contenteng" -ForegroundColor Gray
-Write-Host "     06:30 UTC  -> incident-analyzer-rb-contenteng" -ForegroundColor Gray
-Write-Host "     07:30 UTC  -> incident-reconcile-rb-contenteng" -ForegroundColor Gray
-Write-Host "     08:30 UTC  -> incident-trend-rb-contenteng" -ForegroundColor Gray
+Write-Host "  3. Create CE schedules in Azure Portal:" -ForegroundColor Gray
+foreach ($rb in $ContentEngScheduledRunbooks) {
+    Write-Host "     $($rb.ScheduleUtc) -> $($rb.RunbookName)" -ForegroundColor Gray
+}
+Write-Host "     incident-trend-rb-contenteng stays manual/on-demand" -ForegroundColor Gray
 Write-Host ""
 Write-Host "  4. Add Content Engineering to web/config.json and redeploy:" -ForegroundColor Gray
 Write-Host "     .\setup\publish\Deploy-Web.ps1" -ForegroundColor Gray

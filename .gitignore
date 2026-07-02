@@ -76,8 +76,10 @@ local-output/
 archive/
 config/LocalConfig-ProductivityTools.psd1
 config/LocalSecrets-ProductivityTools.psd1
-content-engineering/config/LocalConfig-ContentEngineering.psd1
+content-engineering/config/LocalConfig-ContentEngineering.psd1 
 content-engineering/config/LocalSecrets-ContentEngineering.psd1
+content-engineering\config\LocalConfig-ContentEngineering.psd1
+content-engineering\config\LocalSecrets-ContentEngineering.psd1
 
 # parcel-bundler cache (https://parceljs.org/)
 .cache

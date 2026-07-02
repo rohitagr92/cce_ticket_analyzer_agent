@@ -80,12 +80,11 @@ function Invoke-OpenAI {
     $url = '{0}/openai/deployments/{1}/chat/completions?api-version={2}' -f `
         $config.AzureOpenAIBaseUrl, $config.AzureOpenAIDeployment, $config.AzureOpenAIApiVersion
     $body = @{
-        messages    = @(
+        messages              = @(
             @{ role = 'system'; content = $SystemPrompt }
             @{ role = 'user';   content = $UserMessage }
         )
-        temperature = 0.2
-        max_tokens  = 3000
+        max_completion_tokens = 3000
     } | ConvertTo-Json -Depth 10
     $headers = @{ 'api-key' = $apiKey; 'Content-Type' = 'application/json' }
     $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $body -ErrorAction Stop
@@ -294,6 +293,56 @@ Respond with JSON only:
 $rootPath = Join-Path $OutputRoot 'blob-PossibleRootCause_ContentEngineering.md'
 $rootSb.ToString() | Set-Content -Path $rootPath -Encoding UTF8
 Write-Step ('Root cause MD saved: {0}' -f $rootPath) 'Green'
+
+# ── Step 4: Write categorised rows to Azure Table (IncidentsCategoryStats) ────
+Write-Step 'Step 4/4 - Writing rows to Azure Table (IncidentsCategoryStats)...' 'Cyan'
+try {
+    $saName = if ($config.StorageAccountName) { $config.StorageAccountName } else { 'opswcontentenggblob' }
+    $saRg   = if ($config.ResourceGroupName)  { $config.ResourceGroupName  } else { 'OPSW-Ticket-Analyzer' }
+
+    Import-Module Az.Accounts -MinimumVersion 2.0.0 -Force -ErrorAction Stop
+    Import-Module Az.Storage  -MinimumVersion 2.0.0 -Force -ErrorAction Stop
+
+    $ctx = Get-AzContext -ErrorAction SilentlyContinue
+    if (-not $ctx) { Connect-AzAccount -ErrorAction Stop | Out-Null }
+
+    if (-not (Get-Module -ListAvailable -Name AzTable)) {
+        throw "AzTable module not installed. Run: Install-Module AzTable -Scope CurrentUser"
+    }
+    Import-Module AzTable -Force
+
+    $saKey   = (Get-AzStorageAccountKey -ResourceGroupName $saRg -Name $saName)[0].Value
+    $saCtx   = New-AzStorageContext -StorageAccountName $saName -StorageAccountKey $saKey
+    $tbl     = Get-AzStorageTable -Name 'IncidentsCategoryStats' -Context $saCtx -ErrorAction Stop
+    $cloud   = $tbl.CloudTable
+
+    $written = 0; $skipped = 0
+    foreach ($inc in $categorised) {
+        $resolvedAt = [string]($inc.resolved_at -replace ' ', 'T')
+        $weekLabel  = [string]$inc.YearWeek
+        $rowKey     = [string]$inc.number
+
+        $existing = Get-AzTableRow -Table $cloud -PartitionKey $weekLabel -RowKey $rowKey -ErrorAction SilentlyContinue
+        if ($existing) { $skipped++; continue }
+
+        $row = @{
+            Category       = [string]$inc.ai_category
+            Subcategory    = [string]$inc.ai_subcategory
+            RootCause      = if ($inc.PSObject.Properties['sub_symptom']) { [string]$inc.sub_symptom } else { 'Unknown' }
+            AIAnalysis     = ''
+            Date           = $resolvedAt
+            YearWeek       = $weekLabel
+            Year           = [string]$Year
+            WeekNumber     = [string](($weekLabel -split '-W')[1])
+            ReportBlobName = 'local-analyze-script'
+        }
+        Add-AzTableRow -Table $cloud -PartitionKey $weekLabel -RowKey $rowKey -Property $row | Out-Null
+        $written++
+    }
+    Write-Step ("  Azure Table: $written rows written, $skipped already existed") 'Green'
+} catch {
+    Write-Step ("  [WARN] Azure Table write skipped: $($_.Exception.Message)") 'Yellow'
+}
 
 # summary
 Write-Step '' 'White'

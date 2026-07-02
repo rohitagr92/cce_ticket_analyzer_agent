@@ -43,6 +43,29 @@ $ErrorActionPreference = 'Stop'
 
 function Write-Step { param([string]$Msg, [string]$Color = 'Cyan') Write-Output "[$(Get-Date -Format 'HH:mm:ss')] $Msg" }
 
+function Get-ContentEngSecretOrVar {
+    param(
+        [Parameter(Mandatory = $true)][string]$LegacyVariableName,
+        [Parameter(Mandatory = $true)][string]$SecretNameVariable,
+        [string]$DefaultSecretName
+    )
+
+    $vaultName = Get-AutomationVariable -Name 'ContentEng_KeyVaultName' -ErrorAction SilentlyContinue
+    $secretName = Get-AutomationVariable -Name $SecretNameVariable -ErrorAction SilentlyContinue
+    if ([string]::IsNullOrWhiteSpace($secretName)) { $secretName = $DefaultSecretName }
+
+    if (-not [string]::IsNullOrWhiteSpace($vaultName) -and -not [string]::IsNullOrWhiteSpace($secretName)) {
+        try {
+            $secretObj = Get-AzKeyVaultSecret -VaultName $vaultName -Name $secretName -ErrorAction Stop
+            if ($secretObj -and $secretObj.SecretValue) { return ($secretObj.SecretValue | ConvertFrom-SecureString -AsPlainText) }
+        } catch {
+            Write-Warning "Key Vault read failed for $secretName. Falling back to automation variable $LegacyVariableName."
+        }
+    }
+
+    return (Get-AutomationVariable -Name $LegacyVariableName -ErrorAction SilentlyContinue)
+}
+
 # -------- Load Automation variables --------
 Write-Step 'Loading Automation variables...' 'Yellow'
 $cfg = @{
@@ -51,12 +74,12 @@ $cfg = @{
     PromptContainerName             = Get-AutomationVariable -Name 'ContentEng_PromptTemplateContainerName'
     SubscriptionId                  = Get-AutomationVariable -Name 'ContentEng_SubscriptionId'
     ContentEng_ServiceNowClientID     = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientID'
-    ContentEng_ServiceNowClientSecret = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientSecret'
+    ContentEng_ServiceNowClientSecret = $null
     ContentEng_ServiceNowScope        = Get-AutomationVariable -Name 'ContentEng_ServiceNowScope'
     TokenUrl                        = Get-AutomationVariable -Name 'ContentEng_TokenUrl'
     AzureOpenAIBaseUrl              = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIBaseUrl'
     AzureOpenAIDeployment           = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIDeployment'
-    AzureOpenAIApiKey               = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIApiKey'
+    AzureOpenAIApiKey               = $null
     AzureOpenAIApiVersion           = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIApiVersion'
 }
 function Get-OptVar { param($n, $d) try { $v = Get-AutomationVariable -Name $n -ErrorAction Stop; if ($null -eq $v -or $v -eq '') { return $d } else { return $v } } catch { return $d } }
@@ -75,6 +98,11 @@ Write-Step 'Connecting to Azure with managed identity...' 'Yellow'
 Disable-AzContextAutosave -Scope Process | Out-Null
 $null = Connect-AzAccount -Identity -ErrorAction Stop
 $null = Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop
+Import-Module Az.KeyVault -Force -ErrorAction SilentlyContinue
+
+# Resolve sensitive values from Key Vault with fallback to legacy automation variables.
+$cfg.ContentEng_ServiceNowClientSecret = Get-ContentEngSecretOrVar -LegacyVariableName 'ContentEng_ServiceNowClientSecret' -SecretNameVariable 'ContentEng_ServiceNowClientSecretName' -DefaultSecretName 'ContentEng-ServiceNowClientSecret'
+$cfg.AzureOpenAIApiKey = Get-ContentEngSecretOrVar -LegacyVariableName 'ContentEng_AzureOpenAIApiKey' -SecretNameVariable 'ContentEng_AzureOpenAIApiKeySecretName' -DefaultSecretName 'ContentEng-AzureOpenAIApiKey'
 
 # -------- Storage context --------
 $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value

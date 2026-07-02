@@ -5,6 +5,30 @@ if ($Script:IsAzureAutomation) {
     Write-Host "Running in Azure Automation environment" -ForegroundColor Green
     Import-Module -Name Az.Storage -Force -ErrorAction Stop
     Import-Module -Name Az.Accounts -Force -ErrorAction Stop
+    Import-Module -Name Az.KeyVault -Force -ErrorAction SilentlyContinue
+
+    function Get-ContentEngSecretOrVar {
+        param(
+            [Parameter(Mandatory = $true)][string]$LegacyVariableName,
+            [Parameter(Mandatory = $true)][string]$SecretNameVariable,
+            [string]$DefaultSecretName
+        )
+
+        $vaultName = Get-AutomationVariable -Name 'ContentEng_KeyVaultName' -ErrorAction SilentlyContinue
+        $secretName = Get-AutomationVariable -Name $SecretNameVariable -ErrorAction SilentlyContinue
+        if ([string]::IsNullOrWhiteSpace($secretName)) { $secretName = $DefaultSecretName }
+
+        if (-not [string]::IsNullOrWhiteSpace($vaultName) -and -not [string]::IsNullOrWhiteSpace($secretName)) {
+            try {
+                $secretObj = Get-AzKeyVaultSecret -VaultName $vaultName -Name $secretName -ErrorAction Stop
+                if ($secretObj -and $secretObj.SecretValue) { return ($secretObj.SecretValue | ConvertFrom-SecureString -AsPlainText) }
+            } catch {
+                Write-Host "Key Vault read failed for $secretName, falling back to automation variable $LegacyVariableName" -ForegroundColor Yellow
+            }
+        }
+
+        return (Get-AutomationVariable -Name $LegacyVariableName -ErrorAction SilentlyContinue)
+    }
 
     $Script:LogFilePrefix = "AI-TrendAnalysis"
     $Script:LogContainerName = "logs"
@@ -24,7 +48,7 @@ if ($Script:IsAzureAutomation) {
     $Script:Constants = @{
         AzureOpenAIBaseUrl       = Get-AutomationVariable -Name "ContentEng_AzureOpenAIBaseUrl"
         AzureOpenAIDeployment    = Get-AutomationVariable -Name "ContentEng_AzureOpenAIDeployment"
-        AzureOpenAIApiKey        = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiKey"
+        AzureOpenAIApiKey        = Get-ContentEngSecretOrVar -LegacyVariableName 'ContentEng_AzureOpenAIApiKey' -SecretNameVariable 'ContentEng_AzureOpenAIApiKeySecretName' -DefaultSecretName 'ContentEng-AzureOpenAIApiKey'
         AzureOpenAIApiVersion    = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiVersion"
         UseClaudeModel           = Get-AutomationVariable -Name "ContentEng_UseClaudeModel" -ErrorAction SilentlyContinue
         ClaudeEndpoint           = Get-AutomationVariable -Name "ContentEng_ClaudeEndpoint" -ErrorAction SilentlyContinue

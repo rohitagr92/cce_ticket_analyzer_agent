@@ -2355,6 +2355,164 @@ function Send-ReportWebhook {
     throw "Failed to send webhook after $RetryAttempts attempts"
 }
 
+function Build-ContentEngWeeklyDashboard {
+    <#
+    .SYNOPSIS
+        Rebuilds the ContentEngineering_Weekly_Report_<YearWeek>.html dashboard for the
+        specified week from the IncidentsCategoryStats table and uploads it to the results
+        blob container. Called automatically at the end of each job run.
+    #>
+    param([string]$YearWeek)
+
+    Write-ScriptLog "=== REBUILDING WEEKLY DASHBOARD: $YearWeek ===" -Level Info
+
+    $CategoryColors = @{
+        'Microsoft Teams'                  = '#464feb'
+        'SharePoint On-Premises'           = '#007940'
+        'SharePoint Online'                = '#038387'
+        'Microsoft 365 Apps'               = '#0078d4'
+        'Content Management System (CMS)'  = '#e67e22'
+        'Content Authoring & Publishing'   = '#9b59b6'
+        'Search & Discoverability'         = '#e74c3c'
+        'Access & Permissions'             = '#f39c12'
+        'How Do I / User Education'        = '#2ecc71'
+        'Unknown / Unclear'                = '#90a4ae'
+    }
+    function ColorFor { param([string]$c) if ($CategoryColors.ContainsKey($c)) { $CategoryColors[$c] } else { '#5b6abf' } }
+    function HtmlEsc  { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
+
+    try {
+        $storageCtx = Get-StorageContext
+
+        # Load all rows for this week from the table via REST (SAS token)
+        $sas  = New-AzStorageTableSASToken -Name $Script:BlobConfig.StatisticsTableName `
+                    -Permission 'r' -ExpiryTime (Get-Date).AddMinutes(15) `
+                    -Protocol HttpsOnly -Context $storageCtx
+        $selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,Date,YearWeek,AIAnalysis,Confidence,State'
+        $base = "https://$($Script:BlobConfig.StorageAccountName).table.core.windows.net/$($Script:BlobConfig.StatisticsTableName)()?`$filter=PartitionKey%20eq%20'$YearWeek'&`$select=$selectedFields&$sas"
+
+        $incidents = @()
+        $url = $base
+        while ($url) {
+            $resp      = Invoke-WebRequest -Uri $url -Headers @{ Accept = 'application/json;odata=nometadata' } -UseBasicParsing
+            $incidents += ($resp.Content | ConvertFrom-Json).value
+            $npk = $resp.Headers['x-ms-continuation-NextPartitionKey']
+            $nrk = $resp.Headers['x-ms-continuation-NextRowKey']
+            if ($npk) {
+                $url = $base + '&NextPartitionKey=' + [Uri]::EscapeDataString([string]$npk)
+                if ($nrk) { $url += '&NextRowKey=' + [Uri]::EscapeDataString([string]$nrk) }
+            } else { $url = $null }
+        }
+
+        if ($incidents.Count -eq 0) {
+            Write-ScriptLog "No rows found for $YearWeek — dashboard not generated." -Level Warning
+            return
+        }
+
+        $incidents  = @($incidents) | Sort-Object Date -Descending
+        $total      = $incidents.Count
+        $byCategory = $incidents | Group-Object Category | Sort-Object Count -Descending
+        $topCat     = if ($byCategory.Count -gt 0) { $byCategory[0] } else { $null }
+        $topCatName  = if ($topCat) { HtmlEsc $topCat.Name } else { '-' }
+        $topCatCount = if ($topCat) { $topCat.Count } else { 0 }
+        $stResolved  = ($incidents | Where-Object { $_.State -eq 'Resolved' }).Count
+        $stClosed    = ($incidents | Where-Object { $_.State -eq 'Closed'   }).Count
+        if ($stResolved + $stClosed -eq 0) { $stResolved = $total; $stClosed = 0 }
+
+        # Week date range Sun->Sat IST
+        $istStart = $null; $istEnd = $null
+        if ($YearWeek -match '^(?<y>\d{4})-W(?<w>\d{1,2})$') {
+            $jan1     = (Get-Date -Year ([int]$Matches.y) -Month 1 -Day 1).Date
+            $istStart = $jan1.AddDays(-1 * [int]$jan1.DayOfWeek).AddDays(([int]$Matches.w - 1) * 7)
+            $istEnd   = $istStart.AddDays(6)
+        }
+        $startStr = if ($istStart) { $istStart.ToString('dddd, dd MMM yyyy') } else { '' }
+        $endStr   = if ($istEnd)   { $istEnd.ToString('dddd, dd MMM yyyy')   } else { '' }
+
+        function BuildBreakdown {
+            param([string]$Property,[string]$Heading,[string]$FilterKey)
+            $groups = $incidents | Group-Object $Property | Where-Object { $_.Name } | Sort-Object Count -Descending
+            if ($groups.Count -eq 0) { return '' }
+            $rowsHtml = ($groups | ForEach-Object {
+                $n    = $_.Name; $cnt = $_.Count
+                $pct  = if ($total -gt 0) { [math]::Round(($cnt/$total)*100,1) } else { 0 }
+                $col  = ColorFor $n
+                $attr = [System.Net.WebUtility]::HtmlEncode($n) -replace "'","&#39;"
+                $links = ($_.Group | Sort-Object Date -Descending | ForEach-Object {
+                    $rk = HtmlEsc $_.RowKey
+                    "<a href='#inc-$rk' class='inc-link' data-inc='$rk' data-filter-key='$FilterKey' data-filter-value=`"$attr`">$rk</a>"
+                }) -join ', '
+                "<tr class='grp-row' data-filter-key='$FilterKey' data-filter-value=`"$attr`"><td><span class='dot' style='background:$col'></span><strong>$(HtmlEsc $n)</strong></td><td class='num'>$cnt</td><td class='num'>$pct%</td><td class='inc-cell'>$links</td></tr>"
+            }) -join "`n"
+            "<div class='section'><h2>$Heading</h2><table class='breakdown-table'><thead><tr><th>$Heading</th><th class='num'>Count</th><th class='num'>Share</th><th>Incidents (click to filter/jump)</th></tr></thead><tbody>$rowsHtml</tbody></table></div>"
+        }
+
+        $byProductHtml   = BuildBreakdown -Property 'Category'          -Heading 'Issues sorted by Product'           -FilterKey 'product'
+        $byRootCauseHtml = BuildBreakdown -Property 'PossibleRootCause' -Heading 'Issues sorted by Possible Root Cause' -FilterKey 'rootcause'
+
+        $incRows = ($incidents | ForEach-Object {
+            $col  = ColorFor $_.Category
+            $num  = HtmlEsc $_.RowKey;  $cat = HtmlEsc $_.Category;  $sub = HtmlEsc $_.Subcategory
+            $prc  = HtmlEsc $_.PossibleRootCause; $drc = HtmlEsc $_.DetailedRootCause
+            $conf = HtmlEsc $_.Confidence; $anal = HtmlEsc $_.AIAnalysis; $date = HtmlEsc $_.Date
+            $catA = $cat -replace "'","&#39;"; $subA = $sub -replace "'","&#39;"; $prcA = $prc -replace "'","&#39;"
+            $url  = "https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=$num"
+            "<tr id='inc-$num' class='detail-row' data-product=`"$catA`" data-symptom=`"$subA`" data-rootcause=`"$prcA`"><td><a href='$url' target='_blank' rel='noopener'>$num</a></td><td>$date</td><td><span class='dot' style='background:$col'></span>$cat</td><td>$sub</td><td>$prc</td><td>$drc</td><td>$conf</td><td>$anal</td></tr>"
+        }) -join "`n"
+
+        $generated = Get-Date -Format 'yyyy-MM-dd HH:mm'
+        $html = @"
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"/>
+<title>Content Engineering - Incident Analysis $YearWeek</title>
+<style>:root{--intel-classic:#003C71;--intel-blue:#0071C5;--bg:#f4f7fb;--card:#fff;--text:#1a2433;--muted:#5b6b7f;--border:#dde4ee;}*{box-sizing:border-box;}body{margin:0;font-family:'Segoe UI',Tahoma,sans-serif;background:var(--bg);color:var(--text);}header{background:linear-gradient(135deg,#002b4d,#007940);color:#fff;padding:28px 32px;}header h1{margin:0 0 6px;font-size:1.7rem;font-weight:600;}header .sub{color:rgba(255,255,255,0.92);font-size:1rem;}header .sub strong{color:#fff;}main{max-width:1500px;margin:0 auto;padding:24px 32px;}.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:14px;margin-bottom:24px;}.stat-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px;}.stat-card .num{font-size:1.8rem;font-weight:700;color:var(--intel-classic);}.stat-card .label{color:var(--muted);font-size:0.85rem;margin-top:2px;}.section{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:20px 22px;margin-bottom:20px;}.section h2{margin:0 0 14px;font-size:1.1rem;color:var(--intel-classic);}table{width:100%;border-collapse:collapse;font-size:0.9rem;}th,td{text-align:left;padding:9px 10px;border-bottom:1px solid var(--border);vertical-align:top;}th{background:#eef5fb;color:var(--intel-classic);font-weight:600;}td.num{text-align:right;}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle;}a{color:var(--intel-blue);text-decoration:none;}a:hover{text-decoration:underline;}footer{text-align:center;color:var(--muted);font-size:0.8rem;padding:20px;}.detail-table td{max-width:280px;word-wrap:break-word;}.inc-cell{font-size:0.82rem;line-height:1.55;}.inc-link{display:inline-block;padding:1px 4px;margin:1px;background:#eef5fb;border:1px solid #d3e3f1;border-radius:3px;}.inc-link:hover{background:#0071C5;color:#fff!important;text-decoration:none;}.grp-row{cursor:pointer;}.grp-row:hover td{background:#f0f7ff;}.grp-row.active td{background:#fff3cd;}.detail-row.flash td{background:#fff3cd!important;transition:background 1.6s;}.detail-row.hidden{display:none;}.filter-hint{font-size:0.75rem;color:var(--muted);font-weight:400;margin-left:8px;}.clear-filter{display:inline-block;margin-left:10px;padding:3px 9px;background:var(--intel-blue);color:#fff;border-radius:4px;font-size:0.75rem;cursor:pointer;}.clear-filter:hover{background:var(--intel-classic);}</style></head>
+<body>
+<header>
+  <h1>Content Engineering - Incident Analysis $YearWeek</h1>
+  <div class="sub"><strong>From:</strong> $startStr &nbsp;<strong>To:</strong> $endStr &nbsp;(IST, Sun &rarr; Sat)</div>
+  <div class="sub" style="margin-top:4px;">State filter: Resolved + Closed &middot; Generated $generated IST</div>
+</header>
+<main>
+  <div class="stats">
+    <div class="stat-card"><div class="num">$total</div><div class="label">Total incidents</div></div>
+    <div class="stat-card"><div class="num">$stResolved</div><div class="label">Resolved (state 6)</div></div>
+    <div class="stat-card"><div class="num">$stClosed</div><div class="label">Closed (state 7)</div></div>
+    <div class="stat-card"><div class="num">$($byCategory.Count)</div><div class="label">Distinct products</div></div>
+    <div class="stat-card"><div class="num">$topCatCount</div><div class="label">Top: $topCatName</div></div>
+  </div>
+$byProductHtml
+$byRootCauseHtml
+  <div class="section" id="detail-section">
+    <h2>Detailed incident analysis <span id="detail-count">($total)</span> <span id="active-filter" class="filter-hint"></span> <span id="clear-filter-btn" class="clear-filter" style="display:none;">Clear filter</span></h2>
+    <table class="detail-table"><thead><tr><th>Incident</th><th>Resolved at</th><th>Category (Product)</th><th>Subcategory (Symptom)</th><th>Possible Root Cause</th><th>Detailed Root Cause</th><th>Confidence</th><th>AI Analysis</th></tr></thead>
+    <tbody id="detail-tbody">$incRows</tbody></table>
+  </div>
+</main>
+<footer>Intel End-User Collaboration &middot; Content Engineering weekly report</footer>
+<script>(function(){var total=$total,rows=document.querySelectorAll('.detail-row'),countEl=document.getElementById('detail-count'),filterEl=document.getElementById('active-filter'),clearBtn=document.getElementById('clear-filter-btn'),dataAttr={product:'data-product',symptom:'data-symptom',rootcause:'data-rootcause'},keyLabel={product:'Product',symptom:'Symptom',rootcause:'Possible Root Cause'};function applyFilter(k,v){var s=0;rows.forEach(function(r){var m=r.getAttribute(dataAttr[k])===v;r.classList.toggle('hidden',!m);if(m)s++;});countEl.textContent='('+s+' of '+total+')';filterEl.textContent='- filtered by '+keyLabel[k]+': "'+v+'"';clearBtn.style.display='inline-block';document.querySelectorAll('.grp-row.active').forEach(function(g){g.classList.remove('active');});document.querySelectorAll('.grp-row[data-filter-key="'+k+'"][data-filter-value="'+v.replace(/"/g,'\\"')+'"]').forEach(function(g){g.classList.add('active');});}function clearFilter(){rows.forEach(function(r){r.classList.remove('hidden');});countEl.textContent='('+total+')';filterEl.textContent='';clearBtn.style.display='none';document.querySelectorAll('.grp-row.active').forEach(function(g){g.classList.remove('active');});}function flash(id){var r=document.getElementById(id);if(!r)return;if(r.classList.contains('hidden'))r.classList.remove('hidden');r.classList.add('flash');r.scrollIntoView({behavior:'smooth',block:'center'});setTimeout(function(){r.classList.remove('flash');},1800);}document.querySelectorAll('.grp-row').forEach(function(g){g.addEventListener('click',function(e){if(e.target.classList&&e.target.classList.contains('inc-link'))return;applyFilter(g.getAttribute('data-filter-key'),g.getAttribute('data-filter-value'));document.getElementById('detail-section').scrollIntoView({behavior:'smooth',block:'start'});});});document.querySelectorAll('.inc-link').forEach(function(a){a.addEventListener('click',function(e){e.preventDefault();applyFilter(a.getAttribute('data-filter-key'),a.getAttribute('data-filter-value'));setTimeout(function(){flash('inc-'+a.getAttribute('data-inc'));},80);});});clearBtn.addEventListener('click',clearFilter);})();</script>
+</body></html>
+"@
+
+        $dashBlobName = "ContentEngineering_Weekly_Report_$YearWeek.html"
+        $tmp = [System.IO.Path]::GetTempFileName()
+        try {
+            Set-Content -Path $tmp -Value $html -Encoding UTF8
+            Set-AzStorageBlobContent -File $tmp `
+                -Container $Script:BlobConfig.ResultsContainerName `
+                -Blob $dashBlobName `
+                -Context $storageCtx `
+                -Properties @{ ContentType = 'text/html; charset=utf-8' } `
+                -Force | Out-Null
+            Write-ScriptLog "Weekly dashboard uploaded: $dashBlobName ($total incidents)" -Level Success
+            Write-Host "✓ Weekly dashboard uploaded: $dashBlobName ($total incidents)" -ForegroundColor Green
+        } finally {
+            if (Test-Path $tmp) { Remove-Item $tmp -Force -ErrorAction SilentlyContinue }
+        }
+    } catch {
+        Write-ScriptLog "Weekly dashboard build failed: $($_.Exception.Message)" -Level Warning
+        Write-Host "⚠ Weekly dashboard build failed (non-fatal): $($_.Exception.Message)" -ForegroundColor Yellow
+    }
+}
+
 #endregion
 
 #region Configuration
@@ -3205,7 +3363,13 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
     #     $result = Send-ReportWebhook -WebhookUrl $webhookUrl -HtmlContent $htmlcontent -Subject $dynamicSubject
     #     Write-ScriptLog "Report sent successfully: $totalProcessedTickets incidents across $($CategoryData.Count) categories" -Level Success
     # }
-    
+
+    # Rebuild the weekly aggregated dashboard (ContentEngineering_Weekly_Report_<YearWeek>.html)
+    # so the static web app viewer always reflects the latest data after each run.
+    if ($Script:IsAzureAutomation) {
+        Build-ContentEngWeeklyDashboard -YearWeek $reportYearWeek
+    }
+
     # Monitoring heartbeat: job completed
     Send-LogAnalyticsHeartbeat -Status 'Completed' -ProcessedCount $totalProcessedTickets -Message "Execution completed successfully ($dataSource)"
 

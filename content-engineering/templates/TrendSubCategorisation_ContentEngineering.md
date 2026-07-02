@@ -5,100 +5,84 @@ Defines the allowed sub-symptom labels for trend analysis. The AI must use only 
 
 ---
 
-## SUB-SYMPTOM LABELS BY CATEGORY
+## SYMPTOM LABELS BY PRODUCT
 
-### Content Authoring & Publishing
+### Microsoft Teams
 
-**Authoring Tool Crash**
-**Data Loss During Edit**
-**Publish Button Non-Responsive**
-**Build Pipeline Failure**
-**Deploy to CDN Failure**
-**Template Rendering Error**
-**Style Sheet Broken**
-**Approval Queue Stuck**
+**Teams Add-in Missing in Outlook**
+**Teams Client Not Working**
+**Outlook-Teams Calendar Issue**
+**Teams Chat / Channel Issue**
+**Teams Audio / Video Issue**
 
 ---
 
-### Content Management System (CMS)
+### SharePoint On-Premises
 
-**SSO / SAML Login Failure**
-**Role Permission Missing**
-**Page Load Timeout**
-**UI Freeze / Hang**
-**Asset Missing or Duplicate**
-**Content Rollback Issue**
-**DAM Integration Error**
-**Translation Connector Broken**
-**API Integration Failure**
-
----
-
-### Search & Discoverability
-
-**Index Stale After Publish**
-**Crawler Not Triggered**
-**404 on Published Page**
-**Internal Link Broken**
-**Tag / Metadata Missing**
-**Facet Filter Broken**
-
----
-
-### Localization & Translation
-
-**Translation Workflow Not Triggered**
-**Translated File Not Imported**
-**Wrong Locale Served**
-**Locale Fallback Missing**
-**Machine Translation Error**
-**Approved Translation Not Published**
-
----
-
-### Access & Permissions
-
-**User Cannot Access CMS**
-**New User Onboarding Delayed**
-**Role Not Propagated**
-**SSO Token Expired**
-**Admin Escalation Required**
-
----
-
-### SharePoint Platform Health
-
-**CPU Saturation Alert**
-**Disk Space Warning**
-**Host Graceful Shutdown**
+**CPU / Resource Saturation**
+**Low Disk Space**
+**Host Shutdown / Restart**
 **Network Connectivity Issue**
 **Service Performance Degradation**
 
 ---
 
-### Microsoft Teams & M365 Collaboration
+### SharePoint Online
 
-**Teams Add-in Missing**
-**Teams Client Not Working**
-**Outlook-Teams Scheduling Broken**
+**Permission Denied**
+**Site Administration Request**
+**File / Item Recovery**
+**SPO How-To / User Education**
+
+---
+
+### Microsoft 365 Apps
+
+**Planner / Project Not Working**
+**OneDrive / File Sync Issue**
 **M365 App Functional Issue**
 
 ---
 
-### SharePoint Online Administration
+### Content Management System (CMS)
 
-**SPO Permission Denied**
-**Site Admin Change Request**
-**File / Item Recovery**
-**SPO User Education Query**
+**CMS Login / Access Issue**
+**CMS Performance Degradation**
+**CMS Data / Asset Corruption**
+**CMS Integration Failure**
+
+---
+
+### Content Authoring & Publishing
+
+**Authoring Tool Failure**
+**Publishing Pipeline Error**
+**Template / Style Issue**
+**Workflow Approval Blocked**
+
+---
+
+### Search & Discoverability
+
+**Search Index Outdated**
+**Broken Links / 404s**
+**Metadata / Taxonomy Error**
+
+---
+
+### Access & Permissions
+
+**Permission Denied**
+**Onboarding / Role Assignment**
+**Broken SSO**
 
 ---
 
 ### How Do I / User Education
 
-**Teams How-To Query**
-**SharePoint How-To Query**
-**General M365 How-To**
+**Teams Usage Query**
+**SharePoint Usage Query**
+**General M365 Query**
 
 ---
 
@@ -106,4 +90,3 @@ Defines the allowed sub-symptom labels for trend analysis. The AI must use only 
 
 **Insufficient Ticket Detail**
 **Out of Scope Incident**
-**Duplicate Ticket**

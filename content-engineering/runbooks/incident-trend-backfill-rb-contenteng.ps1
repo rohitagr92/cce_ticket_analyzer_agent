@@ -138,17 +138,19 @@ $outputFormatInstruction = @'
 
 You MUST end your response with exactly these four labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
 
-Primary Category: <one of the bold category names defined above, or "Excluded">
-Sub-symptom: <EXACT bold header label from the Sub-symptom reference above for the chosen category — e.g. "Sync Issues", "Licensing Issues". Do NOT invent or paraphrase.>
-Possible Root Cause: <EXACT bold label from the chosen product table in the Possible Root Cause reference above. Copy verbatim. If no label fits, write "Unknown".>
-AI Analysis: <2-3 sentence summary: what happened, what was the root cause, and what fixed it. Be specific about technical details.>
+Primary Category: <pick the EXACT product name from the bold category headers above — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Do NOT invent. Use "Unknown / Unclear" only if nothing fits.>
+Sub-symptom: <pick the EXACT bold symptom label from the matching product section above — e.g. "Teams Add-in Missing in Outlook", "CPU / Resource Saturation". Do NOT invent or paraphrase.>
+Possible Root Cause: <pick the EXACT bold label from the Possible Root Cause section for the chosen product — e.g. "Teams Add-in Not Deployed", "Server Resource Exhaustion". Do NOT invent.>
+Confidence Level: <High, Medium, or Low. High = detailed work notes, clear root cause, confirmed resolution. Medium = some notes but outcome unclear or inferred. Low = minimal notes, automated alert, or Unknown / Unclear category.>
+AI Analysis: <Write 3-5 plain sentences: (1) Why the user raised this ticket. (2) What technically happened. (3) What the agent did. (4) Whether resolved. Plain language, no markdown.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
-- Use plain ASCII. No bullets, asterisks, or quotation marks around the values.
-- Sub-symptom MUST be an exact bold header from the Sub-symptom catalog (not a bullet description).
-- Possible Root Cause MUST be an exact bold label from the Possible Root Cause catalog (not a sentence).
-- If unknown, write "Unknown".
+- Use plain ASCII. No bullets, asterisks, or markdown in any value.
+- Primary Category MUST be an exact product name from the category headers.
+- Sub-symptom MUST be an exact bold label from the sub-symptom catalog for that product.
+- Possible Root Cause MUST be an exact bold label from the root cause catalog.
+- If nothing fits, write "Unknown".
 - Keep each value on a single line.
 '@
 # Build system prompt from all 4 canonical templates — same enforcement as incident-analyzer-rb-prodtools.ps1.
@@ -316,19 +318,21 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
     }
 
     foreach ($inc in $incidents) {
-        $num = $inc.number
-        if (-not $num) { continue }
+      try {
+        $num = [string]$inc.number
+        if ([string]::IsNullOrWhiteSpace($num)) { continue }
 
         $resolvedDt = $day
-        if (-not [string]::IsNullOrWhiteSpace($inc.resolved_at)) {
+        $resolvedStr = [string]$inc.resolved_at
+        if (-not [string]::IsNullOrWhiteSpace($resolvedStr)) {
             [DateTime]$tmp = [DateTime]::MinValue
-            if ([DateTime]::TryParse([string]$inc.resolved_at, [ref]$tmp)) { $resolvedDt = $tmp }
+            if ([DateTime]::TryParse($resolvedStr, [ref]$tmp)) { $resolvedDt = $tmp }
         }
         $yw = Get-YearWeekFromDate -Date $resolvedDt
 
         # Skip if already in table
         $existing = Get-ExistingRowKeys -Partition $yw.YearWeek
-        if ($existing.Contains([string]$num)) {
+        if ($null -ne $existing -and $existing.Contains($num)) {
             $summary[$key].skipped++
             continue
         }
@@ -369,6 +373,10 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             Write-Warning "  FAIL ${num}: $($_.Exception.Message)"
             $summary[$key].errors++
         }
+      } catch {
+          Write-Warning "  OUTER FAIL $($inc.number): $($_.Exception.Message)"
+          $summary[$key].errors++
+      }
     }
 }
 

@@ -158,33 +158,63 @@ if ($SkipAI) {
 
 # load templates
 $tplTicket = Get-Content (Join-Path $templateDir 'TicketCategorisation_ContentEngineering.md') -Raw -Encoding UTF8
+$tplEnv    = Get-Content (Join-Path $templateDir 'EnvironmentContext_ContentEngineering.md')    -Raw -Encoding UTF8
 $tplTrend  = Get-Content (Join-Path $templateDir 'TrendSubCategorisation_ContentEngineering.md') -Raw -Encoding UTF8
 $tplRoot   = Get-Content (Join-Path $templateDir 'PossibleRootCause_ContentEngineering.md') -Raw -Encoding UTF8
 
-# Step 1: categorise each incident
-Write-Step ('Step 1/3 - Categorising {0} incidents...' -f $allIncidents.Count) 'Cyan'
+# Combined system prompt used for per-ticket full analysis
+$fullSystemPrompt = $tplTicket + "`n`n" + $tplEnv + "`n`n" +
+    "## REFERENCE: Symptom Labels by Product`n" + $tplTrend + "`n`n" +
+    "## REFERENCE: Root Cause Labels by Product`n" + $tplRoot + @'
+
+
+## REQUIRED OUTPUT FORMAT (STRICT)
+Respond with exactly these four lines — no markdown, no bullets, no extra text:
+
+Primary Category: <exact bold product name from the taxonomy above — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Use "Unknown / Unclear" only if nothing fits.>
+Sub-symptom: <exact bold symptom label from that product's section — e.g. "Teams Add-in Missing in Outlook", "CPU / Resource Saturation". Do NOT invent.>
+Possible Root Cause: <exact bold root cause label from that product's section in the Root Cause reference — e.g. "Teams Add-in Not Deployed", "Server Resource Exhaustion". Do NOT invent.>
+Confidence Level: <High, Medium, or Low — rate based on work notes quality: High = detailed work notes with clear resolution confirmed; Medium = some notes but outcome unclear or inferred; Low = minimal/no notes, automated alert, or category is Unknown / Unclear.>
+AI Analysis: <3–5 plain sentences: (1) Why the user raised this ticket — what problem they reported. (2) What technically happened or was found. (3) What the support agent did to address it. (4) Whether the issue was fully resolved, partially resolved, or still open. Plain language, no markdown, anyone should be able to understand it.>
+
+Rules: Each label appears verbatim followed by a colon. Plain ASCII only. One line per field.
+'@
+
+# Step 1: categorise each incident with full analysis
+Write-Step ('Step 1/3 - Categorising {0} incidents with full analysis...' -f $allIncidents.Count) 'Cyan'
 $categorised = [System.Collections.Generic.List[psobject]]::new()
 
 foreach ($inc in $allIncidents) {
+    $workNotes = [string]$inc.work_notes
+    if ($workNotes.Length -gt 4000) { $workNotes = $workNotes.Substring(0, 4000) + '...[truncated]' }
     $userMsg = @"
 Incident: $($inc.number)
 Short description: $($inc.short_description)
-Category (SN): $($inc.category) / $($inc.subcategory)
-Work week: $($inc.YearWeek)
-
-Assign exactly ONE Category and ONE Subcategory from the taxonomy.
-Respond with JSON only: {"number":"$($inc.number)","category":"<Category>","subcategory":"<Subcategory>"}
+Work notes: $workNotes
+Close notes: $($inc.close_notes)
+Close code: $($inc.close_code)
+Resolved at: $($inc.resolved_at)
 "@
     try {
-        $raw    = Invoke-OpenAI -SystemPrompt $tplTicket -UserMessage $userMsg
-        $parsed = $raw | ConvertFrom-Json
-        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue ([string]$parsed.category)    -Force
-        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue ([string]$parsed.subcategory) -Force
-        Write-Host ('    {0}  {1} / {2}' -f $inc.number, $parsed.category, $parsed.subcategory) -ForegroundColor DarkGray
+        $raw = Invoke-OpenAI -SystemPrompt $fullSystemPrompt -UserMessage $userMsg
+        $cat  = if ($raw -match '(?im)^Primary Category:\s*(.+)$')   { $matches[1].Trim() -replace '\*','' } else { 'Unknown / Unclear' }
+        $sub  = if ($raw -match '(?im)^Sub-symptom:\s*(.+)$')          { $matches[1].Trim() -replace '\*','' } else { 'Insufficient Information' }
+        $rc   = if ($raw -match '(?im)^Possible Root Cause:\s*(.+)$')  { $matches[1].Trim() -replace '\*','' } else { 'Unknown' }
+        $conf = if ($raw -match '(?im)^Confidence Level:\s*(High|Medium|Low)') { $matches[1].Trim() } else { if ($cat -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' } }
+        $anal = if ($raw -match '(?im)^AI Analysis:\s*(.+)$')           { $matches[1].Trim() } else { '' }
+        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue $cat  -Force
+        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue $sub  -Force
+        $inc | Add-Member -NotePropertyName 'ai_rootcause'   -NotePropertyValue $rc   -Force
+        $inc | Add-Member -NotePropertyName 'ai_confidence'  -NotePropertyValue $conf -Force
+        $inc | Add-Member -NotePropertyName 'ai_analysis'    -NotePropertyValue $anal -Force
+        Write-Host ('    {0}  [{1}] {2} / {3}' -f $inc.number, $cat, $sub, $rc) -ForegroundColor DarkGray
     } catch {
-        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue 'Unknown / Unclear' -Force
-        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue 'Insufficient Information' -Force
-        Write-Step ('  {0}: categorisation failed - {1}' -f $inc.number, $_.Exception.Message) 'Yellow'
+        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue 'Unknown / Unclear'        -Force
+        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue 'Insufficient Information'  -Force
+        $inc | Add-Member -NotePropertyName 'ai_rootcause'   -NotePropertyValue 'Unknown'                  -Force
+        $inc | Add-Member -NotePropertyName 'ai_confidence'  -NotePropertyValue 'Low'                      -Force
+        $inc | Add-Member -NotePropertyName 'ai_analysis'    -NotePropertyValue ''                         -Force
+        Write-Step ('  {0}: failed - {1}' -f $inc.number, $_.Exception.Message) 'Yellow'
     }
     $categorised.Add($inc)
 }
@@ -328,8 +358,9 @@ try {
         $row = @{
             Category       = [string]$inc.ai_category
             Subcategory    = [string]$inc.ai_subcategory
-            RootCause      = if ($inc.PSObject.Properties['sub_symptom']) { [string]$inc.sub_symptom } else { 'Unknown' }
-            AIAnalysis     = ''
+            RootCause      = if ($inc.ai_rootcause)   { [string]$inc.ai_rootcause }   else { 'Unknown' }
+            Confidence     = if ($inc.ai_confidence)  { [string]$inc.ai_confidence }  else { if ($inc.ai_category -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' } }
+            AIAnalysis     = if ($inc.ai_analysis)    { [string]$inc.ai_analysis }    else { '' }
             Date           = $resolvedAt
             YearWeek       = $weekLabel
             Year           = [string]$Year

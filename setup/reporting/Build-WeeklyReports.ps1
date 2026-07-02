@@ -64,7 +64,11 @@ $key = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroup -Name $Storage
 $ctx = New-AzStorageContext -StorageAccountName $StorageAccount -StorageAccountKey $key
 
 $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' -ExpiryTime (Get-Date).AddMinutes(15) -Protocol HttpsOnly -Context $ctx
-$base = "https://$StorageAccount.table.core.windows.net/$TableName()?$sas"
+# Use $select to request only the columns needed, deliberately omitting the old
+# "SubCategory" column (written by early runbook versions) so PowerShell's
+# ConvertFrom-Json never sees both "SubCategory" and "Subcategory" in the same row.
+$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,RootCause,Date,YearWeek,Year,WeekNumber,AIAnalysis,Confidence,ReportBlobName,Service,Misrouted'
+$base = "https://$StorageAccount.table.core.windows.net/$TableName()?`$select=$selectedFields&$sas"
 $rows = @()
 $url = $base
 while ($url) {

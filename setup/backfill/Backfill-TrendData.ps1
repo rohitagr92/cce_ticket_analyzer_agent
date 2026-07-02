@@ -222,13 +222,10 @@ function New-FallbackAnalysisText {
         [string]$Subcategory,
         [string]$RootCause
     )
-    $parts = @()
-    if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
-    if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
-    if ($parts.Count -eq 0) {
-        return "$Category: fallback analysis generated because AI analysis text was missing in backfill output."
-    }
-    return "$Category :: " + ($parts -join '. ') + '.'
+    $safeCategory = if ([string]::IsNullOrWhiteSpace($Category)) { 'Other / Miscellaneous' } else { $Category }
+    $safeSubcategory = if ([string]::IsNullOrWhiteSpace($Subcategory)) { 'the symptom was not explicitly documented' } else { $Subcategory }
+    $safeRoot = if ([string]::IsNullOrWhiteSpace($RootCause)) { 'the exact root cause was not explicitly documented' } else { $RootCause }
+    return "The user reported an issue that maps to '$safeSubcategory' within $safeCategory. Because the AI output for this row was incomplete, this narrative was reconstructed from structured ticket fields to preserve readability. Available troubleshooting context indicates $safeRoot as the most likely cause. The engineer resolution path should be reviewed in full work notes to confirm exact steps and user confirmation status before using this row for deep RCA decisions."
 }
 
 function Get-YearWeekFromDate {
@@ -337,7 +334,7 @@ for ($i = 1; $i -le $Days; $i++) {
             $root   = if ($fields.RootCause)   { $fields.RootCause }   else { '' }
             $anal   = if ($fields.Analysis)    { $fields.Analysis }    else { '' }
             $conf   = if ($fields.Confidence)  { $fields.Confidence }  else { 'Medium' }
-            if ([string]::IsNullOrWhiteSpace($anal)) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
+            if ([string]::IsNullOrWhiteSpace($anal) -or $anal.Length -lt 180) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
 
             # Defensive caps (Azure Table string properties are <= 32 KB; we stay well below).
             if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }

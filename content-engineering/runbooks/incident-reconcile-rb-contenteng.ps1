@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Daily ServiceNow vs table reconciliation with auto-heal for Productivity Tools.
 
@@ -13,25 +13,25 @@
 
 .NOTES
     Expected Automation Variables:
-      Incidents_analyzer_StorageAccountName
-      Incidents_analyzer_ResourceGroupName
-      Incidents_analyzer_SubscriptionId
-      ServiceNowIncidentsClientID
-      ServiceNowIncidentsClientSecret
-      ServiceNowIncidentsScope
+      ContentEng_StorageAccountName
+      ContentEng_ResourceGroupName
+      ContentEng_SubscriptionId
+      ContentEng_ServiceNowClientID
+      ContentEng_ServiceNowClientSecret
+      ContentEng_ServiceNowScope
       TokenUrl
-      ServiceNowIncidentsURL
+      ContentEng_ServiceNowIncidentsURL
       LogicAppSendAIEmailWebHookURL (optional)
 
     Optional Automation Variables (defaults used when missing):
-      PT_BusinessServiceId               default a1de2ff2db8f50108062531dd3961911
-      PT_ServiceOfferingId               default fcb18407dbcf50108062531dd39619c4
-      PT_TrendTableName                  default IncidentsCategoryStats
-      PT_ReconcileWeeksToCheck           default 2
-      PT_ReconcileDeltaThreshold         default 0
-      PT_ReconcileEnableAutoHeal         default True
-      PT_ReconcileMaxHealPerWeekPerDay   default 1
-      PT_ReconcileAutoHealState          default {}
+      ContentEng_BusinessServiceId               default f81e6ce5c3f98b901d9832d605013164
+      ContentEng_ServiceOfferingId               default f81e6ce5c3f98b901d9832d605013164
+      ContentEng_TrendTableName                  default IncidentsCategoryStats
+      ContentEng_ReconcileWeeksToCheck           default 2
+      ContentEng_ReconcileDeltaThreshold         default 0
+      ContentEng_ReconcileEnableAutoHeal         default True
+      ContentEng_ReconcileMaxHealPerWeekPerDay   default 1
+      ContentEng_ReconcileAutoHealState          default {}
 #>
 
 [CmdletBinding()]
@@ -142,9 +142,9 @@ function Get-ServiceNowToken {
     param([Parameter(Mandatory)][hashtable]$Config)
     $body = @{
         grant_type = 'client_credentials'
-        client_id = $Config.ServiceNowIncidentsClientID
-        client_secret = $Config.ServiceNowIncidentsClientSecret
-        scope = $Config.ServiceNowIncidentsScope
+        client_id = $Config.ContentEng_ServiceNowClientID
+        client_secret = $Config.ContentEng_ServiceNowClientSecret
+        scope = $Config.ContentEng_ServiceNowScope
     }
     $resp = Invoke-RestMethod -Method Post -Uri $Config.TokenUrl -Body $body -ContentType 'application/x-www-form-urlencoded'
     if (-not $resp.access_token) { throw 'ServiceNow token request did not return access_token.' }
@@ -278,33 +278,33 @@ function Set-HealthArtifact {
 
 Write-Step 'Loading configuration and variables...'
 $cfg = @{
-    StorageAccountName = Get-AutomationVariable -Name 'Incidents_analyzer_StorageAccountName'
-    StorageResourceGroup = Get-AutomationVariable -Name 'Incidents_analyzer_ResourceGroupName'
-    SubscriptionId = Get-AutomationVariable -Name 'Incidents_analyzer_SubscriptionId'
-    ServiceNowIncidentsClientID = Get-AutomationVariable -Name 'ServiceNowIncidentsClientID'
-    ServiceNowIncidentsClientSecret = Get-AutomationVariable -Name 'ServiceNowIncidentsClientSecret'
-    ServiceNowIncidentsScope = Get-AutomationVariable -Name 'ServiceNowIncidentsScope'
-    TokenUrl = Get-AutomationVariable -Name 'TokenUrl'
-    ResultsContainerName = [string](Get-OptVar -Name 'Incidents_analyzer_ResultsContainerName' -Default 'results')
-    WebhookUrl = Get-AutomationVariable -Name 'LogicAppSendAIEmailWebHookURL' -ErrorAction SilentlyContinue
+    StorageAccountName = Get-AutomationVariable -Name 'ContentEng_StorageAccountName'
+    StorageResourceGroup = Get-AutomationVariable -Name 'ContentEng_ResourceGroupName'
+    SubscriptionId = Get-AutomationVariable -Name 'ContentEng_SubscriptionId'
+    ContentEng_ServiceNowClientID = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientID'
+    ContentEng_ServiceNowClientSecret = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientSecret'
+    ContentEng_ServiceNowScope = Get-AutomationVariable -Name 'ContentEng_ServiceNowScope'
+    TokenUrl = Get-AutomationVariable -Name 'ContentEng_TokenUrl'
+    ResultsContainerName = [string](Get-OptVar -Name 'ContentEng_ResultsContainerName' -Default 'results')
+    WebhookUrl = Get-AutomationVariable -Name 'ContentEng_WebhookURL' -ErrorAction SilentlyContinue
 }
 
-$businessServiceId = [string](Get-OptVar -Name 'PT_BusinessServiceId' -Default 'a1de2ff2db8f50108062531dd3961911')
-$serviceOfferingId = [string](Get-OptVar -Name 'PT_ServiceOfferingId' -Default 'fcb18407dbcf50108062531dd39619c4')
-$tableName = [string](Get-OptVar -Name 'PT_TrendTableName' -Default 'IncidentsCategoryStats')
+$businessServiceId = [string](Get-OptVar -Name 'ContentEng_BusinessServiceId' -Default 'a1de2ff2db8f50108062531dd3961911')
+$serviceOfferingId = [string](Get-OptVar -Name 'ContentEng_ServiceOfferingId' -Default 'ce614555dbeb5c105447610ed39619f8')
+$tableName = [string](Get-OptVar -Name 'ContentEng_TrendTableName' -Default 'IncidentsCategoryStats')
 if ($WeeksToCheck -le 0) {
-    $WeeksToCheck = [int](Get-OptVar -Name 'PT_ReconcileWeeksToCheck' -Default 2)
+    $WeeksToCheck = [int](Get-OptVar -Name 'ContentEng_ReconcileWeeksToCheck' -Default 2)
 }
 if ($DeltaThreshold -lt 0) {
-    $DeltaThreshold = [int](Get-OptVar -Name 'PT_ReconcileDeltaThreshold' -Default 0)
+    $DeltaThreshold = [int](Get-OptVar -Name 'ContentEng_ReconcileDeltaThreshold' -Default 0)
 }
 if ($PSBoundParameters.ContainsKey('EnableAutoHeal') -eq $false) {
-    $EnableAutoHeal = ConvertTo-BoolSafe -Value (Get-OptVar -Name 'PT_ReconcileEnableAutoHeal' -Default $true) -Default $true
+    $EnableAutoHeal = ConvertTo-BoolSafe -Value (Get-OptVar -Name 'ContentEng_ReconcileEnableAutoHeal' -Default $true) -Default $true
 }
 if ($MaxAutoHealPerWeekPerDay -le 0) {
-    $MaxAutoHealPerWeekPerDay = [int](Get-OptVar -Name 'PT_ReconcileMaxHealPerWeekPerDay' -Default 1)
+    $MaxAutoHealPerWeekPerDay = [int](Get-OptVar -Name 'ContentEng_ReconcileMaxHealPerWeekPerDay' -Default 1)
 }
-$autoHealStateVarName = 'PT_ReconcileAutoHealState'
+$autoHealStateVarName = 'ContentEng_ReconcileAutoHealState'
 
 Write-Step 'Connecting to Azure with managed identity...'
 Disable-AzContextAutosave -Scope Process | Out-Null
@@ -432,7 +432,7 @@ $state = 'Healthy'
 if ($overallStatus -eq 'Mismatch') { $state = 'Mismatch' }
 if ($engineerSignals.Count -gt 0) { $state = 'Investigating' }
 
-$freshnessDelayHours = [int](Get-OptVar -Name 'PT_ReconcileDelayHours' -Default 30)
+$freshnessDelayHours = [int](Get-OptVar -Name 'ContentEng_ReconcileDelayHours' -Default 30)
 $nowUtc = (Get-Date).ToUniversalTime()
 $freshnessAgeHours = $null
 if (-not [string]::IsNullOrWhiteSpace($lastIngestionUtc)) {

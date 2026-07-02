@@ -1,4 +1,4 @@
-<#
+﻿<#
 .SYNOPSIS
     Daily incremental backfill of IncidentsCategoryStats for the Trends + Ops Report
     dashboards. Designed to run unattended in Azure Automation.
@@ -22,20 +22,20 @@
 
 .NOTES
     Required Automation Variables:
-      Incidents_analyzer_StorageAccountName, Incidents_analyzer_ResourceGroupName,
-      Incidents_analyzer_PromptTemplateContainerName, Incidents_analyzer_SubscriptionId,
-      ServiceNowIncidentsClientID, ServiceNowIncidentsClientSecret, ServiceNowIncidentsScope,
+      ContentEng_StorageAccountName, ContentEng_ResourceGroupName,
+      ContentEng_PromptTemplateContainerName, ContentEng_SubscriptionId,
+      ContentEng_ServiceNowClientID, ContentEng_ServiceNowClientSecret, ContentEng_ServiceNowScope,
       TokenUrl, AzureOpenAIBaseUrl, AzureOpenAIDeployment, AzureOpenAIApiKey, AzureOpenAIApiVersion
     Optional Automation Variables (have hard-coded defaults):
-      PT_BusinessServiceId   (default a1de2ff2db8f50108062531dd3961911)
-      PT_ServiceOfferingId   (default fcb18407dbcf50108062531dd39619c4)
-      PT_TrendTableName      (default IncidentsCategoryStats)
-      PT_TrendLookbackDays   (default 2)
+      ContentEng_BusinessServiceId   (default f81e6ce5c3f98b901d9832d605013164)
+      ContentEng_ServiceOfferingId   (default f81e6ce5c3f98b901d9832d605013164)
+      ContentEng_TrendTableName      (default IncidentsCategoryStats)
+      ContentEng_TrendLookbackDays   (default 2)
 #>
 
 [CmdletBinding()]
 param(
-    [int]$LookbackDays = 0,   # 0 = read from Automation variable PT_TrendLookbackDays (default 2)
+    [int]$LookbackDays = 0,   # 0 = read from Automation variable ContentEng_TrendLookbackDays (default 2)
     [int]$MaxPerDay    = 0    # 0 = no cap
 )
 
@@ -46,24 +46,24 @@ function Write-Step { param([string]$Msg, [string]$Color = 'Cyan') Write-Output 
 # -------- Load Automation variables --------
 Write-Step 'Loading Automation variables...' 'Yellow'
 $cfg = @{
-    StorageAccountName              = Get-AutomationVariable -Name 'Incidents_analyzer_StorageAccountName'
-    ResourceGroupName               = Get-AutomationVariable -Name 'Incidents_analyzer_ResourceGroupName'
-    PromptContainerName             = Get-AutomationVariable -Name 'Incidents_analyzer_PromptTemplateContainerName'
-    SubscriptionId                  = Get-AutomationVariable -Name 'Incidents_analyzer_SubscriptionId'
-    ServiceNowIncidentsClientID     = Get-AutomationVariable -Name 'ServiceNowIncidentsClientID'
-    ServiceNowIncidentsClientSecret = Get-AutomationVariable -Name 'ServiceNowIncidentsClientSecret'
-    ServiceNowIncidentsScope        = Get-AutomationVariable -Name 'ServiceNowIncidentsScope'
-    TokenUrl                        = Get-AutomationVariable -Name 'TokenUrl'
-    AzureOpenAIBaseUrl              = Get-AutomationVariable -Name 'AzureOpenAIBaseUrl'
-    AzureOpenAIDeployment           = Get-AutomationVariable -Name 'AzureOpenAIDeployment'
-    AzureOpenAIApiKey               = Get-AutomationVariable -Name 'AzureOpenAIApiKey'
-    AzureOpenAIApiVersion           = Get-AutomationVariable -Name 'AzureOpenAIApiVersion'
+    StorageAccountName              = Get-AutomationVariable -Name 'ContentEng_StorageAccountName'
+    ResourceGroupName               = Get-AutomationVariable -Name 'ContentEng_ResourceGroupName'
+    PromptContainerName             = Get-AutomationVariable -Name 'ContentEng_PromptTemplateContainerName'
+    SubscriptionId                  = Get-AutomationVariable -Name 'ContentEng_SubscriptionId'
+    ContentEng_ServiceNowClientID     = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientID'
+    ContentEng_ServiceNowClientSecret = Get-AutomationVariable -Name 'ContentEng_ServiceNowClientSecret'
+    ContentEng_ServiceNowScope        = Get-AutomationVariable -Name 'ContentEng_ServiceNowScope'
+    TokenUrl                        = Get-AutomationVariable -Name 'ContentEng_TokenUrl'
+    AzureOpenAIBaseUrl              = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIBaseUrl'
+    AzureOpenAIDeployment           = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIDeployment'
+    AzureOpenAIApiKey               = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIApiKey'
+    AzureOpenAIApiVersion           = Get-AutomationVariable -Name 'ContentEng_AzureOpenAIApiVersion'
 }
 function Get-OptVar { param($n, $d) try { $v = Get-AutomationVariable -Name $n -ErrorAction Stop; if ($null -eq $v -or $v -eq '') { return $d } else { return $v } } catch { return $d } }
-$BusinessServiceId = Get-OptVar 'PT_BusinessServiceId' 'a1de2ff2db8f50108062531dd3961911'
-$ServiceOfferingId = Get-OptVar 'PT_ServiceOfferingId' 'fcb18407dbcf50108062531dd39619c4'
-$TableName         = Get-OptVar 'PT_TrendTableName'    'IncidentsCategoryStats'
-if ($LookbackDays -le 0) { $LookbackDays = [int](Get-OptVar 'PT_TrendLookbackDays' 2) }
+$BusinessServiceId = Get-OptVar 'ContentEng_BusinessServiceId' 'a1de2ff2db8f50108062531dd3961911'
+$ServiceOfferingId = Get-OptVar 'ContentEng_ServiceOfferingId' 'ce614555dbeb5c105447610ed39619f8'
+$TableName         = Get-OptVar 'ContentEng_TrendTableName'    'IncidentsCategoryStats'
+if ($LookbackDays -le 0) { $LookbackDays = [int](Get-OptVar 'ContentEng_TrendLookbackDays' 2) }
 
 Write-Output "Lookback days  : $LookbackDays"
 Write-Output "Table          : $TableName"
@@ -98,10 +98,10 @@ function Read-TemplateBlob {
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     return $txt
 }
-$catTemplate    = Read-TemplateBlob -BlobName 'TicketCategorisation_ProductivityTools.md'
-$envTemplate    = Read-TemplateBlob -BlobName 'EnvironmentContext_ProductivityTools.md'
-$subCatTemplate = Read-TemplateBlob -BlobName 'TrendSubCategorisation_ProductivityTools.md'
-$prcTemplate    = Read-TemplateBlob -BlobName 'PossibleRootCause_ProductivityTools.md'
+$catTemplate    = Read-TemplateBlob -BlobName 'TicketCategorisation_ContentEngineering.md'
+$envTemplate    = Read-TemplateBlob -BlobName 'EnvironmentContext_ContentEngineering.md'
+$subCatTemplate = Read-TemplateBlob -BlobName 'TrendSubCategorisation_ContentEngineering.md'
+$prcTemplate    = Read-TemplateBlob -BlobName 'PossibleRootCause_ContentEngineering.md'
 
 $outputFormatInstruction = @'
 
@@ -113,7 +113,7 @@ You MUST end your response with exactly these four labeled lines, in this order,
 Primary Category: <one of the bold category names defined above, or "Excluded">
 Sub-symptom: <EXACT bold header label from the Sub-symptom reference above for the chosen category — e.g. "Sync Issues", "Licensing Issues". Do NOT invent or paraphrase.>
 Possible Root Cause: <EXACT bold label from the chosen product table in the Possible Root Cause reference above. Copy verbatim. If no label fits, write "Unknown".>
-AI Analysis: <Detailed 4-6 sentence incident narrative covering: (1) user-reported issue and impact, (2) strongest evidence from work/close notes, (3) most likely root cause, (4) exact remediation performed, and (5) preventive follow-up/checks.>
+AI Analysis: <2-3 sentence summary: what happened, what was the root cause, and what fixed it. Be specific about technical details.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
@@ -151,9 +151,9 @@ function Get-ExistingRowKeys {
 function Get-ServiceNowToken {
     $body = @{
         grant_type    = 'client_credentials'
-        client_id     = $cfg.ServiceNowIncidentsClientID
-        client_secret = $cfg.ServiceNowIncidentsClientSecret
-        scope         = $cfg.ServiceNowIncidentsScope
+        client_id     = $cfg.ContentEng_ServiceNowClientID
+        client_secret = $cfg.ContentEng_ServiceNowClientSecret
+        scope         = $cfg.ContentEng_ServiceNowScope
     }
     (Invoke-RestMethod -Method Post -Uri $cfg.TokenUrl -Body $body -ContentType 'application/x-www-form-urlencoded').access_token
 }
@@ -243,23 +243,15 @@ function New-FallbackAnalysisText {
     param(
         [string]$Category,
         [string]$Subcategory,
-        [string]$RootCause,
-        [string]$SeedText = ''
+        [string]$RootCause
     )
-
-    $safeCategory = if ([string]::IsNullOrWhiteSpace($Category)) { 'Other / Miscellaneous' } else { $Category }
-    $safeSubcategory = if ([string]::IsNullOrWhiteSpace($Subcategory)) { 'not explicitly captured in the ticket notes' } else { $Subcategory }
-    $safeRootCause = if ([string]::IsNullOrWhiteSpace($RootCause)) { 'not explicitly confirmed in the stored fields' } else { $RootCause }
-    $safeSeed = ([string]$SeedText).Trim()
-    if ($safeSeed.Length -gt 240) { $safeSeed = $safeSeed.Substring(0, 240).Trim() + '...' }
-
-    $evidenceSentence = if ([string]::IsNullOrWhiteSpace($safeSeed)) {
-        'The available row did not contain a full AI narrative, so this detailed analysis was reconstructed from structured category fields.'
-    } else {
-        "The original AI text was brief, and the strongest captured evidence states: '$safeSeed'."
+    $parts = @()
+    if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
+    if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
+    if ($parts.Count -eq 0) {
+        return "${Category}: fallback analysis generated because AI analysis text was missing in backfill output."
     }
-
-    return "The user reached out due to an issue mapped to '$safeSubcategory' under $safeCategory. $evidenceSentence Based on the available incident notes, the engineer's troubleshooting points to $safeRootCause as the most likely cause. The recorded remediation should be treated as the practical fix path for this ticket, and post-fix validation should confirm whether the user regained expected functionality. User response and explicit satisfaction status are not always captured in this backfill flow, so unresolved confirmation details should be verified in ServiceNow work notes before escalation or closure analytics."
+    return "$Category :: " + ($parts -join '. ') + '.'
 }
 
 function Get-YearWeekFromDate {
@@ -322,9 +314,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             $anal   = $fields.Analysis
             $conf   = $fields.Confidence
             if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
-            if ([string]::IsNullOrWhiteSpace($anal) -or $anal.Length -lt 180) {
-                $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root -SeedText $anal
-            }
+            if ([string]::IsNullOrWhiteSpace($anal)) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
             if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
             if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
             if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
@@ -366,44 +356,3 @@ Write-Output ("  ---------------------------------------------------------------
 Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={3,3}" -f $totalFetched, $totalSaved, $totalSkipped, $totalErrors)
 Write-Output ''
 Write-Output "Rows newly written: $totalSaved (skipped $totalSkipped already in table)"
-
-# -------- Dashboard Regeneration --------
-# Regenerate dashboards for all weeks that had new incidents added
-if ($totalSaved -gt 0) {
-    Write-Output ''
-    Write-Step '=== Regenerating dashboards for affected weeks ===' 'Cyan'
-    try {
-        # Get all unique weeks that had incidents saved
-        $affectedWeeks = @()
-        foreach ($day in $summary.Keys | Sort-Object) {
-            if ($summary[$day].saved -gt 0) {
-                $dayDate = [DateTime]::ParseExact($day, 'yyyy-MM-dd', $null)
-                $yw = Get-YearWeekFromDate -Date $dayDate
-                if ($affectedWeeks -notcontains $yw.YearWeek) {
-                    $affectedWeeks += $yw.YearWeek
-                }
-            }
-        }
-        
-        if ($affectedWeeks.Count -gt 0) {
-            Write-Output "Found $($affectedWeeks.Count) affected week(s): $($affectedWeeks -join ', ')"
-            
-            # Build the Build-WeeklyReports command path
-            $buildReportScript = Join-Path $PSScriptRoot "..\setup\Build-WeeklyReports.ps1"
-            if (-not (Test-Path $buildReportScript)) {
-                $buildReportScript = Join-Path (Split-Path -Parent $PSScriptRoot) "setup\Build-WeeklyReports.ps1"
-            }
-            
-            if (Test-Path $buildReportScript) {
-                & $buildReportScript -OnlyWeeks $affectedWeeks -ErrorAction SilentlyContinue
-                Write-Output "Dashboard regeneration completed for weeks: $($affectedWeeks -join ', ')"
-            } else {
-                Write-Warning "Dashboard regeneration script not found at: $buildReportScript"
-            }
-        }
-    } catch {
-        Write-Warning "Failed to regenerate dashboards: $($_.Exception.Message) - continuing..."
-    }
-} else {
-    Write-Output "No incidents saved in this run - skipping dashboard regeneration"
-}

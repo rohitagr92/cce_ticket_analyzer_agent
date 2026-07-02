@@ -1,4 +1,4 @@
-# Detect execution environment
+﻿# Detect execution environment
 $Script:IsAzureAutomation = $env:AUTOMATION_ASSET_ACCOUNTID -or $PSPrivateMetadata.JobId
 
  
@@ -18,39 +18,39 @@ if ($Script:IsAzureAutomation) {
     $Script:EnableBlobLogging = $true
     # Azure Automation - use automation variables
     $Script:BlobConfig = @{
-        StorageAccountName = Get-AutomationVariable -Name "Incidents_analyzer_StorageAccountName"
-        PromptContainerName = Get-AutomationVariable -Name "Incidents_analyzer_PromptTemplateContainerName"
-        ResourceGroupName = Get-AutomationVariable -Name "Incidents_analyzer_ResourceGroupName"
-        DataContainerName = Get-AutomationVariable -Name "Incidents_analyzer_DataContainerName"
-        ResultsContainerName = Get-AutomationVariable -Name "Incidents_analyzer_ResultsContainerName"
-        SubscriptionId = Get-AutomationVariable -Name "Incidents_analyzer_SubscriptionId"
+        StorageAccountName = Get-AutomationVariable -Name "ContentEng_StorageAccountName"
+        PromptContainerName = Get-AutomationVariable -Name "ContentEng_PromptTemplateContainerName"
+        ResourceGroupName = Get-AutomationVariable -Name "ContentEng_ResourceGroupName"
+        DataContainerName = Get-AutomationVariable -Name "ContentEng_DataContainerName"
+        ResultsContainerName = Get-AutomationVariable -Name "ContentEng_ResultsContainerName"
+        SubscriptionId = Get-AutomationVariable -Name "ContentEng_SubscriptionId"
         StatisticsTableName = "IncidentsCategoryStats"  # Azure Table for statistics
         }
     # Azure Automation - use automation variables
     $Script:Constants = @{
-        ServiceNowIncidentsClientID = Get-AutomationVariable -Name "ServiceNowIncidentsClientID"
-        ServiceNowIncidentsClientSecret = Get-AutomationVariable -Name "ServiceNowIncidentsClientSecret"
-        ServiceNowIncidentsScope = Get-AutomationVariable -Name "ServiceNowIncidentsScope"
-        TokenUrl = Get-AutomationVariable -Name "TokenUrl"
-        AzureOpenAIBaseUrl = Get-AutomationVariable -Name "AzureOpenAIBaseUrl"
-        AzureOpenAIDeployment = Get-AutomationVariable -Name "AzureOpenAIDeployment"
-        AzureOpenAIApiKey = Get-AutomationVariable -Name "AzureOpenAIApiKey"
-        AzureOpenAIApiVersion = Get-AutomationVariable -Name "AzureOpenAIApiVersion"
-        ServicenowIncidentsURL = Get-AutomationVariable -Name "ServiceNowIncidentsURL"
-        ServicenowRequestsURL = Get-AutomationVariable -Name "ServiceNowRequestsURL"
-        LogicAppSendAIEmailWebHookURL = Get-AutomationVariable -Name "LogicAppSendAIEmailWebHookURL" -ErrorAction SilentlyContinue 
-        UseClaudeModel = Get-AutomationVariable -Name "UseClaudeModel" -ErrorAction SilentlyContinue 
-        ClaudeEndpoint = Get-AutomationVariable -Name "ClaudeEndpoint" -ErrorAction SilentlyContinue 
-        ClaudeDeployment = Get-AutomationVariable -Name "ClaudeDeployment" -ErrorAction SilentlyContinue 
-        ClaudeApiKey = Get-AutomationVariable -Name "ClaudeApiKey" -ErrorAction SilentlyContinue 
-        ClaudeApiVersion = Get-AutomationVariable -Name "ClaudeApiVersion" -ErrorAction SilentlyContinue
-        UseStoredIncidents = Get-AutomationVariable -Name "UseStoredIncidents" -ErrorAction SilentlyContinue
-        StoredDataFileName = Get-AutomationVariable -Name "StoredDataFileName" -ErrorAction SilentlyContinue
-        SaveRawDataLocally = Get-AutomationVariable -Name "SaveRawDataLocally" -ErrorAction SilentlyContinue
-        DailyLookbackHours = Get-AutomationVariable -Name "DailyLookbackHours" -ErrorAction SilentlyContinue
-        SaveRunArtifacts = Get-AutomationVariable -Name "SaveRunArtifacts" -ErrorAction SilentlyContinue
-        GenerateWeeklyMergedReportOnWeekend = Get-AutomationVariable -Name "GenerateWeeklyMergedReportOnWeekend" -ErrorAction SilentlyContinue
-        WeeklyMergeLookbackDays = Get-AutomationVariable -Name "WeeklyMergeLookbackDays" -ErrorAction SilentlyContinue
+        ContentEng_ServiceNowClientID = Get-AutomationVariable -Name "ContentEng_ServiceNowClientID"
+        ContentEng_ServiceNowClientSecret = Get-AutomationVariable -Name "ContentEng_ServiceNowClientSecret"
+        ContentEng_ServiceNowScope = Get-AutomationVariable -Name "ContentEng_ServiceNowScope"
+        TokenUrl = Get-AutomationVariable -Name "ContentEng_TokenUrl"
+        AzureOpenAIBaseUrl = Get-AutomationVariable -Name "ContentEng_AzureOpenAIBaseUrl"
+        AzureOpenAIDeployment = Get-AutomationVariable -Name "ContentEng_AzureOpenAIDeployment"
+        AzureOpenAIApiKey = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiKey"
+        AzureOpenAIApiVersion = Get-AutomationVariable -Name "ContentEng_AzureOpenAIApiVersion"
+        ServicenowIncidentsURL = Get-AutomationVariable -Name "ContentEng_ServiceNowIncidentsURL"
+        ServicenowRequestsURL = Get-AutomationVariable -Name "ContentEng_ServiceNowRequestsURL"
+        LogicAppSendAIEmailWebHookURL = Get-AutomationVariable -Name "ContentEng_WebhookURL" -ErrorAction SilentlyContinue 
+        UseClaudeModel = Get-AutomationVariable -Name "ContentEng_UseClaudeModel" -ErrorAction SilentlyContinue 
+        ClaudeEndpoint = Get-AutomationVariable -Name "ContentEng_ClaudeEndpoint" -ErrorAction SilentlyContinue 
+        ClaudeDeployment = Get-AutomationVariable -Name "ContentEng_ClaudeDeployment" -ErrorAction SilentlyContinue 
+        ClaudeApiKey = Get-AutomationVariable -Name "ContentEng_ClaudeApiKey" -ErrorAction SilentlyContinue 
+        ClaudeApiVersion = Get-AutomationVariable -Name "ContentEng_ClaudeApiVersion" -ErrorAction SilentlyContinue
+        UseStoredIncidents = Get-AutomationVariable -Name "ContentEng_UseStoredIncidents" -ErrorAction SilentlyContinue
+        StoredDataFileName = Get-AutomationVariable -Name "ContentEng_StoredDataFileName" -ErrorAction SilentlyContinue
+        SaveRawDataLocally = Get-AutomationVariable -Name "ContentEng_SaveRawDataLocally" -ErrorAction SilentlyContinue
+        DailyLookbackHours = Get-AutomationVariable -Name "ContentEng_DailyLookbackHours" -ErrorAction SilentlyContinue
+        SaveRunArtifacts = Get-AutomationVariable -Name "ContentEng_SaveRunArtifacts" -ErrorAction SilentlyContinue
+        GenerateWeeklyMergedReportOnWeekend = Get-AutomationVariable -Name "ContentEng_GenWeeklyReport" -ErrorAction SilentlyContinue
+        WeeklyMergeLookbackDays = Get-AutomationVariable -Name "ContentEng_WeeklyMergeLookbackDays" -ErrorAction SilentlyContinue
     }
 } else {
     Write-Host "Running in local development environment" -ForegroundColor Yellow
@@ -61,8 +61,8 @@ if ($Script:IsAzureAutomation) {
     # Local development - load Productivity Tools config + secrets
     $Script:ScriptDirectory = $PSScriptRoot
     Set-Location $Script:ScriptDirectory
-    $configPath  = ".\Config\LocalConfig-ProductivityTools.psd1"
-    $secretsPath = ".\Config\LocalSecrets-ProductivityTools.psd1"
+    $configPath  = ".\Config\LocalConfig-ContentEngineering.psd1"
+    $secretsPath = ".\Config\LocalSecrets-ContentEngineering.psd1"
     if (Test-Path $configPath) {
         Write-Host "Loading Productivity Tools configuration from $configPath" -ForegroundColor Green
         $Script:LocalConfig = Import-PowerShellDataFile -Path $configPath
@@ -78,9 +78,9 @@ if ($Script:IsAzureAutomation) {
     }
     # Local development - use loaded config
     $Script:Constants = @{
-        ServiceNowIncidentsClientID = $Script:LocalConfig.ServiceNowIncidentsClientID
-        ServiceNowIncidentsClientSecret = $Script:LocalConfig.ServiceNowIncidentsClientSecret
-        ServiceNowIncidentsScope = $Script:LocalConfig.ServiceNowIncidentsScope
+        ContentEng_ServiceNowClientID = $Script:LocalConfig.ContentEng_ServiceNowClientID
+        ContentEng_ServiceNowClientSecret = $Script:LocalConfig.ContentEng_ServiceNowClientSecret
+        ContentEng_ServiceNowScope = $Script:LocalConfig.ContentEng_ServiceNowScope
         TokenUrl = $Script:LocalConfig.TokenUrl
         AzureOpenAIBaseUrl = $Script:LocalConfig.AzureOpenAIBaseUrl
         AzureOpenAIDeployment = $Script:LocalConfig.AzureOpenAIDeployment
@@ -864,26 +864,13 @@ function Get-IncidentCategory {
                         @"
 ## ADDITIONAL REQUIRED OUTPUT FIELDS
 
-After the existing Primary Category / Sub-symptom / Confidence / Resolution Summary / How Do I or Error / KB Provided fields, append these two lines:
+After the existing Primary Category / Sub-symptom / Confidence / Reasoning / Key Evidence / Resolution Summary / How Do I or Error / KB Provided fields, append these two lines:
 
 Possible Root Cause: [Pick exactly ONE label from the 'Root Cause Label' column of the chosen Primary Category's table in the 'Possible Root Cause' reference above. Copy the label verbatim. If no label fits, write "Unknown".]
 
 Detailed Root Cause: [Pick exactly ONE entry heading from the chosen Primary Category's section in the 'Detailed Root Cause' reference above (the '### Heading' lines). Copy verbatim. If no entry fits, write "Unknown".]
 
 STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from the MD reference files. Anything you produce that is not in those files will be rejected and replaced with "Unknown".
-
-## REASONING FIELD - DETAILED INCIDENT NARRATIVE (REQUIRED)
-
-The Reasoning field MUST be a comprehensive incident narrative of at least 3-5 sentences. It must cover ALL of the following in order:
-1. WHAT HAPPENED: What problem the user experienced - specific symptoms, error messages, and error codes seen.
-2. CONTEXT: When it started, what changed (e.g. rejoin, password reset, OS update), what other apps were affected or not.
-3. TROUBLESHOOTING STEPS: What the engineer diagnosed or tried - tools run, checks performed, logs reviewed.
-4. ROOT CAUSE: What was specifically found to have caused the issue.
-5. RESOLUTION: The exact steps taken to fix it and confirm the fix worked.
-6. USER RESPONSE AND OUTCOME: Whether the user responded, whether they confirmed success, and if closure happened due to no reply.
-
-Do NOT write a single-sentence summary. Do NOT write generic descriptions. Draw on every detail from the work notes and description.
-Do NOT write labeled field format in Reasoning (forbidden: "Category:", "Symptom/Subcategory:", "Possible Root Cause:", "Detailed Root Cause:", markdown bullets or headings). Reasoning must be plain-language prose only.
 "@
         
         # Convert to JSON with consistent formatting - use Compress to avoid whitespace issues
@@ -1605,47 +1592,27 @@ function Invoke-TicketProcessing {
         $rawSubSymptom = Get-CanonicalAlias -Field 'Subcategory' -Product $canonicalCategory -Raw $rawSubSymptom
         $ticket.SubSymptom = $rawSubSymptom
 
-        # ===== STRICT TEMPLATE ENFORCEMENT FOR ROOT CAUSE & SYMPTOMS =====
-        
         # Canonical subcategory (per-product allowlist from TrendSubCategorisation.md)
         $subAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.Subcategories -Product $canonicalCategory
-        
-        # STRICT: Accept ONLY template values, no custom text
         $ticket.Subcategory = Get-CanonicalLabel -Raw $rawSubSymptom -Allowlist $subAllowlist -Fallback ''
         if ([string]::IsNullOrWhiteSpace($ticket.Subcategory)) {
-            # No match found - use fallback from template only
             $ticket.Subcategory = Get-CanonicalFallbackLabel -Field Subcategory -Product $canonicalCategory -Allowlist $subAllowlist
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] Subcategory coerced to fallback: '$($ticket.Subcategory)' (AI input: '$rawSubSymptom')" -Level Warning -Category "TemplateCompliance"
-        } else {
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] Subcategory matched: '$($ticket.Subcategory)'" -Level Info -Category "TemplateCompliance"
         }
 
         # Canonical Possible Root Cause (per-product allowlist from PossibleRootCause.md)
-        # STRICT: Accept ONLY values from template allowlist
         $prcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.PossibleRootCauses -Product $canonicalCategory
         $rawPrc = Get-CanonicalAlias -Field 'PossibleRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.possible_root_cause)
         $ticket.PossibleRootCause = Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback ''
-        
         if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
-            # No match - use template fallback only
             $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] PossibleRootCause coerced to fallback: '$($ticket.PossibleRootCause)' (AI input: '$rawPrc')" -Level Warning -Category "TemplateCompliance"
-        } else {
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] PossibleRootCause matched: '$($ticket.PossibleRootCause)'" -Level Info -Category "TemplateCompliance"
         }
 
         # Canonical Detailed Root Cause (per-product allowlist from DetailedRootCause.md)
-        # STRICT: Accept ONLY values from template allowlist
         $drcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.DetailedRootCauses -Product $canonicalCategory
         $rawDrc = Get-CanonicalAlias -Field 'DetailedRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.detailed_root_cause)
         $ticket.DetailedRootCause = Get-CanonicalLabel -Raw $rawDrc -Allowlist $drcAllowlist -Fallback ''
-        
         if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause)) {
-            # No match - use template fallback only
             $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] DetailedRootCause coerced to fallback: '$($ticket.DetailedRootCause)' (AI input: '$rawDrc')" -Level Warning -Category "TemplateCompliance"
-        } else {
-            Write-ScriptLog "TEMPLATE-STRICT [$($Incident.number)] DetailedRootCause matched: '$($ticket.DetailedRootCause)'" -Level Info -Category "TemplateCompliance"
         }
 
         # Stage 2 rescue: if either PRC or DRC is still empty, ask the AI to map again
@@ -1654,7 +1621,7 @@ function Invoke-TicketProcessing {
         $needPrcRescue = ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -and $prcAllowlist -and $prcAllowlist.Count -gt 0)
         $needDrcRescue = ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause) -and $drcAllowlist -and $drcAllowlist.Count -gt 0)
         if ($Script:Config.Rescue.Enabled -and ($needPrcRescue -or $needDrcRescue)) {
-            Write-ScriptLog "TEMPLATE-RESCUE [$($Incident.number)] Invoking narrow re-classifier for missing root causes (needPrc=$needPrcRescue needDrc=$needDrcRescue)" -Level Info -Category "TemplateCompliance"
+            Write-ScriptLog "RESCUE [$($Incident.number)] invoking narrow re-classifier (needPrc=$needPrcRescue needDrc=$needDrcRescue)" -Level Info -Category "RescueClassifier"
             $rescue = Resolve-RootCauseRescue `
                 -Category          $canonicalCategory `
                 -Subcategory       $ticket.Subcategory `
@@ -1668,21 +1635,15 @@ function Invoke-TicketProcessing {
             if ($needPrcRescue -and $rescue.PossibleRootCause) {
                 $coerced = Get-CanonicalLabel -Raw $rescue.PossibleRootCause -Allowlist $prcAllowlist -Fallback ''
                 if (-not [string]::IsNullOrWhiteSpace($coerced)) {
-                    Write-ScriptLog "TEMPLATE-RESCUE [$($Incident.number)] PRC rescue succeeded: '$coerced' (from AI: '$($rescue.PossibleRootCause)')" -Level Info -Category "TemplateCompliance"
+                    Write-ScriptLog "RESCUE [$($Incident.number)] PRC '$($ticket.PossibleRootCause)' -> '$coerced' (raw='$($rescue.PossibleRootCause)')" -Level Info -Category "RescueClassifier"
                     $ticket.PossibleRootCause = $coerced
-                } else {
-                    Write-ScriptLog "TEMPLATE-RESCUE [$($Incident.number)] PRC rescue failed - using template fallback" -Level Warning -Category "TemplateCompliance"
-                    $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
                 }
             }
             if ($needDrcRescue -and $rescue.DetailedRootCause) {
                 $coerced = Get-CanonicalLabel -Raw $rescue.DetailedRootCause -Allowlist $drcAllowlist -Fallback ''
                 if (-not [string]::IsNullOrWhiteSpace($coerced)) {
-                    Write-ScriptLog "TEMPLATE-RESCUE [$($Incident.number)] DRC rescue succeeded: '$coerced' (from AI: '$($rescue.DetailedRootCause)')" -Level Info -Category "TemplateCompliance"
+                    Write-ScriptLog "RESCUE [$($Incident.number)] DRC '$($ticket.DetailedRootCause)' -> '$coerced' (raw='$($rescue.DetailedRootCause)')" -Level Info -Category "RescueClassifier"
                     $ticket.DetailedRootCause = $coerced
-                } else {
-                    Write-ScriptLog "TEMPLATE-RESCUE [$($Incident.number)] DRC rescue failed - using template fallback" -Level Warning -Category "TemplateCompliance"
-                    $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
                 }
             }
         }
@@ -1713,30 +1674,9 @@ function Invoke-TicketProcessing {
         # Recommendations tab) always has something to show / distil.
         if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.reasoning)) {
             $ticket.Reasoning = Get-FallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] Reasoning empty from AI - using template-compliant fallback" -Level Warning -Category "TemplateCompliance"
+            Write-ScriptLog "Reasoning empty for $($Incident.number) - composed fallback narrative from canonical fields" -Level Info -Category "Categorization"
         } else {
             $ticket.Reasoning = [string]$categoryInfo.reasoning
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] AI Reasoning length: $($ticket.Reasoning.Length) chars" -Level Info -Category "TemplateCompliance"
-        }
-        
-        # STRICT: Validate AI Analysis meets minimum quality standards (100+ chars, detailed)
-        $analysisLength = ([string]$ticket.Reasoning).Length
-        if ($analysisLength -lt 100) {
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] WARNING: AI Analysis too brief ($analysisLength chars) - enhancing with template details" -Level Warning -Category "TemplateCompliance"
-            $ticket.Reasoning = Get-FallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
-            $analysisLength = ([string]$ticket.Reasoning).Length
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] Enhanced analysis length: $analysisLength chars" -Level Info -Category "TemplateCompliance"
-        }
-        
-        # Verify reasoning contains meaningful content (not just placeholders)
-        $hasCategory = $ticket.Reasoning -match [regex]::Escape($ticket.Category)
-        $hasSymptom = -not [string]::IsNullOrWhiteSpace($ticket.Subcategory) -and ($ticket.Reasoning -match [regex]::Escape($ticket.Subcategory))
-        $hasRootCause = -not [string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -and ($ticket.Reasoning -match [regex]::Escape($ticket.PossibleRootCause))
-        
-        if (-not $hasCategory -or $analysisLength -lt 100) {
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] CRITICAL: AI Analysis lacks template details (hasCategory=$hasCategory analysisLen=$analysisLength) - regenerating" -Level Error -Category "TemplateCompliance"
-            $ticket.Reasoning = Get-EnhancedFallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
-            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] Regenerated analysis length: $($ticket.Reasoning.Length) chars" -Level Info -Category "TemplateCompliance"
         }
         $ticket.Evidence = $categoryInfo.key_evidence
         $ticket.Resolution = $categoryInfo.resolution_summary
@@ -1750,47 +1690,6 @@ function Invoke-TicketProcessing {
         
         Write-ScriptLog "Successfully processed $ticketType $($Incident.number) - Category: $($ticket.Category)" -Level Success -Category "Processing"
         
-        # ===== STRICT TEMPLATE COMPLIANCE VALIDATION - FINAL CHECK =====
-        # Ensure all template-dependent fields ONLY contain values from templates
-        
-        # STRICT: Subcategory MUST be from template allowlist
-        if ([string]::IsNullOrWhiteSpace($ticket.Subcategory) -or $ticket.Subcategory -match '^(Unknown|Unclassified|Unable)') {
-            $fallback = Get-CanonicalFallbackLabel -Field Subcategory -Product $ticket.Category -Allowlist $subAllowlist
-            if ($ticket.Subcategory -ne $fallback) {
-                Write-ScriptLog "TEMPLATE-VALIDATE [$($Incident.number)] Subcategory forced to template fallback: '$fallback' (was: '$($ticket.Subcategory)')" -Level Warning -Category "TemplateCompliance"
-                $ticket.Subcategory = $fallback
-            }
-        }
-        
-        # STRICT: PossibleRootCause MUST be from template allowlist
-        if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -or $ticket.PossibleRootCause -match '^(Unknown|Unclassified|Unable)') {
-            $fallback = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $ticket.Category -Allowlist $prcAllowlist
-            if ($ticket.PossibleRootCause -ne $fallback) {
-                Write-ScriptLog "TEMPLATE-VALIDATE [$($Incident.number)] PossibleRootCause forced to template fallback: '$fallback' (was: '$($ticket.PossibleRootCause)')" -Level Warning -Category "TemplateCompliance"
-                $ticket.PossibleRootCause = $fallback
-            }
-        }
-        
-        # STRICT: DetailedRootCause MUST be from template allowlist
-        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause) -or $ticket.DetailedRootCause -match '^(Unknown|Unclassified|Unable)') {
-            $fallback = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $ticket.Category -Allowlist $drcAllowlist
-            if ($ticket.DetailedRootCause -ne $fallback) {
-                Write-ScriptLog "TEMPLATE-VALIDATE [$($Incident.number)] DetailedRootCause forced to template fallback: '$fallback' (was: '$($ticket.DetailedRootCause)')" -Level Warning -Category "TemplateCompliance"
-                $ticket.DetailedRootCause = $fallback
-            }
-        }
-        
-        # STRICT: AI Analysis must meet quality threshold
-        $aiAnalysisLength = ([string]$ticket.Reasoning).Length
-        if ($aiAnalysisLength -lt 120) {
-            Write-ScriptLog "TEMPLATE-VALIDATE [$($Incident.number)] AI Analysis below minimum quality (${aiAnalysisLength} chars) - regenerating to template standard" -Level Warning -Category "TemplateCompliance"
-            $ticket.Reasoning = Get-EnhancedFallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
-            $aiAnalysisLength = ([string]$ticket.Reasoning).Length
-        }
-        
-        # Log final validation result
-        Write-ScriptLog "TEMPLATE-FINAL-COMPLIANCE [$($Incident.number)] VALIDATED: Category=$($ticket.Category) | Subcat=$($ticket.Subcategory) | PRC=$($ticket.PossibleRootCause) | DRC=$($ticket.DetailedRootCause) | AnalysisLen=$aiAnalysisLength | AllFromTemplates=TRUE" -Level Success -Category "TemplateCompliance"
-
         return [PSCustomObject]@{
             IncidentNumber = $Incident.number
             SummarisedNotes = $summary
@@ -1812,13 +1711,11 @@ function New-FallbackTicketAnalysis {
     )
 
     $ticket = [TicketAnalysis]::new([string]$Incident.number)
-    
-    # STRICT: All fallback values MUST be from templates, not custom text
     $ticket.Category = 'Other / Miscellaneous'
     $ticket.SubSymptom = 'Unclassified'
-    $ticket.Subcategory = 'Unclassified'  # From template allowlist
-    $ticket.PossibleRootCause = 'Usage Guidance (How Do I)'  # From template allowlist
-    $ticket.DetailedRootCause = 'Automated fallback classification'  # From template allowlist
+    $ticket.Subcategory = 'Unclassified'
+    $ticket.PossibleRootCause = 'Usage Guidance (How Do I)'
+    $ticket.DetailedRootCause = 'Automated fallback classification'
     $ticket.Service = 'Productivity Tools'
     $ticket.Misrouted = $false
     $ticket.ExclusionReason = ''
@@ -1832,24 +1729,19 @@ function New-FallbackTicketAnalysis {
         $short = 'No incident summary available from source payload.'
     }
 
-    $failureNote = if ([string]::IsNullOrWhiteSpace($FailureReason)) {
-        'the AI categorization call did not return a usable response'
-    } else {
-        $FailureReason
+    $reasoning = "Fallback analysis generated because AI categorization failed after retries. Incident: $short"
+    if (-not [string]::IsNullOrWhiteSpace($FailureReason)) {
+        $reasoning += ". Error: $FailureReason"
     }
-    $ticket.Reasoning = "The user reached out because '$short'. During analysis, the runbook could not complete the normal AI categorization flow because $failureNote. The engineer-side automation therefore applied a safe fallback categorization so reporting could continue without dropping this incident from weekly trends. Available notes do not provide enough verified evidence to describe a precise root-cause chain for this ticket. User-response confirmation is not explicitly captured in the fallback path, so a manual follow-up review is recommended before relying on this entry for deep root-cause conclusions."
-    $ticket.Evidence = 'AI categorization did not complete successfully'
-    $ticket.Resolution = 'Manual review recommended for proper categorization'
-    $ticket.Type = 'Not Determined'
+    $ticket.Reasoning = $reasoning
+    $ticket.Evidence = ''
+    $ticket.Resolution = ''
+    $ticket.Type = ''
     $ticket.KnowledgeBase = ''
     $ticket.OriginalDescription = [string]$Incident.short_description
     $ticket.ResolvedAt = [string]$Incident.resolved_at
 
-    # Ensure fallback ticket also passes compliance validation
     $null = Ensure-TicketAiFields -Ticket $ticket
-    
-    Write-ScriptLog "FALLBACK-TICKET [$($Incident.number)] Created with template-compliant fields: Category=$($ticket.Category) | Subcat=$($ticket.Subcategory) | PRC=$($ticket.PossibleRootCause) | DRC=$($ticket.DetailedRootCause) | ReasonLen=$($ticket.Reasoning.Length)" -Level Warning -Category "TemplateCompliance"
-    
     return $ticket
 }
 
@@ -2445,13 +2337,13 @@ function Send-ReportWebhook {
 # the hashtable keys are kept short so existing references in this script work.
 $Script:PromptTemplates = @{}
 $templateMap = [ordered]@{
-    WorkNotesCleanup       = "WorkNotesCleanup_ProductivityTools"
-    WorkNotesSummary       = "WorkNotesSummary_ProductivityTools"
-    TicketCategorisation   = "TicketCategorisation_ProductivityTools"
-    EnvironmentContext     = "EnvironmentContext_ProductivityTools"
-    TrendSubCategorisation = "TrendSubCategorisation_ProductivityTools"
-    PossibleRootCause      = "PossibleRootCause_ProductivityTools"
-    DetailedRootCause      = "DetailedRootCause_ProductivityTools"
+    WorkNotesCleanup       = "WorkNotesCleanup_ContentEngineering"
+    WorkNotesSummary       = "WorkNotesSummary_ContentEngineering"
+    TicketCategorisation   = "TicketCategorisation_ContentEngineering"
+    EnvironmentContext     = "EnvironmentContext_ContentEngineering"
+    TrendSubCategorisation = "TrendSubCategorisation_ContentEngineering"
+    PossibleRootCause      = "PossibleRootCause_ContentEngineering"
+    DetailedRootCause      = "DetailedRootCause_ContentEngineering"
 }
 $loadedCount = 0
 $failedFiles = @()
@@ -2608,88 +2500,19 @@ function Get-NormalizedConfidence {
     return 'Low'
 }
 
-function Get-PlainLanguageFallbackReasoning {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)][object]$Ticket,
-        [object]$CategoryInfo,
-        [switch]$Expanded
-    )
-
-    $short = ([string]$Ticket.OriginalDescription).Trim()
-    if ([string]::IsNullOrWhiteSpace($short)) { $short = 'the user reported a service issue in the ticket' }
-
-    $symptom = ([string]$Ticket.Subcategory).Trim()
-    if ([string]::IsNullOrWhiteSpace($symptom) -or $symptom -match '^(Unknown|Unclassified|Unable)$') {
-        $symptom = 'the exact symptom category was not clearly captured'
-    }
-
-    $prc = ([string]$Ticket.PossibleRootCause).Trim()
-    if ([string]::IsNullOrWhiteSpace($prc) -or $prc -eq 'Unknown') { $prc = 'the root cause was not explicitly confirmed in structured fields' }
-
-    $drc = ([string]$Ticket.DetailedRootCause).Trim()
-    if ([string]::IsNullOrWhiteSpace($drc) -or $drc -eq 'Unknown') { $drc = '' }
-
-    $resolution = ([string]$CategoryInfo.resolution_summary).Trim()
-    if ([string]::IsNullOrWhiteSpace($resolution)) { $resolution = ([string]$Ticket.Resolution).Trim() }
-
-    $evidence = ([string]$CategoryInfo.key_evidence).Trim()
-    if ([string]::IsNullOrWhiteSpace($evidence)) { $evidence = ([string]$Ticket.Evidence).Trim() }
-
-    $responseContext = ((@([string]$CategoryInfo.resolution_summary, [string]$CategoryInfo.how_do_i_or_error, [string]$Ticket.Resolution, [string]$Ticket.Type) -join ' ')).ToLowerInvariant()
-    $userResponseSentence = if ($responseContext -match 'no response|did not respond|no reply|unresponsive|auto.?close') {
-        'User follow-up appears incomplete in the notes, with closure likely driven by no response.'
-    } elseif ($responseContext -match 'confirmed|resolved|working|fixed|happy|satisfied') {
-        'The notes suggest the user confirmed the fix and accepted closure.'
-    } else {
-        'The ticket notes do not clearly state whether the user responded after the fix, so final confirmation status is uncertain.'
-    }
-
-    $analysis = "The user reached out because $short. Based on the recorded troubleshooting trail, the issue aligns most closely with '$symptom' under the '$($Ticket.Category)' category. Engineer investigation points to $prc"
-    if (-not [string]::IsNullOrWhiteSpace($drc)) {
-        $analysis += ", with additional detail indicating $drc"
-    }
-    $analysis += '. '
-
-    if (-not [string]::IsNullOrWhiteSpace($resolution)) {
-        $analysis += "The engineer-provided solution was: $resolution. "
-    } else {
-        $analysis += 'The exact engineer remediation steps are not fully documented in the structured summary fields. '
-    }
-
-    if (-not [string]::IsNullOrWhiteSpace($evidence)) {
-        $analysis += "Key ticket evidence supports this interpretation: $evidence. "
-    }
-
-    $analysis += $userResponseSentence
-
-    if ($Expanded) {
-        $analysis += ' This narrative was generated to preserve readability for operations reviews, so future readers can quickly understand why the user contacted support, what actions were taken, and what outcome was recorded.'
-    }
-
-    return $analysis.Trim()
-}
-
-function Get-EnhancedFallbackReasoning {
-    [CmdletBinding()]
-    param([object]$Ticket, [object]$CategoryInfo)
-    return (Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $CategoryInfo -Expanded)
-}
-
+# Build a minimal analysis narrative from canonical fields so AIAnalysis is never
+# blank in the dashboards when the model returned no reasoning text.
 function Get-FallbackReasoning {
     [CmdletBinding()]
     param([object]$Ticket, [object]$CategoryInfo)
-    return (Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $CategoryInfo)
-}
-
-function Test-LabelStyleReasoning {
-    [CmdletBinding()]
-    param([string]$Text)
-
-    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
-
-    $pattern = '(?im)(\*\*\s*category\s*:\s*|\*\*\s*symptom/subcategory\s*:\s*|\*\*\s*possible root cause\s*:\s*|\*\*\s*detailed root cause\s*:\s*|^\s*category\s*:\s*|^\s*symptom\s*:\s*|^\s*possible root cause\s*:\s*|^\s*detailed root cause\s*:\s*)'
-    return [bool]($Text -match $pattern)
+    $parts = @()
+    if ($Ticket.Subcategory)                                                    { $parts += "Symptom: $($Ticket.Subcategory)" }
+    if ($Ticket.PossibleRootCause -and $Ticket.PossibleRootCause -ne 'Unknown') { $parts += "Possible root cause: $($Ticket.PossibleRootCause)" }
+    if ($Ticket.DetailedRootCause -and $Ticket.DetailedRootCause -ne 'Unknown') { $parts += "Detailed root cause: $($Ticket.DetailedRootCause)" }
+    $resolution = [string]$CategoryInfo.resolution_summary
+    if (-not [string]::IsNullOrWhiteSpace($resolution))                         { $parts += "Resolution: $resolution" }
+    if ($parts.Count -gt 0) { return ("$($Ticket.Category) :: " + ($parts -join '. ') + '.') }
+    return "$($Ticket.Category): detailed analysis was not captured for this ticket."
 }
 
 function Ensure-TicketAiFields {
@@ -2707,17 +2530,13 @@ function Ensure-TicketAiFields {
     )
     $Ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$Ticket.Confidence) -RootCausesKnown $rootCausesKnown
 
-    $fallbackInfo = if ($CategoryInfo) {
-        $CategoryInfo
-    } else {
-        [PSCustomObject]@{ resolution_summary = [string]$Ticket.Resolution }
-    }
-
     if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
+        $fallbackInfo = if ($CategoryInfo) {
+            $CategoryInfo
+        } else {
+            [PSCustomObject]@{ resolution_summary = [string]$Ticket.Resolution }
+        }
         $Ticket.Reasoning = Get-FallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
-    } elseif (Test-LabelStyleReasoning -Text ([string]$Ticket.Reasoning)) {
-        # Force plain-language narrative when model emits field-label blocks.
-        $Ticket.Reasoning = Get-EnhancedFallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
     }
 
     return $Ticket
@@ -3062,7 +2881,7 @@ try {
     } else {
         # Authentication Phase
         Write-ScriptLog "=== AUTHENTICATION PHASE ===" -Level Info
-        $serviceNowToken = Get-AccessToken -TokenUrl $Script:Constants.TokenUrl -ClientId $Script:Constants.ServiceNowIncidentsClientID -ClientSecret $Script:Constants.ServiceNowIncidentsClientSecret -Scope $Script:Constants.ServiceNowIncidentsScope
+        $serviceNowToken = Get-AccessToken -TokenUrl $Script:Constants.TokenUrl -ClientId $Script:Constants.ContentEng_ServiceNowClientID -ClientSecret $Script:Constants.ContentEng_ServiceNowClientSecret -Scope $Script:Constants.ContentEng_ServiceNowScope
         
         # ServiceNow Incidents API Call
         Write-ScriptLog "=== SERVICENOW INCIDENT DATA RETRIEVAL ===" -Level Info
@@ -3351,186 +3170,6 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
             Write-ScriptLog "Failed to save report locally: $($_.Exception.Message)" -Level Error
             Write-Host "✗ Failed to save HTML report: $($_.Exception.Message)" -ForegroundColor Red
         }
-    }
-
-    # ===== DASHBOARD REGENERATION (inline - no external script dependency) =====
-    # Reads the week's rows from IncidentsCategoryStats and writes
-    # ProductivityTools_Weekly_Report_<YYYY-Www>.html to the results container.
-    Write-ScriptLog "=== DASHBOARD REGENERATION ===" -Level Info
-    try {
-        $storageContext = Get-StorageContext
-
-        # --- Pull all rows for the target week from the table ---
-        $sas = New-AzStorageTableSASToken -Name $Script:BlobConfig.StatisticsTableName `
-            -Permission 'r' -ExpiryTime (Get-Date).AddMinutes(30) `
-            -Protocol HttpsOnly -Context $storageContext
-
-        $tableUri = "https://$($Script:BlobConfig.StorageAccountName).table.core.windows.net/$($Script:BlobConfig.StatisticsTableName)()" +
-                    "?`$filter=PartitionKey eq '$reportYearWeek'&$sas"
-
-        $tableRows = @()
-        $nextUri = $tableUri
-        while ($nextUri) {
-            $resp   = Invoke-WebRequest -Uri $nextUri -Headers @{ Accept = 'application/json;odata=nometadata' } -UseBasicParsing
-            $tableRows += ($resp.Content | ConvertFrom-Json).value
-            $npk = $resp.Headers['x-ms-continuation-NextPartitionKey']
-            $nrk = $resp.Headers['x-ms-continuation-NextRowKey']
-            if ($npk) {
-                $nextUri = $tableUri + '&NextPartitionKey=' + [Uri]::EscapeDataString([string]$npk)
-                if ($nrk) { $nextUri += '&NextRowKey=' + [Uri]::EscapeDataString([string]$nrk) }
-            } else { $nextUri = $null }
-        }
-
-        Write-ScriptLog "Dashboard: $($tableRows.Count) rows loaded for $reportYearWeek" -Level Info
-
-        if ($tableRows.Count -gt 0) {
-            # Helper: HTML-encode a string
-            function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
-
-            $categoryColors = @{
-                'Microsoft OneDrive Issues'                        = '#005a9e'
-                'Microsoft Excel Issues'                           = '#107c41'
-                'Microsoft Word Issues'                            = '#2b579a'
-                'Microsoft PowerPoint Issues'                      = '#b7472a'
-                'Microsoft 365 Copilot Issues'                     = '#464feb'
-                'Microsoft 365 Apps for Enterprise Issues'         = '#0078d4'
-                'Microsoft OneNote Issues'                         = '#7719aa'
-                'Microsoft Forms Issues'                           = '#6264a7'
-                'Microsoft Loop Issues'                            = '#00bcf2'
-                'Microsoft Project Issues'                         = '#ba141a'
-                'Microsoft 365 Planner / To Do Issues'             = '#0078d4'
-                'Shared File Service (Share Drives) Issues'        = '#ff9800'
-                'Google Workspace Issues'                          = '#4285f4'
-                'Smartsheet Issues'                                = '#00a868'
-                'Rejoin / Account Lifecycle Access Issues'         = '#8bc34a'
-                'How Do I / User Education'                        = '#f39c12'
-                'Other / Miscellaneous'                            = '#78909c'
-                'Excluded'                                         = '#90a4ae'
-            }
-            function ColorFor { param([string]$c) if ($categoryColors.ContainsKey($c)) { $categoryColors[$c] } else { '#5b6abf' } }
-
-            $total      = $tableRows.Count
-            $excluded   = ($tableRows | Where-Object { $_.Category -eq 'Excluded' }).Count
-            $inScope    = $total - $excluded
-            $byCategory = $tableRows | Group-Object Category | Sort-Object Count -Descending
-            $topCat     = if ($byCategory.Count -gt 0) { $byCategory[0].Name } else { 'N/A' }
-
-            # Date range label
-            $istStart = ''; $istEnd = ''
-            if ($reportYearWeek -match '^(?<y>\d{4})-W(?<w>\d{1,2})$') {
-                $y = [int]$Matches['y']; $w = [int]$Matches['w']
-                $jan4     = [DateTime]::new($y, 1, 4)
-                $jan4Mon  = $jan4.AddDays(-(([int]$jan4.DayOfWeek + 6) % 7))
-                $monDt    = $jan4Mon.AddDays(($w - 1) * 7)
-                $sunDt    = $monDt.AddDays(6)
-                $istOffset = [TimeSpan]::FromHours(5.5)
-                $istStart = ($monDt + $istOffset).ToString('d MMM')
-                $istEnd   = ($sunDt  + $istOffset).ToString('d MMM yyyy')
-            }
-
-            # KPI cards
-            $kpiHtml = @"
-<div class="kpi-grid">
-  <div class="kpi-card"><div class="kpi-value">$total</div><div class="kpi-label">Total Incidents</div></div>
-  <div class="kpi-card"><div class="kpi-value">$inScope</div><div class="kpi-label">In-Scope</div></div>
-  <div class="kpi-card"><div class="kpi-value">$excluded</div><div class="kpi-label">Excluded</div></div>
-  <div class="kpi-card"><div class="kpi-value" style="font-size:16px;">$(HtmlEsc $topCat)</div><div class="kpi-label">Top Category</div></div>
-</div>
-"@
-
-            # Category breakdown table
-            $catRows = ($byCategory | ForEach-Object {
-                $pct = [math]::Round(($_.Count / $total) * 100, 1)
-                $clr = ColorFor $_.Name
-                "<tr><td><span class='cat-dot' style='background:$clr'></span>$(HtmlEsc $_.Name)</td><td class='num'>$($_.Count)</td><td class='num'>$pct%</td></tr>"
-            }) -join "`n"
-
-            # Incident detail table
-            $detailRows = ($tableRows | Sort-Object Date -Descending | ForEach-Object {
-                $clr  = ColorFor $_.Category
-                $aiHtml = if ($_.AIAnalysis) { "<div class='ai-analysis'>$(HtmlEsc $_.AIAnalysis)</div>" } else { '' }
-                @"
-<tr>
-  <td class='inc-num'><a href='https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=$(HtmlEsc $_.RowKey)' target='_blank'>$(HtmlEsc $_.RowKey)</a></td>
-  <td>$(HtmlEsc $_.Date)</td>
-  <td><span class='cat-badge' style='background:$clr'>$(HtmlEsc $_.Category)</span></td>
-  <td>$(HtmlEsc $_.Subcategory)</td>
-  <td>$(HtmlEsc $_.RootCause)</td>
-  <td>$(HtmlEsc $_.DetailedRootCause)</td>
-  <td class='conf-$(($_.Confidence -replace '\s','').ToLower())'>$(HtmlEsc $_.Confidence)</td>
-  <td>$aiHtml</td>
-</tr>
-"@
-            }) -join "`n"
-
-            $ptDashboardHtml = @"
-<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8">
-<title>Productivity Tools – $reportYearWeek</title>
-<style>
-  body{margin:0;padding:0;background:#f0f2f5;font-family:'Segoe UI',sans-serif;font-size:13px;}
-  .topbar{background:#0071c5;color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;}
-  .topbar h1{margin:0;font-size:20px;font-weight:400;}
-  .topbar .meta{font-size:12px;opacity:.85;}
-  .content{padding:24px 28px;}
-  .kpi-grid{display:flex;gap:16px;margin-bottom:24px;flex-wrap:wrap;}
-  .kpi-card{background:#fff;border-radius:8px;padding:18px 24px;flex:1;min-width:140px;box-shadow:0 2px 6px rgba(0,0,0,.08);}
-  .kpi-value{font-size:32px;font-weight:700;color:#0071c5;}
-  .kpi-label{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.8px;margin-top:4px;}
-  .card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);margin-bottom:24px;overflow:hidden;}
-  .card-title{padding:14px 20px;border-bottom:1px solid #eee;font-weight:600;font-size:14px;color:#333;}
-  table{width:100%;border-collapse:collapse;}
-  th{background:#f8f9fa;padding:10px 14px;text-align:left;font-size:11px;letter-spacing:.6px;text-transform:uppercase;color:#555;border-bottom:2px solid #dee2e6;}
-  td{padding:10px 14px;border-bottom:1px solid #f0f0f0;vertical-align:top;}
-  tr:hover td{background:#fafbfc;}
-  .num{text-align:right;}
-  .cat-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;}
-  .cat-badge{color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;white-space:nowrap;}
-  .inc-num a{color:#0071c5;text-decoration:none;font-weight:600;}
-  .ai-analysis{font-size:12px;color:#444;line-height:1.5;max-width:400px;}
-  .conf-high{color:#107c10;font-weight:600;}
-  .conf-medium{color:#c67c00;font-weight:600;}
-  .conf-low{color:#c50f1f;font-weight:600;}
-</style></head><body>
-<div class="topbar">
-  <h1>Productivity Tools Weekly Report – $reportYearWeek</h1>
-  <div class="meta">$istStart – $istEnd &nbsp;|&nbsp; Generated $(Get-Date -Format 'dd MMM yyyy HH:mm') IST</div>
-</div>
-<div class="content">
-  $kpiHtml
-  <div class="card">
-    <div class="card-title">Category Breakdown</div>
-    <table><thead><tr><th>Category</th><th class="num">Count</th><th class="num">%</th></tr></thead>
-    <tbody>$catRows</tbody></table>
-  </div>
-  <div class="card">
-    <div class="card-title">Incident Details</div>
-    <table><thead><tr>
-      <th>Incident</th><th>Date</th><th>Category</th><th>Subcategory</th>
-      <th>Possible Root Cause</th><th>Detailed Root Cause</th><th>Confidence</th><th>AI Analysis</th>
-    </tr></thead><tbody>$detailRows</tbody></table>
-  </div>
-</div></body></html>
-"@
-
-            $ptBlobName = "ProductivityTools_Weekly_Report_$reportYearWeek.html"
-            $tempFile = [System.IO.Path]::GetTempFileName()
-            try {
-                Set-Content -Path $tempFile -Value $ptDashboardHtml -Encoding UTF8
-                Set-AzStorageBlobContent -File $tempFile `
-                    -Container $Script:BlobConfig.ResultsContainerName `
-                    -Blob $ptBlobName -Context $storageContext -Force | Out-Null
-                Write-ScriptLog "Dashboard saved: $ptBlobName ($($tableRows.Count) incidents)" -Level Success
-                Write-Host "✓ ProductivityTools dashboard saved: $ptBlobName" -ForegroundColor Green
-            } finally {
-                if (Test-Path $tempFile) { Remove-Item $tempFile -Force -ErrorAction SilentlyContinue }
-            }
-        } else {
-            Write-ScriptLog "Dashboard skipped - no table rows found for $reportYearWeek" -Level Warning
-        }
-    } catch {
-        Write-ScriptLog "Failed to regenerate dashboard: $($_.Exception.Message)" -Level Error
-        Write-Host "✗ Dashboard regeneration failed: $($_.Exception.Message)" -ForegroundColor Red
-        # Non-fatal - continue workflow
     }
 
     # COMMENTED OUT - Email webhook delivery (not currently used)

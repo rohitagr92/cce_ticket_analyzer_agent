@@ -1,0 +1,307 @@
+﻿<#
+.SYNOPSIS
+    Fetch Content Engineering incidents for WW26 + WW27, run AI analysis,
+    and generate TrendSubCategorisation + PossibleRootCause markdown report files.
+
+.PARAMETER WeekList
+    Comma-separated ISO week numbers (e.g. "26,27"). Default: "26,27".
+
+.PARAMETER Year
+    Year for the week numbers. Default: current year.
+
+.PARAMETER SkipAI
+    Fetch and save raw JSON only; skip the AI categorisation step.
+
+.PARAMETER OutputRoot
+    Where to write output files. Default: local-output\content-engineering-analysis\
+
+.EXAMPLE
+    .\Analyze-ContentEngIncidents.ps1
+    .\Analyze-ContentEngIncidents.ps1 -WeekList "26,27" -SkipAI
+#>
+param(
+    [string]$WeekList   = '26,27',
+    [int]   $Year       = (Get-Date).Year,
+    [switch]$SkipAI,
+    [string]$OutputRoot = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+$repoRoot    = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+$configPath  = Join-Path $PSScriptRoot '..\config\LocalConfig-ContentEngineering.psd1'
+$secretsPath = Join-Path $PSScriptRoot '..\config\LocalSecrets-ContentEngineering.psd1'
+$templateDir = Join-Path $PSScriptRoot '..\templates'
+
+if ([string]::IsNullOrWhiteSpace($OutputRoot)) {
+    $OutputRoot = Join-Path $repoRoot 'local-output\content-engineering-analysis'
+}
+if (-not (Test-Path $OutputRoot)) { New-Item -ItemType Directory -Path $OutputRoot -Force | Out-Null }
+
+$config  = Import-PowerShellDataFile $configPath
+$secrets = Import-PowerShellDataFile $secretsPath
+
+function Write-Step {
+    param([string]$Msg, [string]$Color = 'Cyan')
+    Write-Host "[$(Get-Date -Format 'HH:mm:ss')] $Msg" -ForegroundColor $Color
+}
+
+function Get-ISOWeekWindow {
+    param([int]$WeekYear, [int]$WeekNum)
+    $jan4   = [datetime]::new($WeekYear, 1, 4)
+    $dow    = [int]$jan4.DayOfWeek; if ($dow -eq 0) { $dow = 7 }
+    $ww1Mon = $jan4.AddDays(1 - $dow)
+    $start  = $ww1Mon.AddDays(($WeekNum - 1) * 7)
+    return @{
+        Start = $start
+        End   = $start.AddDays(7).AddSeconds(-1)
+        Label = ('{0}-W{1:00}' -f $WeekYear, $WeekNum)
+    }
+}
+
+function Get-OAuthToken {
+    $resp = Invoke-RestMethod -Uri $config.TokenUrl -Method Post -ErrorAction Stop `
+        -ContentType 'application/x-www-form-urlencoded' `
+        -Body @{
+            grant_type    = 'client_credentials'
+            client_id     = $config.ServiceNowClientID
+            client_secret = $secrets.ServiceNowClientSecret
+            scope         = $config.ServiceNowScope
+        }
+    return $resp.access_token
+}
+
+function Invoke-OpenAI {
+    param([string]$SystemPrompt, [string]$UserMessage)
+    $apiKey = $secrets.AzureOpenAIApiKey
+    if ([string]::IsNullOrWhiteSpace($apiKey)) {
+        throw "AzureOpenAIApiKey is empty in LocalSecrets-ContentEngineering.psd1."
+    }
+    $url = '{0}/openai/deployments/{1}/chat/completions?api-version={2}' -f `
+        $config.AzureOpenAIBaseUrl, $config.AzureOpenAIDeployment, $config.AzureOpenAIApiVersion
+    $body = @{
+        messages    = @(
+            @{ role = 'system'; content = $SystemPrompt }
+            @{ role = 'user';   content = $UserMessage }
+        )
+        temperature = 0.2
+        max_tokens  = 3000
+    } | ConvertTo-Json -Depth 10
+    $headers = @{ 'api-key' = $apiKey; 'Content-Type' = 'application/json' }
+    $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $body -ErrorAction Stop
+    return $resp.choices[0].message.content
+}
+
+# parse week list
+$weeks = $WeekList -split ',' | ForEach-Object { [int]$_.Trim() }
+
+Write-Step '=== Content Engineering Incident Analyser ===' 'Yellow'
+Write-Step ('Weeks: {0}  Year: {1}' -f ($weeks -join ', '), $Year)
+
+# OAuth
+Write-Step 'Acquiring OAuth token...'
+$snToken   = Get-OAuthToken
+$snHeaders = @{ Authorization = "Bearer $snToken" }
+Write-Step 'Token acquired.' 'Green'
+
+$snBase   = 'https://apis.intel.com/itsm/api/now/table/incident'
+$snFields = 'number,short_description,description,work_notes,category,subcategory,state,resolved_at,opened_at,business_service,service_offering,assignment_group'
+
+$allIncidents  = [System.Collections.Generic.List[psobject]]::new()
+$weekSummaries = @{}
+
+foreach ($wkNum in $weeks) {
+    $window = Get-ISOWeekWindow -WeekYear $Year -WeekNum $wkNum
+    $lbl    = $window.Label
+    Write-Step ('Fetching {0}  ({1} to {2})...' -f $lbl, $window.Start.ToString('yyyy-MM-dd'), $window.End.ToString('yyyy-MM-dd'))
+
+    $query = 'business_service={0}^service_offering={1}^stateIN6,7^resolved_at>={2}^resolved_at<={3}^ORDERBYDESCresolved_at' -f `
+        $config.BusinessServiceId, $config.ServiceOfferingId,
+        $window.Start.ToString('yyyy-MM-dd HH:mm:ss'),
+        $window.End.ToString('yyyy-MM-dd HH:mm:ss')
+
+    $enc  = [uri]::EscapeDataString($query)
+    $url  = ('{0}?sysparm_query={1}&sysparm_display_value=true&sysparm_fields={2}&sysparm_limit=500' -f $snBase, $enc, $snFields)
+    $resp = Invoke-RestMethod -Uri $url -Headers $snHeaders -Method Get -ErrorAction Stop
+    $incs = @($resp.result)
+    Write-Step ('  {0}: {1} incident(s)' -f $lbl, $incs.Count) 'Green'
+
+    foreach ($inc in $incs) {
+        $inc | Add-Member -NotePropertyName 'YearWeek' -NotePropertyValue $lbl -Force
+        foreach ($prop in 'business_service','service_offering','assignment_group','resolved_at','opened_at') {
+            if ($inc.$prop -is [psobject] -and $inc.$prop.PSObject.Properties['display_value']) {
+                $inc.$prop = [string]$inc.$prop.display_value
+            }
+        }
+        $allIncidents.Add($inc)
+    }
+
+    $weekSummaries[$lbl] = $incs.Count
+    $rawPath = Join-Path $OutputRoot ('{0}_raw_incidents.json' -f $lbl)
+    $incs | ConvertTo-Json -Depth 10 | Set-Content -Path $rawPath -Encoding UTF8
+    Write-Step ('  Saved raw JSON: {0}' -f $rawPath) 'DarkGray'
+}
+
+Write-Step ('Total incidents fetched: {0}' -f $allIncidents.Count) 'Green'
+
+if ($allIncidents.Count -eq 0) {
+    Write-Step 'No incidents found. Exiting.' 'Yellow'; exit 0
+}
+
+if ($SkipAI) {
+    Write-Step 'SkipAI flag set - skipping AI steps.' 'Yellow'
+    Write-Step '=== Fetch complete ===' 'Yellow'
+    foreach ($kv in $weekSummaries.GetEnumerator() | Sort-Object Key) {
+        Write-Step ('  {0}: {1} incidents' -f $kv.Key, $kv.Value) 'White'
+    }
+    exit 0
+}
+
+# load templates
+$tplTicket = Get-Content (Join-Path $templateDir 'TicketCategorisation_ContentEngineering.md') -Raw -Encoding UTF8
+$tplTrend  = Get-Content (Join-Path $templateDir 'TrendSubCategorisation_ContentEngineering.md') -Raw -Encoding UTF8
+$tplRoot   = Get-Content (Join-Path $templateDir 'PossibleRootCause_ContentEngineering.md') -Raw -Encoding UTF8
+
+# Step 1: categorise each incident
+Write-Step ('Step 1/3 - Categorising {0} incidents...' -f $allIncidents.Count) 'Cyan'
+$categorised = [System.Collections.Generic.List[psobject]]::new()
+
+foreach ($inc in $allIncidents) {
+    $userMsg = @"
+Incident: $($inc.number)
+Short description: $($inc.short_description)
+Category (SN): $($inc.category) / $($inc.subcategory)
+Work week: $($inc.YearWeek)
+
+Assign exactly ONE Category and ONE Subcategory from the taxonomy.
+Respond with JSON only: {"number":"$($inc.number)","category":"<Category>","subcategory":"<Subcategory>"}
+"@
+    try {
+        $raw    = Invoke-OpenAI -SystemPrompt $tplTicket -UserMessage $userMsg
+        $parsed = $raw | ConvertFrom-Json
+        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue ([string]$parsed.category)    -Force
+        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue ([string]$parsed.subcategory) -Force
+        Write-Host ('    {0}  {1} / {2}' -f $inc.number, $parsed.category, $parsed.subcategory) -ForegroundColor DarkGray
+    } catch {
+        $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue 'Unknown / Unclear' -Force
+        $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue 'Insufficient Information' -Force
+        Write-Step ('  {0}: categorisation failed - {1}' -f $inc.number, $_.Exception.Message) 'Yellow'
+    }
+    $categorised.Add($inc)
+}
+
+$catPath = Join-Path $OutputRoot ('categorised_incidents_{0}.json' -f (Get-Date -Format 'yyyy-MM-dd'))
+$categorised | ConvertTo-Json -Depth 10 | Set-Content -Path $catPath -Encoding UTF8
+Write-Step ('Categorised JSON saved: {0}' -f $catPath) 'Green'
+
+# Step 2: trend sub-categorisation
+Write-Step 'Step 2/3 - Building trend sub-categorisation report...' 'Cyan'
+$grouped  = $categorised | Group-Object ai_category
+$trendSb  = [System.Text.StringBuilder]::new()
+$null = $trendSb.AppendLine('## Incident Sub-Categorisation for Trend Analysis -- Content Engineering')
+$null = $trendSb.AppendLine('')
+$null = $trendSb.AppendLine(('**Period:** WW{0}  |  **Total incidents:** {1}' -f ($weeks -join ' + WW'), $allIncidents.Count))
+$null = $trendSb.AppendLine('')
+
+foreach ($grp in ($grouped | Sort-Object Count -Descending)) {
+    $cat  = $grp.Name
+    $incs = @($grp.Group)
+    $list = ($incs | ForEach-Object { '- {0}: {1}' -f $_.number, $_.short_description }) -join "`n"
+
+    $userMsg = @"
+Category: $cat
+Incidents ($($incs.Count) total):
+$list
+
+Using ONLY the sub-symptom labels defined for this category in the template, assign a sub-symptom to each incident.
+Respond with JSON array only: [{"number":"INCxxx","sub_symptom":"<label>"},...]
+"@
+    try {
+        $raw     = Invoke-OpenAI -SystemPrompt $tplTrend -UserMessage $userMsg
+        $raw     = $raw -replace '(?s)^```json\s*', '' -replace '(?s)```\s*$', ''
+        $subsyms = $raw | ConvertFrom-Json
+        foreach ($ss in $subsyms) {
+            $m = $categorised | Where-Object { $_.number -eq $ss.number } | Select-Object -First 1
+            if ($m) { $m | Add-Member -NotePropertyName 'sub_symptom' -NotePropertyValue ([string]$ss.sub_symptom) -Force }
+        }
+        $subCounts = $subsyms | Group-Object sub_symptom | Sort-Object Count -Descending
+        $null = $trendSb.AppendLine(('### {0}  ({1} tickets)' -f $cat, $incs.Count))
+        $null = $trendSb.AppendLine('')
+        $null = $trendSb.AppendLine('| Sub-Symptom | Count |')
+        $null = $trendSb.AppendLine('|---|---|')
+        foreach ($sc in $subCounts) {
+            $null = $trendSb.AppendLine(('| {0} | {1} |' -f $sc.Name, $sc.Count))
+        }
+        $null = $trendSb.AppendLine('')
+        Write-Step ('  {0}: {1} incidents, {2} sub-symptoms' -f $cat, $incs.Count, $subCounts.Count) 'DarkGray'
+    } catch {
+        $null = $trendSb.AppendLine(('### {0}  ({1} tickets)' -f $cat, $incs.Count))
+        $null = $trendSb.AppendLine('')
+        $null = $trendSb.AppendLine(('_Sub-symptom analysis failed: {0}_' -f $_.Exception.Message))
+        $null = $trendSb.AppendLine('')
+        Write-Step ('  {0}: sub-symptom step failed - {1}' -f $cat, $_.Exception.Message) 'Yellow'
+    }
+}
+
+$trendPath = Join-Path $OutputRoot 'blob-TrendSubCategorisation_ContentEngineering.md'
+$trendSb.ToString() | Set-Content -Path $trendPath -Encoding UTF8
+Write-Step ('Trend MD saved: {0}' -f $trendPath) 'Green'
+
+# Step 3: possible root cause
+Write-Step 'Step 3/3 - Generating possible root cause analysis...' 'Cyan'
+$rootSb = [System.Text.StringBuilder]::new()
+$null = $rootSb.AppendLine('## Possible Root Cause Analysis -- Content Engineering')
+$null = $rootSb.AppendLine('')
+$null = $rootSb.AppendLine(('**Period:** WW{0}  |  **Total incidents:** {1}' -f ($weeks -join ' + WW'), $allIncidents.Count))
+$null = $rootSb.AppendLine('')
+
+foreach ($grp in ($grouped | Sort-Object Count -Descending)) {
+    $cat  = $grp.Name
+    $incs = @($grp.Group)
+    $list = ($incs | ForEach-Object { '- {0}: {1}' -f $_.number, $_.short_description }) -join "`n"
+
+    $userMsg = @"
+Category: $cat
+Incidents ($($incs.Count) total):
+$list
+
+Using ONLY the root cause labels defined for this category in the template, identify the top 1-3 most likely root causes.
+Respond with JSON only:
+{"category":"$cat","root_causes":[{"label":"<bold label>","count":<affected tickets>,"evidence":"<1 sentence>"},...]}
+"@
+    try {
+        $raw    = Invoke-OpenAI -SystemPrompt $tplRoot -UserMessage $userMsg
+        $raw    = $raw -replace '(?s)^```json\s*', '' -replace '(?s)```\s*$', ''
+        $result = $raw | ConvertFrom-Json
+        $null = $rootSb.AppendLine(('### {0}  ({1} tickets)' -f $cat, $incs.Count))
+        $null = $rootSb.AppendLine('')
+        foreach ($rc in $result.root_causes) {
+            $null = $rootSb.AppendLine(('**{0}**  ({1} ticket(s))' -f $rc.label, $rc.count))
+            $null = $rootSb.AppendLine('')
+            $null = $rootSb.AppendLine(('> {0}' -f $rc.evidence))
+            $null = $rootSb.AppendLine('')
+        }
+        Write-Step ('  {0}: {1} root cause(s) identified' -f $cat, $result.root_causes.Count) 'DarkGray'
+    } catch {
+        $null = $rootSb.AppendLine(('### {0}  ({1} tickets)' -f $cat, $incs.Count))
+        $null = $rootSb.AppendLine('')
+        $null = $rootSb.AppendLine(('_Root cause analysis failed: {0}_' -f $_.Exception.Message))
+        $null = $rootSb.AppendLine('')
+        Write-Step ('  {0}: root cause step failed - {1}' -f $cat, $_.Exception.Message) 'Yellow'
+    }
+}
+
+$rootPath = Join-Path $OutputRoot 'blob-PossibleRootCause_ContentEngineering.md'
+$rootSb.ToString() | Set-Content -Path $rootPath -Encoding UTF8
+Write-Step ('Root cause MD saved: {0}' -f $rootPath) 'Green'
+
+# summary
+Write-Step '' 'White'
+Write-Step '=== Complete ===' 'Yellow'
+Write-Step ('Output folder: {0}' -f $OutputRoot) 'White'
+foreach ($kv in $weekSummaries.GetEnumerator() | Sort-Object Key) {
+    Write-Step ('  {0}: {1} incidents' -f $kv.Key, $kv.Value) 'White'
+}
+Write-Step ('  Categorised JSON : {0}' -f $catPath) 'White'
+Write-Step ('  Trend MD         : {0}' -f $trendPath) 'White'
+Write-Step ('  Root Cause MD    : {0}' -f $rootPath) 'White'

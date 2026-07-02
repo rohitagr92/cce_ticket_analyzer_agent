@@ -37,12 +37,15 @@ param(
     [string]$ServiceOfferingId  = 'fcb18407dbcf50108062531dd39619c4',
     [string]$ResourceGroupName  = 'OPSW-Ticket-Analyzer',
     [string]$AutomationAccount  = 'OPSW-ProductivityTools-account',
+    [ValidateSet('incident-analyzer-rb-prodtools')]
     [string]$RunbookName        = 'incident-analyzer-rb-prodtools',
     [int]$PollSeconds           = 30,
     [int]$MaxPollMinutes        = 120
 )
 
 $ErrorActionPreference = 'Stop'
+
+Write-Host "Guardrail: Backfill-WeekData only supports incident-analyzer-rb-prodtools to preserve strict template + detailed AIAnalysis behavior." -ForegroundColor DarkCyan
 
 $setupRoot = Split-Path -Parent $PSScriptRoot
 $backupDir = Join-Path $setupRoot 'archive\backups'

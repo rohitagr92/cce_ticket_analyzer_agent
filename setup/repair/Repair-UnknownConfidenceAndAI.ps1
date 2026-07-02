@@ -42,10 +42,10 @@ function Get-FallbackAnalysisText {
     if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Unknown' }
 
     if ($category -eq 'Excluded') {
-        return "The ticket was categorized as Excluded because the request context indicates it is outside the in-scope Productivity Tools failure patterns. The reported symptom was `"$sub`", and available notes point to routing or ownership outside this service boundary. Root-cause detail in the stored row is limited ($drc), so the recommended next step is queue revalidation and handoff to the owning support team with user-impact details attached. Confidence for this reconstructed analysis: $conf."
+        return "The ticket was excluded from Productivity Tools incident categorization because the request context suggests ownership outside this service boundary. The reported symptom was '$sub', and the stored notes indicate routing or queue-alignment actions rather than an in-scope product defect. Root-cause detail remains limited ($drc), so the next action is to verify assignment and handoff with user-impact context included. User response and closure confirmation are not consistently captured in excluded flows, so confidence should be treated carefully during reporting. Confidence for this reconstructed analysis is $conf."
     }
 
-    return "The ticket is classified under $category based on the recorded symptom `"$sub`" and the resolution context captured in the incident row. The most likely underlying cause is $prc, with additional detail indicating $drc. The original AI narrative was missing or overly short in storage, so this analysis was reconstructed from structured fields to preserve consistent reporting quality. Recommended follow-up is to validate this cause against work-note evidence, confirm end-user recovery, and update closure rationale where needed. Confidence for this reconstructed analysis: $conf."
+    return "The ticket is classified under $category based on the symptom '$sub' and the troubleshooting details captured in the incident row. The most likely cause is $prc, and additional root-cause context indicates $drc. Because the original AI narrative was missing or too short, this analysis was rebuilt from structured fields so reviewers still get a readable incident story. Engineer actions should be cross-checked against full work notes, and user recovery confirmation should be validated before final RCA sign-off. Confidence for this reconstructed analysis is $conf."
 }
 
 function Get-AllRowsFromTable {
@@ -111,7 +111,7 @@ foreach ($r in $rows) {
     $currentAi = ([string]$r.AIAnalysis).Trim()
     $currentConfNorm = Get-NormalizedConfidenceValue -Raw ([string]$r.Confidence)
 
-    $aiLooksGenerated = $currentAi -match '(?i)fallback analysis generated during data repair|::\s*symptom:'
+    $aiLooksGenerated = $currentAi -match '(?i)fallback analysis generated during data repair|::\s*symptom:|\*\*category:\*\*|\*\*symptom/subcategory:\*\*|\*\*possible root cause:\*\*|\*\*detailed root cause:\*\*'
     $needsAi = [string]::IsNullOrWhiteSpace($currentAi) -or ($RewriteGeneratedAiAnalysis -and $aiLooksGenerated)
     $needsConf = [string]::IsNullOrWhiteSpace($currentConfNorm)
 

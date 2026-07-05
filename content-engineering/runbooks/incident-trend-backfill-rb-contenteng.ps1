@@ -138,18 +138,18 @@ $outputFormatInstruction = @'
 
 You MUST end your response with exactly these four labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
 
-Primary Category: <pick the EXACT product name from the bold category headers above — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Do NOT invent. Use "Unknown / Unclear" only if nothing fits.>
-Sub-symptom: <pick the EXACT bold symptom label from the matching product section above — e.g. "Teams Add-in Missing in Outlook", "CPU / Resource Saturation". Do NOT invent or paraphrase.>
-Possible Root Cause: <pick the EXACT bold label from the Possible Root Cause section for the chosen product — e.g. "Teams Add-in Not Deployed", "Server Resource Exhaustion". Do NOT invent.>
-Confidence Level: <High, Medium, or Low. High = detailed work notes, clear root cause, confirmed resolution. Medium = some notes but outcome unclear or inferred. Low = minimal notes, automated alert, or Unknown / Unclear category.>
+Primary Category: <exact bold product name from the taxonomy — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Use "Unknown / Unclear" only if nothing fits.>
+Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category — e.g. if category is "SharePoint Online" pick only from: Permission Denied, Site Administration Request, File / Item Recovery, SPO How-To / User Education. NEVER use a label from a different product section. Do NOT invent.>
+Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the Root Cause reference. NEVER use a label from a different product section. Do NOT invent.>
+Confidence Level: <Apply the CONFIDENCE CALCULATION FRAMEWORK. Start at 70% baseline. Add: +25% if application/platform clearly identified and matches category; +15% if specific error message/code/role name present; +5% if KB reference cited; +10% if agent used CE-specific terminology (AEM, Sitecore, DAM, SSO, SPO permissions, publishing pipeline, workflow approval); +15% if resolution matches category examples exactly. Subtract: -20% if platform unclear/ambiguous; -10% if only user symptom language with no agent technical detail; -10% if multiple categories equally valid; -25% if description/work notes/close notes contradict. Score above 89% = High; 70-89% = Medium; below 70% = Low. If Primary Category is Unknown / Unclear always output Low.>
 AI Analysis: <Write 3-5 plain sentences: (1) Why the user raised this ticket. (2) What technically happened. (3) What the agent did. (4) Whether resolved. Plain language, no markdown.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
 - Use plain ASCII. No bullets, asterisks, or markdown in any value.
 - Primary Category MUST be an exact product name from the category headers.
-- Sub-symptom MUST be an exact bold label from the sub-symptom catalog for that product.
-- Possible Root Cause MUST be an exact bold label from the root cause catalog.
+- Sub-symptom MUST be an exact bold label from that product's own section only.
+- Possible Root Cause MUST be an exact bold label from that product's own root cause section only.
 - If nothing fits, write "Unknown".
 - Keep each value on a single line.
 '@

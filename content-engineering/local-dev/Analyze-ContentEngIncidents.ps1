@@ -91,6 +91,19 @@ function Invoke-OpenAI {
     return $resp.choices[0].message.content
 }
 
+# Extract the exact bold labels defined for a given category section in a template.
+# Used to build the per-category ALLOWED label lists for Steps 2 and 3.
+function Get-LabelsForCategory {
+    param([string]$Category, [string]$TemplateContent)
+    $escaped = [regex]::Escape($Category)
+    if ($TemplateContent -match "(?ms)###\s+$escaped\s*\r?\n(.+?)(?=\n###|\z)") {
+        $section = $matches[1]
+        $labels  = [regex]::Matches($section, '\*\*([^*]+)\*\*') | ForEach-Object { $_.Groups[1].Value.Trim() }
+        return $labels
+    }
+    return @()
+}
+
 # parse week list
 $weeks = $WeekList -split ',' | ForEach-Object { [int]$_.Trim() }
 
@@ -172,9 +185,9 @@ $fullSystemPrompt = $tplTicket + "`n`n" + $tplEnv + "`n`n" +
 Respond with exactly these four lines — no markdown, no bullets, no extra text:
 
 Primary Category: <exact bold product name from the taxonomy above — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Use "Unknown / Unclear" only if nothing fits.>
-Sub-symptom: <exact bold symptom label from that product's section — e.g. "Teams Add-in Missing in Outlook", "CPU / Resource Saturation". Do NOT invent.>
-Possible Root Cause: <exact bold root cause label from that product's section in the Root Cause reference — e.g. "Teams Add-in Not Deployed", "Server Resource Exhaustion". Do NOT invent.>
-Confidence Level: <High, Medium, or Low — rate based on work notes quality: High = detailed work notes with clear resolution confirmed; Medium = some notes but outcome unclear or inferred; Low = minimal/no notes, automated alert, or category is Unknown / Unclear.>
+Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category — e.g. if category is "SharePoint Online" you MUST pick from: Permission Denied, Site Administration Request, File / Item Recovery, SPO How-To / User Education. Never use a label from a different product section. Do NOT invent.>
+Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the Root Cause reference. Never use a label from a different product section. Do NOT invent.>
+Confidence Level: <Apply the CONFIDENCE CALCULATION FRAMEWORK from the template. Start at 70% baseline. Add: +25% if application/platform is clearly identified and matches the category; +15% if a specific error message, error code, or permission/role name is present; +5% if a KB number or KB link is cited; +10% if the agent used Content-Engineering-specific terminology (AEM, Sitecore, DAM, SSO, SPO permissions, publishing pipeline, workflow approval); +15% if the resolution matches the category examples exactly. Subtract: -20% if platform is unclear/ambiguous/contradictory; -10% if only user symptom language is present with no agent technical detail; -10% if multiple categories apply equally; -25% if description, work notes, and close notes contradict each other. Final score above 89% = High; 70-89% = Medium; below 70% = Low. If Primary Category is Unknown / Unclear, always output Low.>
 AI Analysis: <3–5 plain sentences: (1) Why the user raised this ticket — what problem they reported. (2) What technically happened or was found. (3) What the support agent did to address it. (4) Whether the issue was fully resolved, partially resolved, or still open. Plain language, no markdown, anyone should be able to understand it.>
 
 Rules: Each label appears verbatim followed by a colon. Plain ASCII only. One line per field.
@@ -237,13 +250,20 @@ foreach ($grp in ($grouped | Sort-Object Count -Descending)) {
     $incs = @($grp.Group)
     $list = ($incs | ForEach-Object { '- {0}: {1}' -f $_.number, $_.short_description }) -join "`n"
 
+    $allowedSubs = Get-LabelsForCategory -Category $cat -TemplateContent $tplTrend
+    if ($allowedSubs.Count -eq 0) { $allowedSubs = @('Insufficient Ticket Detail', 'Out of Scope Incident') }
+    $allowedSubsList = $allowedSubs -join "`n"
+
     $userMsg = @"
 Category: $cat
 Incidents ($($incs.Count) total):
 $list
 
-Using ONLY the sub-symptom labels defined for this category in the template, assign a sub-symptom to each incident.
-Respond with JSON array only: [{"number":"INCxxx","sub_symptom":"<label>"},...]
+ALLOWED SUB-SYMPTOM LABELS FOR '$cat' (you MUST use exactly one of these — no other values are permitted, do not use labels from other categories):
+$allowedSubsList
+
+Assign exactly one label from the ALLOWED list above to each incident. Output must use exact label text.
+Respond with JSON array only: [{"number":"INCxxx","sub_symptom":"<exact allowed label>"},...]
 "@
     try {
         $raw     = Invoke-OpenAI -SystemPrompt $tplTrend -UserMessage $userMsg
@@ -289,14 +309,21 @@ foreach ($grp in ($grouped | Sort-Object Count -Descending)) {
     $incs = @($grp.Group)
     $list = ($incs | ForEach-Object { '- {0}: {1}' -f $_.number, $_.short_description }) -join "`n"
 
+    $allowedRoots = Get-LabelsForCategory -Category $cat -TemplateContent $tplRoot
+    if ($allowedRoots.Count -eq 0) { $allowedRoots = @('Root Cause Undetermined', 'External Dependency') }
+    $allowedRootsList = $allowedRoots -join "`n"
+
     $userMsg = @"
 Category: $cat
 Incidents ($($incs.Count) total):
 $list
 
-Using ONLY the root cause labels defined for this category in the template, identify the top 1-3 most likely root causes.
+ALLOWED ROOT CAUSE LABELS FOR '$cat' (you MUST use exactly one of these -- no other values are permitted, do not use labels from other categories):
+$allowedRootsList
+
+Using ONLY the root cause labels listed above, identify the top 1-3 most likely root causes. Do NOT use labels from other categories.
 Respond with JSON only:
-{"category":"$cat","root_causes":[{"label":"<bold label>","count":<affected tickets>,"evidence":"<1 sentence>"},...]}
+{"category":"$cat","root_causes":[{"label":"<exact allowed label>","count":<affected tickets>,"evidence":"<1 sentence>"},...]}
 "@
     try {
         $raw    = Invoke-OpenAI -SystemPrompt $tplRoot -UserMessage $userMsg

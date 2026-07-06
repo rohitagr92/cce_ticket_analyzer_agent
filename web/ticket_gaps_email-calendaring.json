@@ -1,0 +1,54 @@
+{
+  "service": "Email and Calendaring",
+  "review_date": "2026",
+  "total_reviewed": 281,
+  "kpis": {
+    "tickets_reviewed": 281,
+    "gaps_identified": 21,
+    "gap_rate_pct": 7.5,
+    "gap_categories": 5
+  },
+  "distribution": [
+    { "rank": 1, "category": "Unnecessary / Inappropriate Troubleshooting", "count": 7, "pct": 33.3, "badge": "r",
+      "tickets": ["INC15122342","INC15122948","INC15150797","INC15135193","INC15172720","INC15169152","INC15175262"] },
+    { "rank": 2, "category": "Poor Documentation / Unclear Work Notes", "count": 6, "pct": 28.6, "badge": "o",
+      "tickets": ["INC15161353","INC15127381","INC15128134","INC15143233","INC15147059","INC15188385"] },
+    { "rank": 3, "category": "Lack of Technical Knowledge", "count": 4, "pct": 19.0, "badge": "y",
+      "tickets": ["INC15124098","INC15169447","INC15179091","INC15189061"] },
+    { "rank": 4, "category": "Missing Error Screenshots / Messages", "count": 3, "pct": 14.3, "badge": "b",
+      "tickets": ["INC15147741","INC15147005","INC15175513"] },
+    { "rank": 5, "category": "Premature Escalation", "count": 1, "pct": 4.8, "badge": "p",
+      "tickets": ["INC15127852"] }
+  ],
+  "per_ticket_gaps": [
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15122342", "description": "Performed unnecessary Teams cache and temp folder cleanup unrelated to the calendar issue." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15122948", "description": "Performed unnecessary Office Repair for stale PDL name; could resolve by removing the cached name." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15150797", "description": "Should not have repaired Outlook on a new laptop; Classic Outlook needs time to sync." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15135193", "description": "Should have checked OST file size and created a new profile instead of repairing." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15172720", "description": "Should have guided user to wait for new system to download emails instead of running repair." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15169152", "description": "Multiple engineers repaired Outlook multiple times for images issue without any diagnosis first." },
+    { "category": "Unnecessary Troubleshooting", "ticket": "INC15175262", "description": "No troubleshooting performed before Outlook repair; repair used as a default shortcut." },
+    { "category": "Poor Documentation", "ticket": "INC15161353", "description": "Unclear statement about what was fine in OWA vs Classic Outlook - no specifics provided." },
+    { "category": "Poor Documentation", "ticket": "INC15127381", "description": "Unclear what 'educated user' means; actual solution not documented in work notes." },
+    { "category": "Poor Documentation", "ticket": "INC15128134", "description": "Did not mention actual solution; only stated user followed email guide - outcome not captured." },
+    { "category": "Poor Documentation", "ticket": "INC15143233", "description": "Work notes combined agent/user/L3 comments making root cause unclear and audit trail unusable." },
+    { "category": "Poor Documentation", "ticket": "INC15147059", "description": "Mentioned 'loading essentials' in New Outlook which does not exist; inaccurate steps recorded." },
+    { "category": "Poor Documentation", "ticket": "INC15188385", "description": "Notes and screenshots not in chronological order; no explanation provided for screenshots included." },
+    { "category": "Lack of Knowledge", "ticket": "INC15124098", "description": "Should know auto-mapping takes up to 24 hours; did not verify or advise user to wait." },
+    { "category": "Lack of Knowledge", "ticket": "INC15169447", "description": "Did not recognize mailbox provisioning delay after AD object creation - escalated prematurely." },
+    { "category": "Lack of Knowledge", "ticket": "INC15179091", "description": "Did not know correct OWA URL format; escalated instead of advising correct URL." },
+    { "category": "Lack of Knowledge", "ticket": "INC15189061", "description": "Claimed emails missing in OWA (impossible if not deleted); validation steps are doubtful." },
+    { "category": "Missing Error Info", "ticket": "INC15147741", "description": "Did not capture error message when recipient name was not resolvable - no evidence collected." },
+    { "category": "Missing Error Info", "ticket": "INC15147005", "description": "Did not provide error message when user could not send to PDL - root cause unverifiable." },
+    { "category": "Missing Error Info", "ticket": "INC15175513", "description": "Did not mention reason for repairing Outlook for shared mailbox addition - no justification captured." },
+    { "category": "Premature Escalation", "ticket": "INC15127852", "description": "Should have recommended basic spam fixes before escalation; L1 steps were not attempted first." }
+  ],
+  "recommendations": [
+    { "num": 1, "title": "Ensure Proper Wait Time", "body": "For new mailboxes or provisioned resources, allow adequate sync time: Auto-mapping up to 24 hours, PDL propagation up to 48 hours. Advise user to wait before troubleshooting." },
+    { "num": 2, "title": "Document Clearly", "body": "Work notes must include specific steps taken, exact error messages, explanation of changes made, and confirmation of resolution with user acceptance." },
+    { "num": 3, "title": "Capture Evidence Before Repairs", "body": "Always screenshot and log the exact error before applying any fix. Evidence is required for escalation, audit, and root cause analysis." },
+    { "num": 4, "title": "Avoid Unnecessary Repairs", "body": "Outlook Repair must not be a default first step. Diagnose root cause first and apply the correct targeted fix." },
+    { "num": 5, "title": "Maintain Chronological Notes", "body": "Keep work notes in strict chronological order with timestamps. Separate agent, user, and L3 notes clearly." },
+    { "num": 6, "title": "Verify Basic Fixes First", "body": "Follow the escalation ladder. Escalate only when L1 steps are confirmed ineffective." }
+  ]
+}

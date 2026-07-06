@@ -67,7 +67,7 @@ $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' -ExpiryTime (
 # Use $select to request only the columns needed, deliberately omitting the old
 # "SubCategory" column (written by early runbook versions) so PowerShell's
 # ConvertFrom-Json never sees both "SubCategory" and "Subcategory" in the same row.
-$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,RootCause,Date,YearWeek,Year,WeekNumber,AIAnalysis,Confidence,ReportBlobName,Service,Misrouted'
+$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,TopRootCause,PossibleRootCause,DetailedRootCause,RootCause,Date,YearWeek,Year,WeekNumber,AIAnalysis,Confidence,ReportBlobName,Service,Misrouted'
 $base = "https://$StorageAccount.table.core.windows.net/$TableName()?`$select=$selectedFields&$sas"
 $rows = @()
 $url = $base
@@ -154,8 +154,14 @@ $rowsHtml
 "@
     }
 
-    $byProductHtml   = BuildBreakdown -Property 'Category'     -Heading 'Issues sorted by Product'         -FilterKey 'product'
-    $byRootCauseHtml = BuildBreakdown -Property 'TopRootCause' -Heading 'Issues sorted by Possible Root Cause' -FilterKey 'rootcause'
+    # Add a resolved root cause field that works regardless of which column the runbook populated
+    $incidents = $incidents | ForEach-Object {
+        $rc = if ($_.TopRootCause) { $_.TopRootCause } elseif ($_.PossibleRootCause) { $_.PossibleRootCause } else { $_.RootCause }
+        $_ | Add-Member -NotePropertyName 'ResolvedRootCause' -NotePropertyValue $rc -Force -PassThru
+    }
+
+    $byProductHtml   = BuildBreakdown -Property 'Category'          -Heading 'Issues sorted by Product'              -FilterKey 'product'
+    $byRootCauseHtml = BuildBreakdown -Property 'ResolvedRootCause' -Heading 'Issues sorted by Possible Root Cause'  -FilterKey 'rootcause'
 
     $byCategory = $incidents | Group-Object Category | Sort-Object Count -Descending
     $topCat = if ($byCategory.Count -gt 0) { $byCategory[0] } else { $null }
@@ -168,7 +174,8 @@ $rowsHtml
             $num   = HtmlEsc $_.RowKey
             $cat   = HtmlEsc $_.Category
             $sub   = HtmlEsc $_.Subcategory
-            $top   = HtmlEsc $_.TopRootCause
+            $topRaw = if ($_.TopRootCause) { $_.TopRootCause } elseif ($_.PossibleRootCause) { $_.PossibleRootCause } else { $_.RootCause }
+            $top   = HtmlEsc $topRaw
             $det   = HtmlEsc $_.DetailedRootCause
             $anal  = HtmlEsc $_.AIAnalysis
             $date  = HtmlEsc $_.Date

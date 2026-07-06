@@ -27,7 +27,7 @@
 | 1.8a | **Rejoin Access Issue** | Rejoined user cannot access previously shared OneDrive/SharePoint site or content because old permissions are tied to the previous identity and need owner re-share or entitlement reapply. |
 | 1.9 | **Prior OneDrive Site Expired** | Previous OneDrive site was not retained within the 30-day post-separation window and is permanently deleted. |
 | 1.10 | **Former Employee Data Request** | File is in a separated employee's OneDrive; access requires a formal IT request within the 30-day retention window. |
-| 1.11 | 
+| 1.11 | **Prior OneDrive Site Inaccessible** | Previous OneDrive site is no longer accessible after rejoin or separation; the site was retained but permissions tied to old identity need to be restored or re-shared. |
 | 1.12 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an Microsoft OneDrive app. |
 | 1.13 | **Missing Files After PC Refresh** | Files not re-synced to the new device after PC refresh because OneDrive client was not signed in or Known Folder Move was not re-enabled. |
 | 1.14 | **OneDrive Sign-In / Connectivity Failure** | OneDrive client cannot authenticate or reach service endpoints; blocks login on user device. |
@@ -46,7 +46,7 @@
 | 2.3 | **Licensing Endpoint Unreachable** | Device offline or unable to reach licensing endpoints, blocking activation. |
 | 2.4 | **Click-to-Run Installer Corruption** | Error 30015-xx indicates corrupted installer state; requires Quick/Online Repair or full reinstall. |
 | 2.5 | **Company Portal Install Stuck** | M365 Apps installer hung in Company Portal; stalled process must be cleared before retry. |
-| 2.6 | 
+| 2.6 | **Office Feature Not Working** | A specific Office app feature (AutoSave, Dictation, co-authoring, accessibility checker, etc.) is non-functional despite a valid license and healthy app install; requires feature-level repair or settings reset. |
 | 2.7 | **License Not Assigned After Rejoin** | Office suite license not provisioned to the rejoined user's new identity. |
 | 2.8 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an M365 app. |
 | 2.9 | **Office App Crash** | Office desktop app crashes on launch or during use; commonly resolved by Quick/Online Repair or profile reset. |
@@ -100,6 +100,7 @@
 | 5.7 | **OneNote Feature Not Working** | Specific OneNote feature (search, audio, drawing, tags, etc.) not functioning despite a working client. |
 | 5.8 | **Missing Notes / Pages** | Specific notes, pages, or sections are missing from a notebook (sync failure, accidental deletion, or section group hidden). |
 | 5.9 | **Data Loss After PC Refresh** | OneNote local-only content or cached notebooks lost after PC refresh because they were not synced to OneDrive/SharePoint. |
+| 5.10 | **OneNote Sync Failure** | OneNote notebook sync is stuck or stopped; signing out of OneNote, restarting the client, or re-linking the notebook from OneDrive re-establishes sync. |
 
 ---
 
@@ -213,8 +214,8 @@
 
 | # | Root Cause Label | Description |
 |---|---|---|
-| 14.1 | 
-| 14.2 | 
+| 14.1 | **Planner Group Membership Missing** | User is not a member of the M365 Group that backs the Planner plan; group membership must be granted before plan access is possible. |
+| 14.2 | **Planner Plan Not Shared** | Planner plan exists but the owner has not shared access with the user; owner must add the user to the plan or group. |
 | 14.3 | **Planner Plan Deleted** | Plan deleted when associated M365 Group was removed; recovery requires IT admin within soft-delete window. |
 | 14.4 | **To Do Account Provisioning Delay** | To Do tasks not appearing due to incomplete M365 account provisioning or pending tenant sync. |
 

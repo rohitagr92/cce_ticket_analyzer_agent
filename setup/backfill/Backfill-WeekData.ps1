@@ -118,13 +118,22 @@ try {
     Write-Host "Runbook final status: $($j.Status)" -ForegroundColor $color
 }
 finally {
-    # -------- Always restore the original Automation Variables --------
+    # -------- Always restore the original Automation Variables (with retry) --------
     Write-Host "Restoring original Automation Variables..." -ForegroundColor Yellow
-    Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'ServiceNowIncidentsURL' -Value $origUrlVar.Value -Encrypted $false | Out-Null
-    if ($origLookVar) {
-        Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'DailyLookbackHours' -Value $origLookVar.Value -Encrypted $false | Out-Null
+    $maxRetries = 5
+    for ($attempt = 1; $attempt -le $maxRetries; $attempt++) {
+        try {
+            Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'ServiceNowIncidentsURL' -Value $origUrlVar.Value -Encrypted $false | Out-Null
+            if ($origLookVar) {
+                Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'DailyLookbackHours' -Value $origLookVar.Value -Encrypted $false | Out-Null
+            }
+            Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'BackfillYearWeek' -Value '' -Encrypted $false -ErrorAction SilentlyContinue | Out-Null
+            Write-Host "Restored." -ForegroundColor Green
+            break
+        } catch {
+            Write-Warning "Restore attempt $attempt/$maxRetries failed: $($_.Exception.Message)"
+            if ($attempt -lt $maxRetries) { Start-Sleep -Seconds (10 * $attempt) }
+            else { Write-Error "CRITICAL: Could not restore ServiceNowIncidentsURL after $maxRetries attempts. Run restore-url.ps1 manually." }
+        }
     }
-    # Clear backfill marker so the next daily run behaves normally
-    Set-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccount -Name 'BackfillYearWeek' -Value '' -Encrypted $false -ErrorAction SilentlyContinue | Out-Null
-    Write-Host "Restored." -ForegroundColor Green
 }

@@ -1,0 +1,9 @@
+{
+  "service": "Content Engineering",
+  "review_date": null,
+  "total_reviewed": 0,
+  "kpis": { "tickets_reviewed": 0, "gaps_identified": 0, "gap_rate_pct": 0, "gap_categories": 0 },
+  "distribution": [],
+  "per_ticket_gaps": [],
+  "recommendations": []
+}

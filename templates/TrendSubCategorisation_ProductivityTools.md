@@ -11,7 +11,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 3. **Be consistent** — use the exact same sub-category name for similar incidents. Use the exact labels listed below where they apply.
 4. **Focus on symptoms**, not root cause. For example, if Copilot was missing in Excel because the license was unassigned, sub-categorize it under **"Licensing Issues"**, not under an Excel sub-category.
 5. **Use sub-category labels only** in the JSON output. The grouping headers (e.g., "Sync Issues", "Access & Permission Issues") below are for sub-category value.
-6. **Never return the symptom bullet text itself** as `SubCategory`. For example, return **"Sync Issues"** and not **"OneDrive sync failure"**, and return **"Feature Availability Issues"** and not **"Copilot not visible"**.
+6. **Never return the symptom bullet text itself** as `SubCategory`. For example, return **"Sync Issues"** and not **"OneDrive sync failure"**, return **"Feature Availability Issues"** and not **"Copilot not visible"**, return **"File Opening Issues"** and not **"File not opening"**, and return **"Missing Content & Data Loss Issues"** and not **"Data not available after device change"**.
 
 ### Sub-Category Guidelines by Parent Category
 
@@ -79,12 +79,12 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Excel Hang
 - Excel Crash
 
-**Data Handling Issues**
+**File Save & Sync Issues**
 - File save failure
 - File update inconsistency
 - Shared file sync issue
 
-**Add-in & Feature Issues**
+**Add-in & Data Refresh Issues**
 - Add-in issue
 - Data refresh failure
 
@@ -119,7 +119,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Microsoft Word Issues
 
-**File Access Issues**
+**File Opening Issues**
 - Document not opening
 - File corruption issue
 
@@ -143,11 +143,11 @@ Your task is to classify each incident into a **sub-category** that captures the
 **Sync Issues**
 - Notebook sync failure
 
-**Missing Data Issues**
+**Missing Content & Data Loss Issues**
 - Missing notes issue
 - Data loss after PC refresh
 
-**Application Issues**
+**App Performance & Stability Issues**
 - OneNote not responding
 - OneNote not opening
 - OneNote Crash
@@ -162,7 +162,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Microsoft 365 Apps for Enterprise Issues
 
-**Application Access Issues**
+**App Sign-In & Activation Issues**
 - Office apps not opening
 - App login failure
 - App crash issue
@@ -176,7 +176,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Installation failure
 - Missing app issue
 
-**General Usage Issues**
+**Compatibility & Integration Issues**
 - Compatibility issue
 
 **Usage Queries**
@@ -195,25 +195,25 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Copilot license missing
 - License expired issue
 
-**Access / Enablement Issues**
+**Copilot Enablement Issues**
 - Copilot partially enabled
 - Feature inconsistency issue
 
 **Usage Queries**
 - Copilot usage query
 
-**Application Issues**
+**App Performance & Stability Issues**
 - Copilot not responding
 - Copilot not opening
 - Copilot Crash
 - Copilot Hang
-- Copilot Perfomance Issue
+- Copilot Performance Issue
 
 ---
 
 #### Microsoft Forms Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Forms access issue
 - Forms Ownership Transfer issue
 
@@ -236,7 +236,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Trial expired issue
 - Activation failure
 
-**Application Issues**
+**App Performance & Stability Issues**
 - Features missing
 - Visio Hang
 - Visio Crash
@@ -254,7 +254,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 - Unable to delete the workspace
 - Unable to share the workspace
 
-**Integration Issues**
+**Teams & App Integration Issues**
 - Loop integration issue
 
 **Usage Queries**
@@ -264,7 +264,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Microsoft 365 Planner / To Do Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Planner plan / board access issue
 - To Do list sync / access issue
 
@@ -278,11 +278,11 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Canva Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Access / SSO sign-in issue
 - License / entitlement missing
 
-**Sharing & Content Issues**
+**Design Sharing & Template Issues**
 - Sharing / collaboration issue
 - Template / brand kit access issue
 - Export / download failure
@@ -294,7 +294,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Smartsheet Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Smartsheet access issue
 
 **Feature Availability Issues**
@@ -307,7 +307,7 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Google Workspace Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Google access issue
 - External sharing issue
 - Unable to access external application
@@ -328,14 +328,14 @@ Your task is to classify each incident into a **sub-category** that captures the
 **Installation Issues**
 - Installation failure
 
-**File Handling Issues**
+**Project File Management Issues**
 - File open / save failure
 - Schedule / plan corruption
 
 **Performance Issues**
 - Performance / hang issue
 
-**Application Issues**
+**App Performance & Stability Issues**
 - Features missing
 - Project Hang
 - Project Crash
@@ -347,12 +347,12 @@ Your task is to classify each incident into a **sub-category** that captures the
 
 #### Shared File Service (Share Drives) Issues
 
-**Access Issues**
+**Access & Permission Issues**
 - Access permission issue
 - Mapped drive not connecting
 - Unable to map the drive
 
-**File Handling Issues**
+**Drive File Management Issues**
 - Missing folder / file
 
 **Storage Issues**
@@ -390,7 +390,7 @@ Your task is to classify each incident into a **sub-category** that captures the
     - Sync / client / availability failure → "Application / Client Issues" as subcategory.
     - "Access denied" on a shared file resolved by owner re-share → "Access & Permission Issues" as a subcategory under Microsoft OneDrive (or the equivalent under Rejoin if the user rejoined).
 - **OneNote on a new laptop.** Default to a "Missing Data Issues" or "Usage Queries" as a subcategory unless the work notes specifically attribute the failure to the OneDrive client.
-- **Mapped network drive not connecting** is a "Access Issues" as a subCategory where server name contains "SFS"  — never OneDrive.
+- **Mapped network drive not connecting** is a "Access & Permission Issues" as a subCategory where server name contains "SFS"  — never OneDrive.
 
 ### Output Format
 

@@ -872,6 +872,14 @@ Detailed Root Cause: [Pick exactly ONE entry heading from the chosen Primary Cat
 
 STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from the MD reference files. Anything you produce that is not in those files will be rejected and replaced with "Unknown".
 
+## STRICT SUB-SYMPTOM RULE (enforced)
+
+For the Sub-symptom field: You MUST use the EXACT bold section header from the matching parent category's sub-section in the 'Subcategory (Sub-Symptom) Labels' reference above.
+- Return the header label (e.g., "Sync Issues", "Licensing Issues", "Feature Availability Issues") — NEVER a bullet point description.
+- Example: return "Sync Issues" NOT "OneDrive sync failure" or "Sync failure (file not uploading...)".
+- Example: return "Licensing Issues" NOT "Copilot license missing" or "Copilot not visible".
+- The sub-symptom MUST be the bold heading from the template section for the chosen Primary Category. If none fits, write "Other".
+
 ## REASONING FIELD - DETAILED INCIDENT NARRATIVE (REQUIRED)
 
 The Reasoning field MUST be a comprehensive incident narrative of at least 3-5 sentences. It must cover ALL of the following in order:
@@ -2025,7 +2033,9 @@ function Save-CategoryStatisticsToTable {
                     "Category"          = [string]$ticket.Category
                     "Subcategory"       = [string]$ticket.Subcategory
                     "PossibleRootCause" = [string]$ticket.PossibleRootCause
+                    "RootCause"         = [string]$ticket.PossibleRootCause
                     "DetailedRootCause" = [string]$ticket.DetailedRootCause
+                    "TopRootCause"      = [string]$ticket.PossibleRootCause
                     "Service"           = [string]$ticket.Service
                     "Misrouted"         = [bool]$ticket.Misrouted
                     "Date"              = [string]$dateString

@@ -804,163 +804,12 @@
       <!-- ── TICKET GAPS SUMMARY PANEL ── -->
       <div class="chart-card" style="margin-top:20px;">
         <h3 style="margin:0 0 4px 0;">&#128269; Incident Management Gaps Summary
-          <span style="font-weight:400;font-size:0.8rem;color:var(--muted);">&nbsp;&middot;&nbsp;Manual quality review &middot; Productivity Tools</span>
+          <span id="gapsServiceLabel" style="font-weight:400;font-size:0.8rem;color:var(--muted);"></span>
         </h3>
-        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 16px 0;">Random sample review of 281 AI-analyzed tickets &mdash; 2026 · <em>Not dynamically loaded; updated with each quality review cycle.</em></p>
+        <p style="font-size:0.82rem;color:var(--muted);margin:0 0 16px 0;">Manual quality review sample &mdash; updated each review cycle.</p>
 
-        <!-- KPI bar -->
-        <div class="gaps-kpi-bar">
-          <div class="gaps-kpi"><div class="gaps-kpi-value">281</div><div class="gaps-kpi-label">Tickets Reviewed by AI</div></div>
-          <div class="gaps-kpi"><div class="gaps-kpi-value orange">21</div><div class="gaps-kpi-label">Gaps Identified (manual)</div></div>
-          <div class="gaps-kpi"><div class="gaps-kpi-value red">7.5%</div><div class="gaps-kpi-label">Gap Rate</div></div>
-          <div class="gaps-kpi"><div class="gaps-kpi-value">5</div><div class="gaps-kpi-label">Gap Categories</div></div>
-        </div>
-
-        <!-- Bar chart -->
-        <div class="gaps-section-title">&#128202; Gap Category Distribution</div>
-        <div style="margin-bottom:18px;">
-          <div class="gaps-bar-row">
-            <div class="gaps-bar-label"><span class="gaps-badge r">1</span>&nbsp; Unnecessary / Inappropriate Troubleshooting</div>
-            <div class="gaps-bar-track"><div class="gaps-bar-fill c1" style="width:33.3%;">7</div></div>
-            <div class="gaps-bar-count">7 &middot; 33.3%</div>
-          </div>
-          <div class="gaps-bar-row">
-            <div class="gaps-bar-label"><span class="gaps-badge o">2</span>&nbsp; Poor Documentation / Unclear Work Notes</div>
-            <div class="gaps-bar-track"><div class="gaps-bar-fill c2" style="width:28.6%;">6</div></div>
-            <div class="gaps-bar-count">6 &middot; 28.6%</div>
-          </div>
-          <div class="gaps-bar-row">
-            <div class="gaps-bar-label"><span class="gaps-badge y">3</span>&nbsp; Lack of Technical Knowledge</div>
-            <div class="gaps-bar-track"><div class="gaps-bar-fill c3" style="width:19%;">4</div></div>
-            <div class="gaps-bar-count">4 &middot; 19.0%</div>
-          </div>
-          <div class="gaps-bar-row">
-            <div class="gaps-bar-label"><span class="gaps-badge b">4</span>&nbsp; Missing Error Screenshots / Messages</div>
-            <div class="gaps-bar-track"><div class="gaps-bar-fill c4" style="width:14.3%;">3</div></div>
-            <div class="gaps-bar-count">3 &middot; 14.3%</div>
-          </div>
-          <div class="gaps-bar-row">
-            <div class="gaps-bar-label"><span class="gaps-badge p">5</span>&nbsp; Premature Escalation</div>
-            <div class="gaps-bar-track"><div class="gaps-bar-fill c5" style="width:4.8%;">1</div></div>
-            <div class="gaps-bar-count">1 &middot; 4.8%</div>
-          </div>
-        </div>
-
-        <!-- Summary table -->
-        <table class="gaps-tbl">
-          <thead><tr>
-            <th style="width:5%;">#</th>
-            <th style="width:40%;">Gap Category</th>
-            <th style="width:9%;">Count</th>
-            <th style="width:11%;">% of Gaps</th>
-            <th>Affected Tickets</th>
-          </tr></thead>
-          <tbody>
-            <tr>
-              <td><span class="gaps-badge r">1</span></td>
-              <td style="font-weight:600;">Unnecessary / Inappropriate Troubleshooting Steps</td>
-              <td style="text-align:center;font-weight:700;color:#c0392b;">7</td>
-              <td style="text-align:center;color:#c0392b;font-weight:600;">33.3%</td>
-              <td><span class="gaps-chip">INC15122342</span><span class="gaps-chip">INC15122948</span><span class="gaps-chip">INC15150797</span><span class="gaps-chip">INC15135193</span><span class="gaps-chip">INC15172720</span><span class="gaps-chip">INC15169152</span><span class="gaps-chip">INC15175262</span></td>
-            </tr>
-            <tr>
-              <td><span class="gaps-badge o">2</span></td>
-              <td style="font-weight:600;">Poor Documentation / Unclear Work Notes</td>
-              <td style="text-align:center;font-weight:700;color:#e07b00;">6</td>
-              <td style="text-align:center;color:#e07b00;font-weight:600;">28.6%</td>
-              <td><span class="gaps-chip">INC15161353</span><span class="gaps-chip">INC15127381</span><span class="gaps-chip">INC15128134</span><span class="gaps-chip">INC15143233</span><span class="gaps-chip">INC15147059</span><span class="gaps-chip">INC15188385</span></td>
-            </tr>
-            <tr>
-              <td><span class="gaps-badge y">3</span></td>
-              <td style="font-weight:600;">Lack of Technical Knowledge</td>
-              <td style="text-align:center;font-weight:700;color:#9a7a00;">4</td>
-              <td style="text-align:center;color:#9a7a00;font-weight:600;">19.0%</td>
-              <td><span class="gaps-chip">INC15124098</span><span class="gaps-chip">INC15169447</span><span class="gaps-chip">INC15179091</span><span class="gaps-chip">INC15189061</span></td>
-            </tr>
-            <tr>
-              <td><span class="gaps-badge b">4</span></td>
-              <td style="font-weight:600;">Missing Error Screenshots / Messages</td>
-              <td style="text-align:center;font-weight:700;color:var(--intel-blue);">3</td>
-              <td style="text-align:center;color:var(--intel-blue);font-weight:600;">14.3%</td>
-              <td><span class="gaps-chip">INC15147741</span><span class="gaps-chip">INC15147005</span><span class="gaps-chip">INC15175513</span></td>
-            </tr>
-            <tr>
-              <td><span class="gaps-badge p">5</span></td>
-              <td style="font-weight:600;">Premature Escalation</td>
-              <td style="text-align:center;font-weight:700;color:#6b2fa0;">1</td>
-              <td style="text-align:center;color:#6b2fa0;font-weight:600;">4.8%</td>
-              <td><span class="gaps-chip">INC15127852</span></td>
-            </tr>
-            <tr class="total-row">
-              <td colspan="2">TOTAL GAPS IDENTIFIED &mdash; manual random review</td>
-              <td style="text-align:center;">21</td>
-              <td style="text-align:center;">7.5%</td>
-              <td>out of 281 tickets reviewed by AI</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <!-- Detailed per-ticket table -->
-        <div class="gaps-section-title">&#128203; Detailed Gap Analysis &mdash; Per Ticket</div>
-        <table class="gaps-tbl">
-          <thead><tr>
-            <th style="width:18%;">Gap Category</th>
-            <th style="width:13%;">Ticket #</th>
-            <th>Gap Description</th>
-          </tr></thead>
-          <tbody>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15122342</span></td><td>Performed unnecessary Teams cache and temp folder cleanup unrelated to the calendar issue.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15122948</span></td><td>Performed unnecessary Office Repair for stale PDL name; could resolve by removing the cached name.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15150797</span></td><td>Should not have repaired Outlook on a new laptop; Classic Outlook needs time to sync.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15135193</span></td><td>Should have checked OST file size and created a new profile instead of repairing.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15172720</span></td><td>Should have guided user to wait for new system to download emails instead of running repair.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15169152</span></td><td>Multiple engineers repaired Outlook multiple times for images issue without any diagnosis first.</td></tr>
-            <tr><td><span class="gaps-badge r">Unnecessary Troubleshooting</span></td><td><span class="gaps-chip">INC15175262</span></td><td>No troubleshooting performed before Outlook repair; repair used as a default shortcut.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15161353</span></td><td>Unclear statement about what was &lsquo;fine&rsquo; in OWA vs Classic Outlook &mdash; no specifics provided.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15127381</span></td><td>Unclear what &lsquo;educated user&rsquo; means; actual solution not documented in work notes.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15128134</span></td><td>Did not mention actual solution; only stated user followed email guide &mdash; outcome not captured.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15143233</span></td><td>Work notes combined agent/user/L3 comments making root cause unclear and audit trail unusable.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15147059</span></td><td>Mentioned &lsquo;loading essentials&rsquo; in New Outlook which does not exist; inaccurate steps recorded.</td></tr>
-            <tr><td><span class="gaps-badge o">Poor Documentation</span></td><td><span class="gaps-chip">INC15188385</span></td><td>Notes and screenshots not in chronological order; no explanation provided for screenshots included.</td></tr>
-            <tr><td><span class="gaps-badge y">Lack of Knowledge</span></td><td><span class="gaps-chip">INC15124098</span></td><td>Should know auto-mapping takes up to 24 hours; did not verify or advise user to wait.</td></tr>
-            <tr><td><span class="gaps-badge y">Lack of Knowledge</span></td><td><span class="gaps-chip">INC15169447</span></td><td>Did not recognize mailbox provisioning delay after AD object creation &mdash; escalated prematurely.</td></tr>
-            <tr><td><span class="gaps-badge y">Lack of Knowledge</span></td><td><span class="gaps-chip">INC15179091</span></td><td>Did not know correct OWA URL format; escalated instead of advising correct URL.</td></tr>
-            <tr><td><span class="gaps-badge y">Lack of Knowledge</span></td><td><span class="gaps-chip">INC15189061</span></td><td>Claimed emails missing in OWA (impossible if not deleted); validation steps are doubtful.</td></tr>
-            <tr><td><span class="gaps-badge b">Missing Error Info</span></td><td><span class="gaps-chip">INC15147741</span></td><td>Did not capture error message when recipient name was not resolvable &mdash; no evidence collected.</td></tr>
-            <tr><td><span class="gaps-badge b">Missing Error Info</span></td><td><span class="gaps-chip">INC15147005</span></td><td>Did not provide error message when user could not send to PDL &mdash; root cause unverifiable.</td></tr>
-            <tr><td><span class="gaps-badge b">Missing Error Info</span></td><td><span class="gaps-chip">INC15175513</span></td><td>Did not mention reason for repairing Outlook for shared mailbox addition &mdash; no justification captured.</td></tr>
-            <tr><td><span class="gaps-badge p">Premature Escalation</span></td><td><span class="gaps-chip">INC15127852</span></td><td>Should have recommended basic spam fixes before escalation; L1 steps were not attempted first.</td></tr>
-          </tbody>
-        </table>
-
-        <!-- Recommendations -->
-        <div class="gaps-section-title">&#9989; Key Recommendations for TAC Agents</div>
-        <div class="gaps-rec-grid">
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">1</span>Ensure Proper Wait Time</div>
-            <div class="gaps-rec-body">For new mailboxes, profiles, or provisioned resources, allow adequate sync time before troubleshooting:<ul><li>Auto-mapping: up to <strong>24 hours</strong></li><li>PDL propagation: up to <strong>48 hours</strong></li><li>New profile sync: varies by mail volume</li></ul>Advise the user to wait and recheck before performing repairs.</div>
-          </div>
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">2</span>Document Clearly</div>
-            <div class="gaps-rec-body">Work notes must include:<ul><li>Specific steps taken in order (timestamped)</li><li>Exact error messages and codes observed</li><li>Clear explanation of what was changed and why</li><li>Confirmation of resolution and user acceptance</li></ul>Avoid vague terms like &ldquo;educated user&rdquo; or &ldquo;followed guide&rdquo; without specifics.</div>
-          </div>
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">3</span>Capture Evidence Before Repairs</div>
-            <div class="gaps-rec-body">Always collect and attach evidence <em>before</em> applying any fix:<ul><li>Screenshot of the exact error message</li><li>Document error text verbatim in work notes</li><li>Capture system state (version, OS, client) before and after</li></ul>Evidence is required for escalation, audit, and root cause analysis.</div>
-          </div>
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">4</span>Avoid Unnecessary Repairs</div>
-            <div class="gaps-rec-body"><strong>Outlook Repair must not be a default first step.</strong> Diagnose root cause first:<ul><li>Check profile/OST size and age before repair</li><li>Try targeted fixes (remove cached name, restart, wait for sync)</li><li>Apply the correct troubleshooting path for the issue type</li><li>Incidents must be resolved with quality fixes, not shortcuts</li></ul></div>
-          </div>
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">5</span>Maintain Chronological Notes</div>
-            <div class="gaps-rec-body">Keep work notes in strict chronological order:<ul><li>Add a timestamp to each update</li><li>Separate agent notes from user responses</li><li>Label screenshots with step number and what they show</li><li>L3 / escalation notes must be clearly marked and attributed</li></ul></div>
-          </div>
-          <div class="gaps-rec-card">
-            <div class="gaps-rec-title"><span class="gaps-rec-num">6</span>Verify Basic Fixes First</div>
-            <div class="gaps-rec-body">Follow the escalation ladder &mdash; do not skip L1 steps:<ul><li>For spam/junk: guide user to report and adjust filter settings</li><li>For send/receive errors: verify DNS, cached recipients, send limits</li><li>Try restart and cache clear before any repair or escalation</li><li>Escalate only when L1 steps are confirmed ineffective</li></ul></div>
-          </div>
-        </div>
+        <!-- Dynamic gaps content rendered by loadGapsData() -->
+        <div id="gapsDynamicPanel"><p style="color:var(--muted);font-size:0.9rem;">Loading gaps data…</p></div>
       </div>
       <!-- ── END TICKET GAPS SUMMARY PANEL ── -->
 
@@ -3421,6 +3270,99 @@
   let airLoaded = false;
   let airConfidenceFlag = 'all'; // all | low | medium | missing
 
+  // ── Dynamic Gaps Data Loader ──────────────────────────────────────────────
+  // Fetches ticket_gaps_<slug>.json based on selected service, renders all sections.
+  const SERVICE_SLUG = { 'Productivity Tools': 'productivity-tools', 'Email and Calendaring': 'email-calendaring', 'Content Engineering': 'content-engineering' };
+  const BADGE_COLORS = { r: '#c0392b', o: '#e07b00', y: '#9a7a00', b: '#0071C5', p: '#6b2fa0' };
+
+  async function loadGapsData() {
+    const svc = $('airService') ? $('airService').value : 'Productivity Tools';
+    const slug = SERVICE_SLUG[svc] || 'productivity-tools';
+    const panel = $('gapsDynamicPanel');
+    const label = $('gapsServiceLabel');
+    if (label) label.textContent = '\u00B7 ' + svc;
+    if (!panel) return;
+    panel.innerHTML = '<p style="color:var(--muted);font-size:0.9rem;">Loading\u2026</p>';
+
+    // Try blob first (auto-updated daily by Azure runbook), fallback to static
+    const svcCfg = (window.serviceConfigs || []).find(s => s.name === svc);
+    const blobUrl = svcCfg
+      ? svcCfg.reportsContainerBaseUrl + '/ticket_gaps_' + slug + '.json' + svcCfg.reportsSas
+      : null;
+
+    let d = null;
+    for (const url of [blobUrl, './ticket_gaps_' + slug + '.json'].filter(Boolean)) {
+      try {
+        const resp = await fetch(url);
+        if (resp.ok) { d = await resp.json(); break; }
+      } catch (_) {}
+    }
+    try {
+      if (!d || !d.total_reviewed) {
+        panel.innerHTML = '<p style="color:var(--muted);padding:16px 0;">No quality review data available for <strong>' + esc(svc) + '</strong> yet.</p>';
+        return;
+      }
+      let html = '';
+
+      // KPI bar
+      const rateColor = d.kpis.gap_rate_pct >= 10 ? 'red' : d.kpis.gap_rate_pct >= 5 ? 'orange' : '';
+      html += '<div class="gaps-kpi-bar">'
+        + '<div class="gaps-kpi"><div class="gaps-kpi-value">' + d.kpis.tickets_reviewed + '</div><div class="gaps-kpi-label">Tickets Reviewed</div></div>'
+        + '<div class="gaps-kpi"><div class="gaps-kpi-value orange">' + d.kpis.gaps_identified + '</div><div class="gaps-kpi-label">Gaps Identified</div></div>'
+        + '<div class="gaps-kpi"><div class="gaps-kpi-value ' + rateColor + '">' + d.kpis.gap_rate_pct + '%</div><div class="gaps-kpi-label">Gap Rate</div></div>'
+        + '<div class="gaps-kpi"><div class="gaps-kpi-value">' + d.kpis.gap_categories + '</div><div class="gaps-kpi-label">Gap Categories</div></div>'
+        + '</div>';
+
+      // Distribution bar chart
+      if (d.distribution && d.distribution.length) {
+        html += '<div class="gaps-section-title">&#128202; Gap Category Distribution</div><div style="margin-bottom:18px;">';
+        const colorClass = ['c1','c2','c3','c4','c5'];
+        const total = d.distribution.reduce((s, r) => s + r.count, 0);
+        d.distribution.forEach((row, i) => {
+          const pct = total ? Math.round(row.count / total * 1000) / 10 : 0;
+          html += '<div class="gaps-bar-row"><div class="gaps-bar-label"><span class="gaps-badge ' + row.badge + '">' + row.rank + '</span>&nbsp;' + esc(row.category) + '</div>'
+            + '<div class="gaps-bar-track"><div class="gaps-bar-fill ' + (colorClass[i] || 'c1') + '" style="width:' + pct + '%;">' + row.count + '</div></div>'
+            + '<div class="gaps-bar-count">' + row.count + ' &middot; ' + pct + '%</div></div>';
+        });
+        html += '</div>';
+        // Summary table
+        html += '<table class="gaps-tbl"><thead><tr><th style="width:5%;">#</th><th style="width:40%;">Gap Category</th><th style="width:9%;">Count</th><th style="width:11%;">% of Gaps</th><th>Affected Tickets</th></tr></thead><tbody>';
+        d.distribution.forEach(row => {
+          const clr = BADGE_COLORS[row.badge] || '#333';
+          html += '<tr><td><span class="gaps-badge ' + row.badge + '">' + row.rank + '</span></td><td style="font-weight:600;">' + esc(row.category) + '</td>'
+            + '<td style="text-align:center;font-weight:700;color:' + clr + ';">' + row.count + '</td>'
+            + '<td style="text-align:center;color:' + clr + ';font-weight:600;">' + row.pct + '%</td>'
+            + '<td>' + (row.tickets || []).map(t => '<a href="https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(t) + '" target="_blank" rel="noopener" class="gaps-chip" style="text-decoration:none;">' + esc(t) + '</a>').join('') + '</td></tr>';
+        });
+        html += '<tr class="total-row"><td colspan="2">TOTAL GAPS IDENTIFIED &mdash; manual random review</td><td style="text-align:center;">' + d.kpis.gaps_identified + '</td><td style="text-align:center;">' + d.kpis.gap_rate_pct + '%</td><td>out of ' + d.kpis.tickets_reviewed + ' tickets reviewed</td></tr></tbody></table>';
+      }
+
+      // Per-ticket gap table
+      if (d.per_ticket_gaps && d.per_ticket_gaps.length) {
+        html += '<div class="gaps-section-title">&#128203; Detailed Gap Analysis &mdash; Per Ticket</div>';
+        html += '<table class="gaps-tbl"><thead><tr><th style="width:18%;">Gap Category</th><th style="width:13%;">Ticket #</th><th>Gap Description</th></tr></thead><tbody>';
+        d.per_ticket_gaps.forEach(row => {
+          html += '<tr><td><span class="gaps-badge">' + esc(row.category) + '</span></td><td><a href="https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(row.ticket) + '" target="_blank" rel="noopener" class="gaps-chip" style="text-decoration:none;">' + esc(row.ticket) + '</a></td><td>' + esc(row.description) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+      }
+
+      // Recommendations
+      if (d.recommendations && d.recommendations.length) {
+        html += '<div class="gaps-section-title">&#9989; Key Recommendations for TAC Agents</div><div class="gaps-rec-grid">';
+        d.recommendations.forEach(rec => {
+          html += '<div class="gaps-rec-card"><div class="gaps-rec-title"><span class="gaps-rec-num">' + rec.num + '</span>' + esc(rec.title) + '</div><div class="gaps-rec-body">' + esc(rec.body) + '</div></div>';
+        });
+        html += '</div>';
+      }
+
+      panel.innerHTML = html;
+    } catch (e) {
+      panel.innerHTML = '<p style="color:var(--muted);padding:16px 0;">No quality review data available for <strong>' + esc(svc) + '</strong> yet.</p>';
+    }
+  }
+  // ─────────────────────────────────────────────────────────────────────────
+
   // All known work weeks (ascending).
   const airAllWeeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice() : []);
 
@@ -4174,12 +4116,7 @@
           factorCard(fForm, 'Template-like Narrative', 'Repeated phrasing without concrete troubleshooting') +
         '</div>';
 
-      return topBar +
-        factorCards +
-        '<div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.35px;color:var(--muted);font-weight:700;margin:6px 2px;">Action-wise incident groups</div>' +
-        '<div style="max-height:520px;overflow:auto;padding-right:2px;">' +
-          actionCardsHtml +
-        '</div>';
+      return topBar;
     }
 
     function airRefresh() {
@@ -4217,7 +4154,7 @@
       populateAirProducts();
       populateAirWeeks();
       populateAirSymptoms(false);
-      $('airService').addEventListener('change', () => { populateAirProducts(); populateAirSymptoms(false); airRefresh(); });
+      $('airService').addEventListener('change', () => { populateAirProducts(); populateAirSymptoms(false); airRefresh(); loadGapsData(); });
       $('airProduct').addEventListener('change', () => { populateAirSymptoms(false); airRefresh(); });
       $('airSymptom').addEventListener('change', airRefresh);
       $('airWeekFrom').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
@@ -4231,6 +4168,7 @@
       });
       loading.style.display = 'none'; content.style.display = 'block';
       airRefresh();
+      loadGapsData();
       airLoaded = true;
     } catch (e) {
       loading.style.display = 'none';

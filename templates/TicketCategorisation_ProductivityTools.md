@@ -13,7 +13,7 @@ Every ticket must be described along **three separate axes**. Do not confuse the
 | Axis | Meaning | Where it comes from | Example |
 |------|---------|---------------------|---------|
 | **1. Primary Category (= the PRODUCT)** | The in-scope **product** that owns the failure. Always one of the bold category names below — never a symptom, never a cause. | Identify the affected application/service first. | `Microsoft Excel Issues`, `Microsoft OneDrive Issues`, `Microsoft 365 Copilot Issues` |
-| **2. Sub-symptom (= the SYMPTOM)** | The **observable failure mode** the user reported — what looked broken. Pick one item verbatim from the product's bulleted sub-symptom list. | The visible behaviour in the ticket. | `File not opening`, `Sync failure`, `Copilot license missing` |
+| **2. Sub-symptom (= the SYMPTOM)** | The **observable failure mode** the user reported — what looked broken. Pick the **bold section header** verbatim from the matching product's sub-symptom section in `TrendSubCategorisation_ProductivityTools.md`. Never use the bullet point text beneath a header. | The visible behaviour in the ticket. | `File Opening Issues`, `Sync Issues`, `Licensing Issues` |
 | **3. Possible Root Cause (= short canonical LABEL — strict)** | A **short, fixed label** (typically 2–5 words) picked **verbatim** from the matching product's table in `PossibleRootCause_ProductivityTools.md`. Never a sentence, never a free-form description, never a narrative. Just the label string. | The PRC catalog table for the chosen Primary Category. | `Sync Stall`, `Long File Path Issue`, `F3 License Restriction`, `Copilot License Blackout`, `Out-of-scope Service Offering` |
 
 **Key rules:**

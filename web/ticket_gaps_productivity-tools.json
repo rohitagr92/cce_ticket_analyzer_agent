@@ -1,0 +1,303 @@
+﻿{
+    "service":  "Productivity Tools",
+    "review_date":  "2026-07-06",
+    "total_reviewed":  100,
+    "kpis":  {
+                 "tickets_reviewed":  100,
+                 "gaps_identified":  32,
+                 "gap_rate_pct":  32,
+                 "gap_categories":  3
+             },
+    "distribution":  [
+                         {
+                             "rank":  1,
+                             "category":  "Missing Error Code / Evidence",
+                             "count":  21,
+                             "pct":  53.8,
+                             "badge":  "r",
+                             "tickets":  [
+                                             "INC13578737",
+                                             "INC14453419",
+                                             "INC14472808",
+                                             "INC14574656",
+                                             "INC14726855",
+                                             "INC14754695",
+                                             "INC14754638",
+                                             "INC14760387",
+                                             "INC14804469",
+                                             "INC14850268",
+                                             "INC14855696",
+                                             "INC14938523",
+                                             "INC15072631",
+                                             "INC15092951",
+                                             "INC15154546",
+                                             "INC15154547",
+                                             "INC15090288",
+                                             "INC15210407",
+                                             "INC15233979",
+                                             "INC15315313",
+                                             "INC15294869"
+                                         ]
+                         },
+                         {
+                             "rank":  2,
+                             "category":  "Premature Escalation",
+                             "count":  16,
+                             "pct":  41,
+                             "badge":  "o",
+                             "tickets":  [
+                                             "INC13565143",
+                                             "INC14360245",
+                                             "INC14472808",
+                                             "INC14642417",
+                                             "INC14754695",
+                                             "INC14735620",
+                                             "INC14740183",
+                                             "INC14855696",
+                                             "INC15000886",
+                                             "INC15092951",
+                                             "INC15269641",
+                                             "INC15294869",
+                                             "INC15366354",
+                                             "INC15322246",
+                                             "INC15386301",
+                                             "INC15466905"
+                                         ]
+                         },
+                         {
+                             "rank":  3,
+                             "category":  "OneDrive Reset Not Attempted",
+                             "count":  2,
+                             "pct":  5.1,
+                             "badge":  "y",
+                             "tickets":  [
+                                             "INC14855696",
+                                             "INC15294869"
+                                         ]
+                         }
+                     ],
+    "per_ticket_gaps":  [
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC13565143",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC13578737",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14360245",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14453419",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14472808",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14472808",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14574656",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14642417",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14726855",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14754695",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14754695",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14754638",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14760387",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14735620",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14740183",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14804469",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14850268",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "OneDrive Reset Not Attempted",
+                                "ticket":  "INC14855696",
+                                "description":  "OneDrive sync issue resolved without attempting OneDrive client reset or re-link as a troubleshooting step."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14855696",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC14855696",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC14938523",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15000886",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15072631",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15092951",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15092951",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15154546",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15154547",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15090288",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15210407",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15233979",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15269641",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15315313",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "OneDrive Reset Not Attempted",
+                                "ticket":  "INC15294869",
+                                "description":  "OneDrive sync issue resolved without attempting OneDrive client reset or re-link as a troubleshooting step."
+                            },
+                            {
+                                "category":  "Missing Error Code / Evidence",
+                                "ticket":  "INC15294869",
+                                "description":  "Sync or sign-in failure closed without capturing or referencing specific error codes or screenshots as evidence."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15294869",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15366354",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15322246",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15386301",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            },
+                            {
+                                "category":  "Premature Escalation",
+                                "ticket":  "INC15466905",
+                                "description":  "Ticket escalated without evidence that standard L1 troubleshooting steps (restart, sign-out/in, clear cache) were attempted first."
+                            }
+                        ],
+    "recommendations":  [
+                            {
+                                "num":  1,
+                                "title":  "Advise License Propagation Wait",
+                                "body":  "For all Copilot and M365 Apps licensing issues: always tell the user to wait 15 minutes to 4 hours after AGS approval before escalating. Document the expected wait time in work notes."
+                            },
+                            {
+                                "num":  2,
+                                "title":  "Attempt OneDrive Reset Before Escalating",
+                                "body":  "For OneDrive sync failures: perform OneDrive reset (onedrive.exe /reset), sign-out/sign-in, or re-link before escalating. Document the steps taken and outcome."
+                            },
+                            {
+                                "num":  3,
+                                "title":  "Capture Error Codes and Screenshots",
+                                "body":  "For all sync, sign-in, or connectivity failures: capture the exact error code (0x80xxxxxx) or screenshot before applying any fix. Evidence is mandatory for audit."
+                            },
+                            {
+                                "num":  4,
+                                "title":  "Complete L1 Steps Before Escalating",
+                                "body":  "Escalation requires evidence that basic steps (restart, sign-out/in, clear cache, repair) were attempted and documented. Do not escalate on first contact."
+                            },
+                            {
+                                "num":  5,
+                                "title":  "Verify KFM Before Closing Refresh Tickets",
+                                "body":  "For PC refresh missing file reports: always verify whether Known Folder Move (KFM) was enabled on the old device. If not, set correct expectation - files are unrecoverable."
+                            }
+                        ]
+}

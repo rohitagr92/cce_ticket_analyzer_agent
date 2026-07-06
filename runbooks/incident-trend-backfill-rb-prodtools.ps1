@@ -63,7 +63,7 @@ function Get-OptVar { param($n, $d) try { $v = Get-AutomationVariable -Name $n -
 $BusinessServiceId = Get-OptVar 'PT_BusinessServiceId' 'a1de2ff2db8f50108062531dd3961911'
 $ServiceOfferingId = Get-OptVar 'PT_ServiceOfferingId' 'fcb18407dbcf50108062531dd39619c4'
 $TableName         = Get-OptVar 'PT_TrendTableName'    'IncidentsCategoryStats'
-if ($LookbackDays -le 0) { $LookbackDays = [int](Get-OptVar 'PT_TrendLookbackDays' 2) }
+if ($LookbackDays -le 0) { $LookbackDays = [int](Get-OptVar 'PT_TrendLookbackDays' 7) }
 
 Write-Output "Lookback days  : $LookbackDays"
 Write-Output "Table          : $TableName"
@@ -367,43 +367,179 @@ Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={
 Write-Output ''
 Write-Output "Rows newly written: $totalSaved (skipped $totalSkipped already in table)"
 
-# -------- Dashboard Regeneration --------
-# Regenerate dashboards for all weeks that had new incidents added
+# -------- Dashboard Regeneration (inline - no external script dependency) --------
+# Works in Azure Automation because it uses table SAS + blob upload directly.
 if ($totalSaved -gt 0) {
     Write-Output ''
     Write-Step '=== Regenerating dashboards for affected weeks ===' 'Cyan'
     try {
-        # Get all unique weeks that had incidents saved
-        $affectedWeeks = @()
-        foreach ($day in $summary.Keys | Sort-Object) {
+        # Collect affected weeks
+        $affectedWeeks = [System.Collections.Generic.List[string]]::new()
+        foreach ($day in $summary.Keys) {
             if ($summary[$day].saved -gt 0) {
                 $dayDate = [DateTime]::ParseExact($day, 'yyyy-MM-dd', $null)
                 $yw = Get-YearWeekFromDate -Date $dayDate
-                if ($affectedWeeks -notcontains $yw.YearWeek) {
-                    $affectedWeeks += $yw.YearWeek
-                }
+                if (-not $affectedWeeks.Contains($yw.YearWeek)) { $affectedWeeks.Add($yw.YearWeek) }
             }
         }
-        
-        if ($affectedWeeks.Count -gt 0) {
-            Write-Output "Found $($affectedWeeks.Count) affected week(s): $($affectedWeeks -join ', ')"
-            
-            # Build the Build-WeeklyReports command path
-            $buildReportScript = Join-Path $PSScriptRoot "..\setup\Build-WeeklyReports.ps1"
-            if (-not (Test-Path $buildReportScript)) {
-                $buildReportScript = Join-Path (Split-Path -Parent $PSScriptRoot) "setup\Build-WeeklyReports.ps1"
+
+        if ($affectedWeeks.Count -eq 0) {
+            Write-Output 'No affected weeks identified.'
+        } else {
+            Write-Output "Affected week(s): $($affectedWeeks -join ', ')"
+
+            function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
+            $catColors = @{
+                'Microsoft OneDrive Issues'                 = '#005a9e'
+                'Microsoft Excel Issues'                    = '#107c41'
+                'Microsoft Word Issues'                     = '#2b579a'
+                'Microsoft PowerPoint Issues'               = '#b7472a'
+                'Microsoft 365 Copilot Issues'              = '#464feb'
+                'Microsoft 365 Apps for Enterprise Issues'  = '#0078d4'
+                'Microsoft OneNote Issues'                  = '#7719aa'
+                'Microsoft Forms Issues'                    = '#6264a7'
+                'Microsoft Loop Issues'                     = '#00bcf2'
+                'Microsoft Project Issues'                  = '#ba141a'
+                'Microsoft 365 Planner / To Do Issues'      = '#0078d4'
+                'Shared File Service (Share Drives) Issues' = '#ff9800'
+                'Google Workspace Issues'                   = '#4285f4'
+                'Smartsheet Issues'                         = '#00a868'
+                'Rejoin / Account Lifecycle Access Issues'  = '#8bc34a'
+                'How Do I / User Education'                 = '#f39c12'
+                'Other / Miscellaneous'                     = '#78909c'
+                'Excluded'                                  = '#90a4ae'
             }
-            
-            if (Test-Path $buildReportScript) {
-                & $buildReportScript -OnlyWeeks $affectedWeeks -ErrorAction SilentlyContinue
-                Write-Output "Dashboard regeneration completed for weeks: $($affectedWeeks -join ', ')"
-            } else {
-                Write-Warning "Dashboard regeneration script not found at: $buildReportScript"
+            function ColorFor { param([string]$c) if ($catColors.ContainsKey($c)) { $catColors[$c] } else { '#5b6abf' } }
+
+            foreach ($weekKey in $affectedWeeks) {
+                try {
+                    # Query table for the full week via SAS (no AzTable module needed, works inline)
+                    $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' `
+                        -ExpiryTime (Get-Date).AddMinutes(20) -Protocol HttpsOnly -Context $saCtx
+                    $tableUri = "https://$($cfg.StorageAccountName).table.core.windows.net/$TableName()" +
+                                "?`$filter=PartitionKey eq '$weekKey'&$sas"
+                    $tableRows = @()
+                    $nxtUri = $tableUri
+                    while ($nxtUri) {
+                        $r = Invoke-WebRequest -Uri $nxtUri -Headers @{ Accept = 'application/json;odata=nometadata' } -UseBasicParsing
+                        $tableRows += ($r.Content | ConvertFrom-Json).value
+                        $npk = $r.Headers['x-ms-continuation-NextPartitionKey']
+                        $nrk = $r.Headers['x-ms-continuation-NextRowKey']
+                        if ($npk) {
+                            $nxtUri = $tableUri + '&NextPartitionKey=' + [Uri]::EscapeDataString([string]$npk)
+                            if ($nrk) { $nxtUri += '&NextRowKey=' + [Uri]::EscapeDataString([string]$nrk) }
+                        } else { $nxtUri = $null }
+                    }
+
+                    if ($tableRows.Count -eq 0) { Write-Warning "  $weekKey - no rows, skipping"; continue }
+
+                    $total    = $tableRows.Count
+                    $excluded = ($tableRows | Where-Object { $_.Category -eq 'Excluded' }).Count
+                    $inScope  = $total - $excluded
+                    $byCat    = $tableRows | Group-Object Category | Sort-Object Count -Descending
+                    $topCat   = if ($byCat.Count -gt 0) { $byCat[0].Name } else { 'N/A' }
+
+                    # Date range label (Mon-Sun IST, using same ISO week calculation as this runbook)
+                    $istStart = ''; $istEnd = ''
+                    if ($weekKey -match '^(?<y>\d{4})-W(?<w>\d{1,2})$') {
+                        $wy = [int]$Matches['y']; $ww = [int]$Matches['w']
+                        $jan4    = [DateTime]::new($wy, 1, 4)
+                        $jan4Mon = $jan4.AddDays(-(([int]$jan4.DayOfWeek + 6) % 7))
+                        $monDt   = $jan4Mon.AddDays(($ww - 1) * 7)
+                        $sunDt   = $monDt.AddDays(6)
+                        $ist     = [TimeSpan]::FromHours(5.5)
+                        $istStart = ($monDt + $ist).ToString('d MMM')
+                        $istEnd   = ($sunDt  + $ist).ToString('d MMM yyyy')
+                    }
+
+                    $catRows = ($byCat | ForEach-Object {
+                        $pct = [math]::Round(($_.Count / $total) * 100, 1)
+                        $clr = ColorFor $_.Name
+                        "<tr><td><span style='display:inline-block;width:10px;height:10px;border-radius:50%;background:$clr;margin-right:6px'></span>$(HtmlEsc $_.Name)</td><td class='num'>$($_.Count)</td><td class='num'>$pct%</td></tr>"
+                    }) -join "`n"
+
+                    $detRows = ($tableRows | Sort-Object Date -Descending | ForEach-Object {
+                        $clr = ColorFor $_.Category
+                        $ai  = if ($_.AIAnalysis) { "<div class='ai'>$(HtmlEsc $_.AIAnalysis)</div>" } else { '' }
+                        "<tr><td><a href='https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=$(HtmlEsc $_.RowKey)' target='_blank'>$(HtmlEsc $_.RowKey)</a></td><td>$(HtmlEsc $_.Date)</td><td><span class='badge' style='background:$clr'>$(HtmlEsc $_.Category)</span></td><td>$(HtmlEsc $_.Subcategory)</td><td>$(HtmlEsc $_.RootCause)</td><td class='ai-col'>$ai</td></tr>"
+                    }) -join "`n"
+
+                    $html = @"
+<!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><title>Productivity Tools - $weekKey</title>
+<style>body{margin:0;background:#f0f2f5;font-family:'Segoe UI',sans-serif;font-size:13px;}
+.hdr{background:#0071c5;color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;}
+.hdr h1{margin:0;font-size:20px;font-weight:400;}.hdr .meta{font-size:12px;opacity:.85;}
+.wrap{padding:24px 28px;}.kpis{display:flex;gap:14px;margin-bottom:22px;flex-wrap:wrap;}
+.kpi{background:#fff;border-radius:8px;padding:16px 22px;flex:1;min-width:130px;box-shadow:0 2px 6px rgba(0,0,0,.08);}
+.kpi .v{font-size:30px;font-weight:700;color:#0071c5;}.kpi .l{font-size:11px;color:#666;text-transform:uppercase;letter-spacing:.7px;margin-top:3px;}
+.card{background:#fff;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);margin-bottom:22px;overflow:hidden;}
+.card-h{padding:13px 20px;border-bottom:1px solid #eee;font-weight:600;font-size:14px;color:#333;}
+table{width:100%;border-collapse:collapse;}th{background:#f8f9fa;padding:9px 13px;text-align:left;font-size:11px;letter-spacing:.5px;text-transform:uppercase;color:#555;border-bottom:2px solid #dee2e6;}
+td{padding:9px 13px;border-bottom:1px solid #f0f0f0;vertical-align:top;}tr:hover td{background:#fafbfc;}
+.num{text-align:right;}.badge{color:#fff;padding:2px 8px;border-radius:12px;font-size:11px;white-space:nowrap;}
+a{color:#0071c5;text-decoration:none;font-weight:600;}.ai-col{max-width:380px;}.ai{font-size:12px;color:#444;line-height:1.5;}</style></head><body>
+<div class="hdr"><h1>Productivity Tools - $weekKey</h1>
+  <div class="meta">$istStart - $istEnd | Updated $(Get-Date -Format 'dd MMM yyyy HH:mm') UTC</div></div>
+<div class="wrap">
+  <div class="kpis">
+    <div class="kpi"><div class="v">$total</div><div class="l">Total</div></div>
+    <div class="kpi"><div class="v">$inScope</div><div class="l">In-Scope</div></div>
+    <div class="kpi"><div class="v">$excluded</div><div class="l">Excluded</div></div>
+    <div class="kpi"><div class="v" style="font-size:15px">$(HtmlEsc $topCat)</div><div class="l">Top Category</div></div>
+  </div>
+  <div class="card"><div class="card-h">Category Breakdown</div>
+    <table><thead><tr><th>Category</th><th class="num">Count</th><th class="num">%</th></tr></thead><tbody>$catRows</tbody></table></div>
+  <div class="card"><div class="card-h">Incident Details ($total)</div>
+    <table><thead><tr><th>Incident</th><th>Date</th><th>Category</th><th>Subcategory</th><th>Root Cause</th><th>AI Analysis</th></tr></thead><tbody>$detRows</tbody></table></div>
+</div></body></html>
+"@
+
+                    $blobName = "ProductivityTools_Weekly_Report_$weekKey.html"
+                    $tmpFile  = [System.IO.Path]::GetTempFileName()
+                    try {
+                        Set-Content -Path $tmpFile -Value $html -Encoding UTF8
+                        Set-AzStorageBlobContent -File $tmpFile -Container 'results' -Blob $blobName `
+                            -Context $saCtx -Properties @{ ContentType = 'text/html; charset=utf-8' } -Force | Out-Null
+                        Write-Output "  Uploaded $blobName ($total incidents)"
+                    } finally {
+                        if (Test-Path $tmpFile) { Remove-Item $tmpFile -Force -ErrorAction SilentlyContinue }
+                    }
+                } catch {
+                    Write-Warning "  Failed dashboard for ${weekKey}: $($_.Exception.Message)"
+                }
+            }
+
+            # Rebuild index.json so the web app discovers the new report
+            try {
+                $blobs = Get-AzStorageBlob -Container 'results' -Context $saCtx | Where-Object { $_.Name -like '*.html' }
+                $reports = @(); $runs = @{}
+                foreach ($b in $blobs) {
+                    if ($b.Name -notmatch '(\d{4})-W(\d{2})') { continue }
+                    $wk  = "$($matches[1])-W$($matches[2])"; $lbl = "WW$($matches[2]) $($matches[1])"
+                    $entry = [ordered]@{ week_label=$lbl; run_id=$wk; generated_at=$b.LastModified.UtcDateTime.ToString('o'); blob=$b.Name; size_kb=[math]::Round($b.Length/1KB,1) }
+                    $reports += [pscustomobject]$entry
+                    if (-not $runs.ContainsKey($wk)) { $runs[$wk] = [ordered]@{ week_label=$lbl; run_id=$wk; generated_at=$b.LastModified.UtcDateTime.ToString('o'); ticket_count=0; dashboard_blob=$null; strict_report_blob=$null } }
+                    $rv = $runs[$wk]
+                    if ($b.Name -match 'Trend_Analysis') { $rv.strict_report_blob = $b.Name }
+                    else { $rv.dashboard_blob = $b.Name; $rv.generated_at = $b.LastModified.UtcDateTime.ToString('o') }
+                }
+                $idx = [ordered]@{ generated_at=(Get-Date).ToUniversalTime().ToString('o'); reports=@($reports|Sort-Object run_id -Descending); trends=@(); runs=@($runs.Values|Sort-Object {$_.run_id} -Descending) }
+                $idxTmp = [System.IO.Path]::GetTempFileName()
+                try {
+                    $idx | ConvertTo-Json -Depth 5 | Out-File -FilePath $idxTmp -Encoding UTF8 -NoNewline
+                    Set-AzStorageBlobContent -File $idxTmp -Container 'results' -Blob 'index.json' `
+                        -Context $saCtx -Properties @{ ContentType = 'application/json' } -Force | Out-Null
+                    Write-Output "  index.json updated ($($runs.Count) runs)"
+                } finally {
+                    if (Test-Path $idxTmp) { Remove-Item $idxTmp -Force -ErrorAction SilentlyContinue }
+                }
+            } catch {
+                Write-Warning "  Failed to update index.json: $($_.Exception.Message)"
             }
         }
     } catch {
-        Write-Warning "Failed to regenerate dashboards: $($_.Exception.Message) - continuing..."
+        Write-Warning "Dashboard regeneration failed: $($_.Exception.Message) - continuing..."
     }
 } else {
-    Write-Output "No incidents saved in this run - skipping dashboard regeneration"
+    Write-Output 'No incidents saved in this run - skipping dashboard regeneration.'
 }

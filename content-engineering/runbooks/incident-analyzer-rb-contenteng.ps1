@@ -462,9 +462,24 @@ function Get-BlobMarkdownContent {
             Write-ScriptLog "Successfully authenticated with managed identity" -Level Success
         }
 
-        # Get storage account key for authentication
-        $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $Script:BlobConfig.ResourceGroupName -Name $Script:BlobConfig.StorageAccountName)[0].Value
-        $Context = New-AzStorageContext -StorageAccountName $Script:BlobConfig.StorageAccountName -StorageAccountKey $storageKey
+        # Get storage account key for authentication.
+        # Retry on transient Azure control-plane errors (e.g. management.azure.com:443
+        # connection timeouts) so one network blip does not blank out a prompt template
+        # and cascade into 100% fallback categorization.
+        $Context = $null
+        $maxAttempts = 4
+        for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+            try {
+                $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $Script:BlobConfig.ResourceGroupName -Name $Script:BlobConfig.StorageAccountName)[0].Value
+                $Context = New-AzStorageContext -StorageAccountName $Script:BlobConfig.StorageAccountName -StorageAccountKey $storageKey
+                break
+            } catch {
+                if ($attempt -eq $maxAttempts) { throw }
+                $wait = [math]::Min(30, [math]::Pow(2, $attempt))
+                Write-ScriptLog "Storage context attempt $attempt/$maxAttempts failed ($($_.Exception.Message)). Retrying in ${wait}s..." -Level Warning
+                Start-Sleep -Seconds $wait
+            }
+        }
 
         # Check if blob exists
         $blob = Get-AzStorageBlob -Container $Script:BlobConfig.PromptContainerName -Blob $FileName -Context $Context -ErrorAction SilentlyContinue
@@ -885,18 +900,25 @@ function Get-IncidentCategory {
                         $Script:PromptTemplates.TrendSubCategorisation + "`n`n" +
                         "## REFERENCE: Possible Root Cause Labels`n" +
                         $Script:PromptTemplates.PossibleRootCause + "`n`n" +
-                        "## REFERENCE: Detailed Root Cause Entries`n" +
-                        $Script:PromptTemplates.DetailedRootCause + "`n`n" +
                         @"
-## ADDITIONAL REQUIRED OUTPUT FIELDS
+## REQUIRED OUTPUT FORMAT (STRICT - OVERRIDES ANY OTHER FORMAT ABOVE)
 
-After the existing Primary Category / Sub-symptom / Confidence / Reasoning / Key Evidence / Resolution Summary / How Do I or Error / KB Provided fields, append these two lines:
+Ignore any earlier example that used "Category:" or "Subcategory:". You MUST end your response with exactly these labeled lines, in this order, each on its own line, with the label text verbatim followed by a colon:
 
-Possible Root Cause: [Pick exactly ONE label from the 'Root Cause Label' column of the chosen Primary Category's table in the 'Possible Root Cause' reference above. Copy the label verbatim. If no label fits, write "Unknown".]
+Primary Category: <exact product name from the taxonomy, e.g. "Microsoft Teams", "SharePoint Online", "SharePoint On-Premises". Use "Unknown / Unclear" only if nothing fits.>
+Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category. Never use a label from a different product. Do NOT invent.>
+Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the 'Possible Root Cause' reference above. Never use a label from a different product. Do NOT invent. If none fits, write "Unknown".>
+Confidence Level: <High, Medium, or Low - apply the CONFIDENCE CALCULATION FRAMEWORK above.>
+Reasoning: <3-5 plain sentences: (1) why the user raised the ticket, (2) what technically happened, (3) what the agent did, (4) whether it was resolved. Plain language, no markdown.>
+Key Evidence: <one or more short quotes from the notes that justify the classification.>
+Resolution Summary: <one sentence describing what actually fixed the issue.>
+How Do I or Error: <"How Do I" or "Error">
+KB Provided: <KB number if present, otherwise "No">
 
-Detailed Root Cause: [Pick exactly ONE entry heading from the chosen Primary Category's section in the 'Detailed Root Cause' reference above (the '### Heading' lines). Copy verbatim. If no entry fits, write "Unknown".]
-
-STRICT RULE: Do NOT invent labels. Do NOT paraphrase. Output the exact text from the MD reference files. Anything you produce that is not in those files will be rejected and replaced with "Unknown".
+RULES:
+- Each label must appear verbatim followed by a colon. Use plain ASCII, no bullets or markdown in the values.
+- Primary Category, Sub-symptom and Possible Root Cause MUST be exact labels from the reference sections above, all from the SAME product.
+- Keep each value on a single line.
 "@
         
         # Convert to JSON with consistent formatting - use Compress to avoid whitespace issues
@@ -2527,7 +2549,6 @@ $templateMap = [ordered]@{
     EnvironmentContext     = "EnvironmentContext_ContentEngineering"
     TrendSubCategorisation = "TrendSubCategorisation_ContentEngineering"
     PossibleRootCause      = "PossibleRootCause_ContentEngineering"
-    DetailedRootCause      = "DetailedRootCause_ContentEngineering"
 }
 $loadedCount = 0
 $failedFiles = @()
@@ -2544,9 +2565,12 @@ foreach ($key in $templateMap.Keys) {
 }
 
 if ($loadedCount -eq $templateMap.Count) {
-    Write-Host "✓ Successfully loaded all $loadedCount Productivity Tools prompt templates" -ForegroundColor Green
+    Write-Host "✓ Successfully loaded all $loadedCount Content Engineering prompt templates" -ForegroundColor Green
 } else {
-    Write-Host "⚠ Loaded $loadedCount/$($templateMap.Count) prompt templates. Failed: $($failedFiles -join ', ')" -ForegroundColor Yellow
+    # FAIL FAST: a missing or empty prompt template makes every AI call fall back to
+    # 'Other / Miscellaneous' / 'Unclassified', silently polluting the table and dashboard.
+    # Abort the entire run with a clear error instead of writing 100% garbage rows.
+    throw "Aborting run: only loaded $loadedCount/$($templateMap.Count) prompt templates. Failed: $($failedFiles -join ', '). Fix the template(s) in the 'templates' blob container and re-run."
 }
 
 #region Canonical MD Allowlists
@@ -2568,71 +2592,47 @@ function Get-CanonicalLabelsFromTemplates {
         DetailedRootCauses  = @{}   # product => list of detailed entry headings
     }
 
-    # --- Categories: bold-line product headers in TicketCategorisation ("**Microsoft X Issues**") ---
+    # --- Categories: "### **Product**" headers in TicketCategorisation (Content Engineering format) ---
+    # CE product names have NO " Issues" suffix (e.g. "Microsoft Teams", "SharePoint Online").
     $catText = [string]$Script:PromptTemplates.TicketCategorisation
-    foreach ($m in [regex]::Matches($catText, '(?m)^\*\*([^*\n]+? Issues)\*\*\s*$')) {
+    foreach ($m in [regex]::Matches($catText, '(?m)^###\s+\*\*(.+?)\*\*\s*$')) {
         $label = $m.Groups[1].Value.Trim()
         if (-not $result.Categories.Contains($label)) { $result.Categories.Add($label) }
     }
-    # Excluded is a valid category even though it's not "...Issues"
-    if (-not $result.Categories.Contains('Excluded'))              { $result.Categories.Add('Excluded') }
     if (-not $result.Categories.Contains('Other / Miscellaneous')) { $result.Categories.Add('Other / Miscellaneous') }
 
-    # --- Subcategories: "#### Product" sections in TrendSubCategorisation ---
-    # Canonical value must be the bold grouping header (for example "Sync Issues").
-    # Bulleted symptom lines are treated as aliases that map to the active header.
-    # Product key here lacks the " Issues" suffix (e.g. "Microsoft OneDrive"); the lookup
-    # helper's substring fallback handles "Microsoft OneDrive Issues" -> "Microsoft OneDrive".
+    # --- Subcategories: "### Product" sections in TrendSubCategorisation (Content Engineering format) ---
+    # Each product section lists sub-symptom labels as standalone bold lines (e.g. **Teams Client Not Working**).
+    # The bold label itself is the canonical value; there are no bullet aliases in the CE templates.
     $subText = [string]$Script:PromptTemplates.TrendSubCategorisation
     if ($subText) {
-        $sections = [regex]::Split($subText, '(?m)^####\s+') | Where-Object { $_ -match '\S' }
-        foreach ($section in $sections) {
-            $lines = $section -split "`r?`n", 2
-            if ($lines.Count -lt 2) { continue }
-            $product = $lines[0].Trim()
-            $body    = $lines[1]
-            $headers = New-Object System.Collections.Generic.List[string]
-            $currentHeader = ''
-            foreach ($ln in ($body -split "`r?`n")) {
-                $trim = [string]$ln
-                $trim = $trim.Trim()
-                if (-not $trim) { continue }
-
-                if ($trim -match '^\*\*(.+?)\*\*\s*$') {
-                    $currentHeader = $matches[1].Trim()
-                    if ($currentHeader -and -not $headers.Contains($currentHeader)) { $headers.Add($currentHeader) }
-                    continue
-                }
-
-                if ($trim -match '^\s*[-*]\s+(.+?)\s*$') {
-                    $sym = $matches[1].Trim()
-                    if ($sym -match '^\*\*.+\*\*$') { continue }
-                    if ($sym -match '^\*[A-Z]') { continue }
-                    $sym = $sym -replace '\s*\(.+?\)\s*$', ''
-                    if ($currentHeader -and $sym) {
-                        $aliasKey = ('{0}||{1}' -f (Normalize-CanonicalText -Raw $product), (Normalize-CanonicalText -Raw $sym))
-                        if (-not $result.SubcategoryAliasMap.ContainsKey($aliasKey)) {
-                            $result.SubcategoryAliasMap[$aliasKey] = $currentHeader
-                        }
-                    }
-                }
-            }
-            if ($headers.Count -gt 0) { $result.Subcategories[$product] = $headers }
-        }
-    }
-
-    # --- Possible Root Causes: each "## N. Product Issues" section has a markdown table ---
-    # Table rows look like: | 1.1 | **Sync Stall** | description |
-    $prcText = [string]$Script:PromptTemplates.PossibleRootCause
-    if ($prcText) {
-        $sections = [regex]::Split($prcText, '(?m)^##\s+\d+\.\s+') | Where-Object { $_ -match '\S' }
+        $sections = [regex]::Split($subText, '(?m)^###\s+') | Where-Object { $_ -match '\S' }
         foreach ($section in $sections) {
             $lines = $section -split "`r?`n", 2
             if ($lines.Count -lt 2) { continue }
             $product = $lines[0].Trim()
             $body    = $lines[1]
             $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\|\s*\d+\.\d+\s*\|\s*\*\*([^|*]+?)\*\*\s*\|')) {
+            foreach ($m in [regex]::Matches($body, '(?m)^\*\*(.+?)\*\*\s*$')) {
+                $lbl = $m.Groups[1].Value.Trim()
+                if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
+            }
+            if ($labels.Count -gt 0) { $result.Subcategories[$product] = $labels }
+        }
+    }
+
+    # --- Possible Root Causes: "### Product" sections in PossibleRootCause (Content Engineering format) ---
+    # Table rows look like: | **Server Resource Exhaustion** | description |  (no numbering column).
+    $prcText = [string]$Script:PromptTemplates.PossibleRootCause
+    if ($prcText) {
+        $sections = [regex]::Split($prcText, '(?m)^###\s+') | Where-Object { $_ -match '\S' }
+        foreach ($section in $sections) {
+            $lines = $section -split "`r?`n", 2
+            if ($lines.Count -lt 2) { continue }
+            $product = $lines[0].Trim()
+            $body    = $lines[1]
+            $labels  = New-Object System.Collections.Generic.List[string]
+            foreach ($m in [regex]::Matches($body, '(?m)^\|\s*\*\*([^|*]+?)\*\*\s*\|')) {
                 $lbl = $m.Groups[1].Value.Trim()
                 if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
             }

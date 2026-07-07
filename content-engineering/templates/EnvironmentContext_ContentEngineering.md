@@ -10,7 +10,7 @@ Provides the AI with context about the Content Engineering service scope, tools,
 Content Engineering is responsible for the platforms, pipelines, and tooling used to author, manage, localize, and publish content, as well as the Microsoft 365 collaboration infrastructure (SharePoint, Teams) that Intel employees use for content sharing and productivity.
 
 **In-scope platforms and tools:**
-- Authoring platforms: Adobe Experience Manager (AEM), Sitecore, or equivalent CMS
+- Authoring platforms: Adobe Experience Manager (AEM), Sitecore, or equivalent CMS 
 - Digital Asset Management (DAM) system
 - Publishing pipelines and CI/CD for content delivery
 - Localization / translation management system (TMS)
@@ -21,6 +21,7 @@ Content Engineering is responsible for the platforms, pipelines, and tooling use
 - **SharePoint Online (SPO)** — user access, permissions, site administration, and file recovery
 - **Microsoft Teams** — Teams client, add-ins, Outlook-Teams integration, meeting scheduling
 - **M365 apps** — Planner, OneDrive, OneNote, and other integrated M365 productivity tools
+
 
 **Typical users:**
 - Content authors and editors

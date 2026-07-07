@@ -3123,7 +3123,39 @@ try {
     
 # Process incidents first
 Write-ScriptLog "Processing $totalIncidents incidents..." -Level Info
+
+# --- Cost control: skip incidents already categorized in the table ---
+# Only NEW incidents should incur AI cost. Incidents already stored from a prior run
+# are reused via the 7-day weekly artifact merge, so re-categorizing them is wasted spend.
+$existingKeysByWeek = @{}
+$dedupTable = $null
+try { $dedupTable = Initialize-StatisticsTable } catch { $dedupTable = $null }
+$skippedAlreadyStored = 0
+
 foreach ($incident in $incidents) {
+    # Skip if this incident is already categorized in the stats table (avoids re-paying for AI)
+    if ($dedupTable -and $incident.number) {
+        $rdt = [DateTime]::MinValue
+        if ([DateTime]::TryParse([string]$incident.resolved_at, [ref]$rdt)) {
+            $wn = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear($rdt, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
+            $wk = '{0:D4}-W{1:D2}' -f $rdt.Year, $wn
+            if (-not $existingKeysByWeek.ContainsKey($wk)) {
+                $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                try {
+                    $rows = Get-AzTableRow -Table $dedupTable -PartitionKey $wk -ErrorAction Stop
+                    foreach ($r in @($rows)) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+                } catch {
+                    Write-ScriptLog "Dedup: could not load existing keys for ${wk}: $($_.Exception.Message)" -Level Warning
+                }
+                $existingKeysByWeek[$wk] = $set
+            }
+            if ($existingKeysByWeek[$wk].Contains([string]$incident.number)) {
+                $skippedAlreadyStored++
+                continue
+            }
+        }
+    }
+
     $maxRetries = 3
     $retryCount = 0
     $success = $false
@@ -3174,7 +3206,7 @@ foreach ($incident in $incidents) {
     Start-Sleep -Seconds 3
 }
 
-Write-ScriptLog "Completed incident processing: $processedIncidentCount/$totalIncidents successful" -Level Success
+Write-ScriptLog "Completed incident processing: $processedIncidentCount/$totalIncidents successful (skipped $skippedAlreadyStored already-categorized incidents to avoid AI cost)" -Level Success
 
 # COMMENTED OUT - Service Request Processing
 # Write-ScriptLog "Processing $totalRequests service requests..." -Level Info
@@ -3223,11 +3255,17 @@ Write-ScriptLog "Completed incident processing: $processedIncidentCount/$totalIn
 Write-ScriptLog "Service request processing disabled - focusing on incidents only" -Level Info
     Write-ScriptLog "Total AI processing completed: $processedIncidentCount/$totalTickets incidents successful" -Level Success
     
-    # Check if any tickets were actually processed successfully
-    if ($Script:ProcessedTickets.Count -eq 0) {
+    # Check if any tickets were actually processed successfully.
+    # NOTE: when every fetched incident was skipped by the dedup guard (all already in the
+    # table), $Script:ProcessedTickets is legitimately empty for THIS run - we must still
+    # proceed to the weekly merge so the report/table refresh from prior artifacts.
+    if ($Script:ProcessedTickets.Count -eq 0 -and $skippedAlreadyStored -eq 0) {
         Write-ScriptLog "ERROR: No incidents were successfully processed - check AI authentication and API endpoints" -Level Error
         Complete-BlobLogging -FinalMessage "Processing failed - no incidents successfully processed"
         return
+    }
+    if ($Script:ProcessedTickets.Count -eq 0 -and $skippedAlreadyStored -gt 0) {
+        Write-ScriptLog "All $skippedAlreadyStored fetched incidents were already categorized - proceeding to weekly merge/report from artifacts." -Level Info
     }
     
     $dataSource = if ($Script:Constants.UseStoredIncidents -and -not $Script:IsAzureAutomation) { "Stored Data" } else { "Live API" }
@@ -3244,8 +3282,10 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
         Write-ScriptLog "BACKFILL MODE active for $backfillYearWeek - skipping artifact save and weekly merge" -Level Info
     }
 
-    # Save per-run artifact for weekly merge (skipped in backfill mode)
-    if (-not $backfillYearWeek -and (($Script:Constants.SaveRunArtifacts ?? $true) -eq $true)) {
+    # Save per-run artifact for weekly merge (skipped in backfill mode).
+    # Also skipped when this run processed no NEW incidents (all were deduped/already stored) -
+    # there is nothing new to persist and Save-RunProcessingArtifact rejects an empty collection.
+    if (-not $backfillYearWeek -and (($Script:Constants.SaveRunArtifacts ?? $true) -eq $true) -and $allsummarisednotes.Count -gt 0) {
         Save-RunProcessingArtifact -DetailedSummaries $allsummarisednotes -ReportPeriod $Script:reportperiod -DataSource $dataSource | Out-Null
     }
 

@@ -296,6 +296,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
     }
 
     foreach ($inc in $incidents) {
+      try {
         $num = $inc.number
         if (-not $num) { continue }
 
@@ -308,13 +309,12 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
 
         # Skip if already in table
         $existing = Get-ExistingRowKeys -Partition $yw.YearWeek
-        if ($existing.Contains([string]$num)) {
+        if ($existing -and $existing.Contains([string]$num)) {
             $summary[$key].skipped++
             continue
         }
 
-        try {
-            $aiText  = Invoke-Categorize -Incident $inc
+        $aiText  = Invoke-Categorize -Incident $inc
             $fields  = Get-StructuredFields -Text $aiText
             $category = if ($fields.Category) { $fields.Category } else { 'Unknown' }
             $subcat = $fields.Subcategory
@@ -344,11 +344,11 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
 
             # Cache so a same-incident appearance in another loop day doesn't double-process
-            [void]$existing.Add([string]$num)
+            if ($existing) { [void]$existing.Add([string]$num) }
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {
-            Write-Warning "  FAIL ${num}: $($_.Exception.Message)"
+            Write-Warning "  FAIL $($inc.number): $($_.Exception.Message)"
             $summary[$key].errors++
         }
     }

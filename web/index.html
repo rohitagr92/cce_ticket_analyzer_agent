@@ -459,6 +459,9 @@
       <div>
         <h1>AI-Powered Incident Analyzer for IT</h1>
         <p class="subtitle">AI-powered incident analysis and categorization reports</p>
+        <!-- Service level (parent of Service Offering). Single value today; kept as a
+             visible, non-editable indicator per onboarding requirements. -->
+        <span class="label-inline" style="font-size:0.76rem;">Service: <strong>End User Collaboration</strong></span>
       </div>
       <div>
         <span class="user-info" id="userInfo">Loading...</span>
@@ -744,6 +747,8 @@
           <select id="opxSubcategory" style="min-width:240px;"></select>
           <span class="label-inline">Root Cause</span>
           <select id="opxRootCause" style="min-width:240px;"></select>
+          <span class="label-inline">Search</span>
+          <input type="search" id="opxSearch" placeholder="Search incident #, product, symptom, root cause…" style="min-width:260px;" />
         </div>
         <div class="toolbar" style="margin-bottom:0;">
           <span class="label-inline">From WW</span>
@@ -1011,17 +1016,153 @@
     return !!(lens && lens.value === 'engineer');
   }
 
+  // ------------------------------------------------------------------
+  // PER-SERVICE-OFFERING DATA RETENTION CUTOFF
+  // Weeks strictly before the configured cutoff are hidden from every tab's
+  // Static Web App output. This is a client-side floor to keep the UI backward
+  // compatible even before the backend cleanup (setup/Cleanup-OldWeeksByServiceOffering.ps1)
+  // has purged the corresponding rows from Blob/Table Storage.
+  // TODO: if a Service Offering is renamed or a new one is added, update this map.
+  // "Content Engineering" is the config/table name used for the "Content Sharing" offering.
+  // ------------------------------------------------------------------
+  const SERVICE_WW_CUTOFF = {
+    'Productivity Tools':    '2026-W19',
+    'Email and Calendaring': '2026-W27',
+    'Content Engineering':   '2026-W26'
+  };
+  function isWeekAllowedForService(week, svcName) {
+    if (!week) return false;
+    const svc = svcName || 'Productivity Tools';
+    const cutoff = SERVICE_WW_CUTOFF[svc];
+    if (!cutoff) return true; // no cutoff configured for this offering
+    return week >= cutoff;
+  }
+
+  // Short-lived cache so reloading/re-navigating the SPA within the same browser
+  // session doesn't re-fetch the entire table over the network every time.
+  // Kept intentionally short (5 min) so scheduled-run updates still show up promptly.
+  const TABLE_CACHE_KEY = 'aiIncidentAnalyzer.tableCache.v1';
+  const TABLE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+  function readTableCache() {
+    try {
+      const raw = sessionStorage.getItem(TABLE_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed || !Array.isArray(parsed.entities)) return null;
+      if (Date.now() - parsed.savedAt > TABLE_CACHE_TTL_MS) return null;
+      return parsed.entities;
+    } catch (e) { return null; }
+  }
+
+  function writeTableCache(entities) {
+    try {
+      sessionStorage.setItem(TABLE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), entities }));
+    } catch (e) { /* quota or storage unavailable - just skip caching */ }
+  }
+
   async function ensureTableLoaded() {
     if (allEntities) return allEntities;
     if (!tableLoadPromise) {
       tableLoadPromise = (async () => {
+        const cached = readTableCache();
+        if (cached) {
+          allEntities = cached;
+          aggregated = aggregate(allEntities);
+          return allEntities;
+        }
         const entities = await fetchTableEntities();
-        allEntities = entities;
-        aggregated = aggregate(entities);
-        return entities;
+        // Apply per-Service-Offering retention cutoff before anything else consumes
+        // the data, so every tab (Summary, Trends+, Root Cause, Ops Report+, AI Recs)
+        // is automatically compliant without per-tab changes.
+        allEntities = entities.filter(e => isWeekAllowedForService(e.PartitionKey || e.YearWeek, e.Service));
+        aggregated = aggregate(allEntities);
+        writeTableCache(allEntities);
+        return allEntities;
       })();
     }
     return tableLoadPromise;
+  }
+
+  // ------------------------------------------------------------------
+  // CROSS-TAB SHARED FILTER (Summary / Ops Report+ / AI Recommendation)
+  // Keeps the selected Service Offering + WW range consistent across these
+  // three tabs. Requirement: "same WW dropdown behaviour and selected WW
+  // range across Summary / OpsReport+ / AI Recs". Trends+/Root Cause are
+  // intentionally NOT included — the requirement scopes this to those 3 tabs.
+  // ------------------------------------------------------------------
+  const SHARED_FILTER = { service: null, weekFrom: null, weekTo: null };
+  let SHARED_FILTER_SYNCING = false; // re-entrancy guard so pushes don't loop
+  let smRebuildRangeRef = null, smRebuildDrillRef = null, smRenderRef = null;
+
+  function applySharedFilterServiceIfValid(selId) {
+    const sel = $(selId);
+    if (!sel || !SHARED_FILTER.service) return;
+    if ([...sel.options].some(o => o.value === SHARED_FILTER.service)) sel.value = SHARED_FILTER.service;
+  }
+
+  function applySharedFilterWeeksIfValid(fromId, toId) {
+    const fromSel = $(fromId), toSel = $(toId);
+    if (fromSel && SHARED_FILTER.weekFrom && [...fromSel.options].some(o => o.value === SHARED_FILTER.weekFrom)) {
+      fromSel.value = SHARED_FILTER.weekFrom;
+    }
+    if (toSel && SHARED_FILTER.weekTo && [...toSel.options].some(o => o.value === SHARED_FILTER.weekTo)) {
+      toSel.value = SHARED_FILTER.weekTo;
+    }
+  }
+
+  // Called whenever the Service/WW selection changes on Summary, Ops Report+, or AI Recs.
+  // Records the selection and mirrors it onto the other two tabs (if already loaded) so
+  // they show the same slice of data without the user re-selecting it on each tab.
+  function pushSharedFilter(source, service, weekFrom, weekTo) {
+    if (SHARED_FILTER_SYNCING) return;
+    SHARED_FILTER.service = service;
+    SHARED_FILTER.weekFrom = weekFrom;
+    SHARED_FILTER.weekTo = weekTo;
+    SHARED_FILTER_SYNCING = true;
+    try {
+      if (source !== 'sm'  && smLoaded)  resyncSummaryFromShared();
+      if (source !== 'opx' && opxLoaded) resyncOpsPlusFromShared();
+      if (source !== 'air' && airLoaded) resyncAirRecsFromShared();
+    } finally {
+      SHARED_FILTER_SYNCING = false;
+    }
+  }
+
+  function resyncSummaryFromShared() {
+    const sel = $('smService');
+    if (!sel || ![...sel.options].some(o => o.value === SHARED_FILTER.service)) return;
+    sel.value = SHARED_FILTER.service;
+    if (smRebuildRangeRef) smRebuildRangeRef();
+    applySharedFilterWeeksIfValid('smFromWeek', 'smToWeek');
+    if (smRebuildDrillRef) smRebuildDrillRef();
+    if (smRenderRef) smRenderRef();
+  }
+
+  function resyncOpsPlusFromShared() {
+    const sel = $('opxService');
+    if (!sel || ![...sel.options].some(o => o.value === SHARED_FILTER.service)) return;
+    sel.value = SHARED_FILTER.service;
+    opxRebuildFirstSeen();
+    populateOpxProducts();
+    populateOpxWeeks(weeksMatchingService(sel.value));
+    applySharedFilterWeeksIfValid('opxWeekFrom', 'opxWeekTo');
+    populateOpxSubcategories(false);
+    populateOpxRootCauses(false);
+    opxExpanded.clear();
+    opxRefresh();
+  }
+
+  function resyncAirRecsFromShared() {
+    const sel = $('airService');
+    if (!sel || ![...sel.options].some(o => o.value === SHARED_FILTER.service)) return;
+    sel.value = SHARED_FILTER.service;
+    populateAirProducts();
+    populateAirWeeks();
+    applySharedFilterWeeksIfValid('airWeekFrom', 'airWeekTo');
+    populateAirSymptoms(false);
+    airRefresh();
+    loadGapsData();
   }
 
   // ====================================================================
@@ -1031,26 +1172,33 @@
   const chartInstances = {};
 
   async function fetchTableEntities() {
-    const merged = [];
-    for (const svc of serviceConfigs) {
+    // Fetch all Service Offerings' tables CONCURRENTLY instead of one-at-a-time.
+    // With N service offerings this turns N sequential round-trip chains into one
+    // parallel wait, which is the single biggest lever on initial load time.
+    const results = await Promise.all(serviceConfigs.map(async (svc) => {
       try {
         const rows = await fetchOneTable(svc);
         // Tag each row with its service (overrides whatever the row carried) so
         // the Service dropdown filter works consistently across both tables.
-        for (const r of rows) {
-          r.Service = svc.name;
-          merged.push(r);
-        }
+        for (const r of rows) r.Service = svc.name;
+        return rows;
       } catch (e) {
         console.warn('Failed to load service "' + svc.name + '":', e.message);
+        return [];
       }
-    }
-    return merged;
+    }));
+    return results.flat();
   }
 
   async function fetchOneTable(svc) {
     const all = [];
-    let url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas;
+    // Push the per-Service-Offering retention cutoff into the OData query itself
+    // (server-side $filter) instead of only filtering client-side after download.
+    // This avoids transferring/parsing rows that would just be discarded, which
+    // matters most right after a cleanup lag or if a scheduled purge is missed.
+    const cutoff = SERVICE_WW_CUTOFF[svc.name];
+    const filterQS = cutoff ? '&$filter=' + encodeURIComponent("PartitionKey ge '" + cutoff + "'") : '';
+    let url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas + filterQS;
     while (url) {
       const res = await fetch(url, { headers: { Accept: 'application/json;odata=nometadata' } });
       if (!res.ok) throw new Error('Table HTTP ' + res.status + ': ' + (await res.text()));
@@ -1059,7 +1207,7 @@
       const nPK = res.headers.get('x-ms-continuation-NextPartitionKey');
       const nRK = res.headers.get('x-ms-continuation-NextRowKey');
       if (nPK) {
-        url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas +
+        url = svc.tableBaseUrl + '/' + svc.tableName + '()?' + svc.tableSas + filterQS +
               '&NextPartitionKey=' + encodeURIComponent(nPK) +
               (nRK ? '&NextRowKey=' + encodeURIComponent(nRK) : '');
       } else { url = null; }
@@ -1080,6 +1228,31 @@
     }
     const weeks = Object.keys(byWeek).sort();
     return { byWeek, weeks, categories: [...cats].sort() };
+  }
+
+  // Distinct sorted YearWeeks available for a given Service Offering. Used so every
+  // tab's WW dropdown is scoped to that offering's own data (Requirement: "WW dropdown
+  // must update when Service Offering changes"), instead of the merged/global week list.
+  function weeksMatchingService(svc, entities) {
+    const pool = entities || allEntities || [];
+    const set = new Set();
+    for (const e of pool) {
+      const match = (svc === 'Productivity Tools') ? (!e.Service || e.Service === 'Productivity Tools') : (e.Service === svc);
+      if (!match) continue;
+      const w = e.PartitionKey || e.YearWeek;
+      if (w) set.add(w);
+    }
+    return [...set].sort();
+  }
+
+  // Populates a Service Offering <select> from serviceConfigs (config.json) instead of
+  // hardcoded <option> tags, so new/removed offerings show up without a code change.
+  function populateServiceDropdown(selId) {
+    const sel = $(selId);
+    if (!sel || !serviceConfigs.length) return;
+    const prev = sel.value;
+    sel.innerHTML = serviceConfigs.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>').join('');
+    if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
   }
 
   // Generic aggregation by any entity field (Subcategory, PossibleRootCause, etc.)
@@ -1740,11 +1913,12 @@
         err.innerHTML = '<h3>No trend data yet</h3><p>Run the analyzer runbook to populate weekly data.</p>';
         err.style.display = 'block'; tpLoaded = true; return;
       }
-      tpPopulateWeeks(aggregated.weeks);
-      $('tpService').addEventListener('change', tpRefresh);
+      populateServiceDropdown('tpService');
+      tpPopulateWeeks(weeksMatchingService($('tpService').value));
+      $('tpService').addEventListener('change', () => { tpPopulateWeeks(weeksMatchingService($('tpService').value)); tpRefresh(); });
       $('tpWeekFrom').addEventListener('change', tpRefresh);
       $('tpWeekTo').addEventListener('change', tpRefresh);
-      $('tpResetBtn').addEventListener('click', () => { tpPopulateWeeks(aggregated.weeks); tpRefresh(); });
+      $('tpResetBtn').addEventListener('click', () => { tpPopulateWeeks(weeksMatchingService($('tpService').value)); tpRefresh(); });
       loading.style.display = 'none'; content.style.display = 'block';
       tpRefresh();
       tpLoaded = true;
@@ -2024,13 +2198,14 @@
         err.innerHTML = '<h3>No data yet</h3><p>Run the analyzer runbook to populate weekly data.</p>';
         err.style.display = 'block'; rcLoaded = true; return;
       }
-      rcPopulateWeeks(aggregated.weeks);
-      $('rcService').addEventListener('change', rcRefresh);
+      populateServiceDropdown('rcService');
+      rcPopulateWeeks(weeksMatchingService($('rcService').value));
+      $('rcService').addEventListener('change', () => { rcPopulateWeeks(weeksMatchingService($('rcService').value)); rcRefresh(); });
       $('rcWeekFrom').addEventListener('change', rcRefresh);
       $('rcWeekTo').addEventListener('change', rcRefresh);
       $('rcMode').addEventListener('change', rcRefresh);
       $('rcTopN').addEventListener('change', rcRefresh);
-      $('rcResetBtn').addEventListener('click', () => { rcPopulateWeeks(aggregated.weeks); rcRefresh(); });
+      $('rcResetBtn').addEventListener('click', () => { rcPopulateWeeks(weeksMatchingService($('rcService').value)); rcRefresh(); });
       $('rcDrillProduct').addEventListener('change', () => rcRenderDrillCharts(rcFilteredEntities()));
       loading.style.display = 'none'; content.style.display = 'block';
       rcRefresh();
@@ -2524,13 +2699,30 @@
     const subValue = $('opxSubcategory').value;
     const rcValue  = $('opxRootCause').value;
     const base = opxBaseFiltered();
-    return base.filter(e => {
+    const scoped = base.filter(e => {
       if (subValue !== '__all__' && (e.Subcategory || '').trim() !== subValue) return false;
       if (rcValue  !== '__all__') {
         const rc = (e.PossibleRootCause || e.RootCause || '').trim();
         if (rc !== rcValue) return false;
       }
       return true;
+    });
+    return opxApplySearch(scoped);
+  }
+
+  // Free-text search across Incident #, Product, Symptom, Root Cause and AI analysis
+  // text. Applied on top of the Service/Product/Subcategory/RootCause/WW dropdown
+  // filters (never replaces them), so search + filters combine with AND semantics.
+  function opxApplySearch(entities) {
+    const searchEl = $('opxSearch');
+    const q = searchEl ? searchEl.value.trim().toLowerCase() : '';
+    if (!q) return entities;
+    return entities.filter(e => {
+      const haystack = [
+        e.RowKey, e.Category, e.Subcategory, e.PossibleRootCause, e.RootCause,
+        e.DetailedRootCause, e.AIAnalysis
+      ].map(v => (v == null ? '' : String(v)).toLowerCase());
+      return haystack.some(v => v.includes(q));
     });
   }
 
@@ -2555,17 +2747,17 @@
   function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
   function opxParseKey(k)     { return { product: '', subcategory: '', rootCause: k || '' }; }
 
-  // Weeks (ascending) currently selected in the toolbar, scoped to aggregated.weeks.
+  // Weeks (ascending) currently selected in the toolbar, scoped to the selected Service Offering.
   function opxWeeksInRange() {
     const from = $('opxWeekFrom').value, to = $('opxWeekTo').value;
-    return (aggregated && aggregated.weeks ? aggregated.weeks : []).filter(w => w >= from && w <= to);
+    return weeksMatchingService($('opxService').value).filter(w => w >= from && w <= to);
   }
 
   // For each pattern in `filtered`, compute history-aware stats across the WHOLE
   // service (opxAllInService): per-week counts (last 6 wks), spike flag (current
   // WW > 2x avg of prior 4), repeat flag (>=4 of last 6 wks).
   function opxBuildPatternStats(filtered) {
-    const weeksAll = aggregated && aggregated.weeks ? aggregated.weeks : [];
+    const weeksAll = weeksMatchingService($('opxService').value);
     const last6    = weeksAll.slice(-6);
     const currentWW= weeksAll[weeksAll.length - 1] || '';
 
@@ -2845,7 +3037,7 @@
 
   function opxBuildSparkline(rowKey, category, sub) {
     // Mini 6-week sparkline of (Category + Subcategory) occurrences across opxAllInService
-    const weeks = aggregated && aggregated.weeks ? aggregated.weeks.slice(-6) : [];
+    const weeks = weeksMatchingService($('opxService').value).slice(-6);
     if (weeks.length === 0) return '';
     const byWeek = {};
     for (const e of opxAllInService) {
@@ -3206,19 +3398,34 @@
         err.innerHTML = '<h3>No incident data yet</h3><p>Run the analyzer runbook to populate incidents.</p>';
         err.style.display = 'block'; opxLoaded = true; return;
       }
+      populateServiceDropdown('opxService');
+      // Seed from the cross-tab shared filter (Summary / Ops Report+ / AI Recs) if one
+      // of those tabs already set a Service Offering + WW range.
+      applySharedFilterServiceIfValid('opxService');
       opxRebuildFirstSeen();
       populateOpxProducts();
-      populateOpxWeeks(aggregated.weeks);
+      populateOpxWeeks(weeksMatchingService($('opxService').value));
+      applySharedFilterWeeksIfValid('opxWeekFrom', 'opxWeekTo');
       populateOpxSubcategories(false);
       populateOpxRootCauses(false);
       $('opxService').addEventListener('change', () => {
-        opxRebuildFirstSeen(); populateOpxProducts(); populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
+        opxRebuildFirstSeen(); populateOpxProducts();
+        populateOpxWeeks(weeksMatchingService($('opxService').value));
+        populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
+        pushSharedFilter('opx', $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
       });
       $('opxProduct').addEventListener('change', () => { populateOpxSubcategories(false); populateOpxRootCauses(false); opxRefresh(); });
       $('opxSubcategory').addEventListener('change', () => { populateOpxRootCauses(false); opxRefresh(); });
       $('opxRootCause').addEventListener('change', opxRefresh);
-      $('opxWeekFrom').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
-      $('opxWeekTo').addEventListener('change', () => { populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh(); });
+      $('opxSearch').addEventListener('input', opxRefresh);
+      $('opxWeekFrom').addEventListener('change', () => {
+        populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh();
+        pushSharedFilter('opx', $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
+      });
+      $('opxWeekTo').addEventListener('change', () => {
+        populateOpxSubcategories(true); populateOpxRootCauses(true); opxRefresh();
+        pushSharedFilter('opx', $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
+      });
       // View-mode toggle (Patterns / Incidents)
       document.querySelectorAll('#opxViewToggle .opx-view-btn').forEach(btn => {
         btn.addEventListener('click', () => {
@@ -3237,8 +3444,9 @@
       $('opxResetBtn').addEventListener('click', () => {
         $('opxProduct').value = 'All Products';
         opxActiveFlags.clear();
+        if ($('opxSearch')) $('opxSearch').value = '';
         // Default WW range back to the most recent 4 weeks rather than the full history
-        const weeks = aggregated.weeks || [];
+        const weeks = weeksMatchingService($('opxService').value);
         const recent = weeks.slice(-4);
         const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
         $('opxWeekFrom').innerHTML = opts; $('opxWeekTo').innerHTML = opts;
@@ -3248,6 +3456,7 @@
         populateOpxRootCauses(false);
         opxExpanded.clear();
         opxRefresh();
+        pushSharedFilter('opx', $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
       });
       $('opxDownloadBtn').addEventListener('click', opxDownloadCsv);
       loading.style.display = 'none'; content.style.display = 'block';
@@ -3364,7 +3573,7 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   // All known work weeks (ascending).
-  const airAllWeeks = () => (aggregated && aggregated.weeks ? aggregated.weeks.slice() : []);
+  const airAllWeeks = () => weeksMatchingService($('airService') ? $('airService').value : 'Productivity Tools');
 
   // The work-week window the user has selected (From/To dropdowns).
   // Defaults to the most recent 7 weeks until the dropdowns are populated.
@@ -4151,20 +4360,33 @@
         err.innerHTML = '<h3>No incident data yet</h3><p>Run the analyzer runbook to populate incidents.</p>';
         err.style.display = 'block'; airLoaded = true; return;
       }
+      populateServiceDropdown('airService');
+      applySharedFilterServiceIfValid('airService');
       populateAirProducts();
       populateAirWeeks();
+      applySharedFilterWeeksIfValid('airWeekFrom', 'airWeekTo');
       populateAirSymptoms(false);
-      $('airService').addEventListener('change', () => { populateAirProducts(); populateAirSymptoms(false); airRefresh(); loadGapsData(); });
+      $('airService').addEventListener('change', () => {
+        populateAirProducts(); populateAirWeeks(); populateAirSymptoms(false); airRefresh(); loadGapsData();
+        pushSharedFilter('air', $('airService').value, $('airWeekFrom').value, $('airWeekTo').value);
+      });
       $('airProduct').addEventListener('change', () => { populateAirSymptoms(false); airRefresh(); });
       $('airSymptom').addEventListener('change', airRefresh);
-      $('airWeekFrom').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
-      $('airWeekTo').addEventListener('change', () => { populateAirSymptoms(true); airRefresh(); });
+      $('airWeekFrom').addEventListener('change', () => {
+        populateAirSymptoms(true); airRefresh();
+        pushSharedFilter('air', $('airService').value, $('airWeekFrom').value, $('airWeekTo').value);
+      });
+      $('airWeekTo').addEventListener('change', () => {
+        populateAirSymptoms(true); airRefresh();
+        pushSharedFilter('air', $('airService').value, $('airWeekFrom').value, $('airWeekTo').value);
+      });
       $('airResetBtn').addEventListener('click', () => {
         $('airProduct').value = 'All Products';
         airConfidenceFlag = 'all';
         populateAirWeeks();
         populateAirSymptoms(false);
         airRefresh();
+        pushSharedFilter('air', $('airService').value, $('airWeekFrom').value, $('airWeekTo').value);
       });
       loading.style.display = 'none'; content.style.display = 'block';
       airRefresh();
@@ -5347,6 +5569,9 @@
         .concat(serviceConfigs.map(s => '<option value="' + esc(s.name) + '">' + esc(s.name) + '</option>'));
       svcSel.innerHTML = svcOpts.join('');
       svcSel.value = serviceConfigs.length === 1 ? serviceConfigs[0].name : 'all';
+      // Honour the cross-tab shared filter (Summary / Ops Report+ / AI Recs) if a
+      // Service Offering was already selected on one of those tabs.
+      applySharedFilterServiceIfValid('smService');
 
       const fromSel = $('smFromWeek');
       const toSel = $('smToWeek');
@@ -5505,14 +5730,17 @@
         rebuildRangeSelectors();
         rebuildDrillProductOptions();
         render();
+        pushSharedFilter('sm', svcSel.value, fromSel.value, toSel.value);
       });
       fromSel.addEventListener('change', () => {
         rebuildDrillProductOptions();
         render();
+        pushSharedFilter('sm', svcSel.value, fromSel.value, toSel.value);
       });
       toSel.addEventListener('change', () => {
         rebuildDrillProductOptions();
         render();
+        pushSharedFilter('sm', svcSel.value, fromSel.value, toSel.value);
       });
       sankeyTopNSel.addEventListener('change', render);
       drillProd.addEventListener('change', () => {
@@ -5526,9 +5754,15 @@
         rebuildRangeSelectors();
         rebuildDrillProductOptions();
         render();
+        pushSharedFilter('sm', svcSel.value, fromSel.value, toSel.value);
       });
 
+      smRebuildRangeRef = rebuildRangeSelectors;
+      smRebuildDrillRef = rebuildDrillProductOptions;
+      smRenderRef = render;
+
       rebuildRangeSelectors();
+      applySharedFilterWeeksIfValid('smFromWeek', 'smToWeek');
       rebuildDrillProductOptions();
       render();
 

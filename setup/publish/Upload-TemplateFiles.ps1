@@ -16,13 +16,13 @@ Write-Host ""
 # Define the template files to upload
 # Blob name (what runbook expects) = local file path
 $templateFiles = @{
-    "WorkNotesCleanup_ProductivityTools.md"       = "$PSScriptRoot\..\templates\WorkNotesCleanup_ProductivityTools.md"
-    "WorkNotesSummary_ProductivityTools.md"       = "$PSScriptRoot\..\templates\WorkNotesSummary_ProductivityTools.md"
-    "TicketCategorisation_ProductivityTools.md"   = "$PSScriptRoot\..\templates\TicketCategorisation_ProductivityTools.md"
-    "TrendSubCategorisation_ProductivityTools.md" = "$PSScriptRoot\..\templates\TrendSubCategorisation_ProductivityTools.md"
-    "EnvironmentContext_ProductivityTools.md"     = "$PSScriptRoot\..\templates\EnvironmentContext_ProductivityTools.md"
-    "PossibleRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\templates\PossibleRootCause_ProductivityTools.md"
-    "DetailedRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\templates\DetailedRootCause_ProductivityTools.md"
+    "WorkNotesCleanup_ProductivityTools.md"       = "$PSScriptRoot\..\..\templates\WorkNotesCleanup_ProductivityTools.md"
+    "WorkNotesSummary_ProductivityTools.md"       = "$PSScriptRoot\..\..\templates\WorkNotesSummary_ProductivityTools.md"
+    "TicketCategorisation_ProductivityTools.md"   = "$PSScriptRoot\..\..\templates\TicketCategorisation_ProductivityTools.md"
+    "TrendSubCategorisation_ProductivityTools.md" = "$PSScriptRoot\..\..\templates\TrendSubCategorisation_ProductivityTools.md"
+    "EnvironmentContext_ProductivityTools.md"     = "$PSScriptRoot\..\..\templates\EnvironmentContext_ProductivityTools.md"
+    "PossibleRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\..\templates\PossibleRootCause_ProductivityTools.md"
+    "DetailedRootCause_ProductivityTools.md"      = "$PSScriptRoot\..\..\templates\DetailedRootCause_ProductivityTools.md"
 }
 
 try {

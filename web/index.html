@@ -1499,6 +1499,27 @@
     return ai.length > 0;
   }
 
+  // Parses the structured "Problem: / AI Analysis (Confidence): ..." text written by the
+  // updated Productivity Tools runbook. Returns null (caller falls back to plain-paragraph
+  // rendering) for older AIAnalysis rows that predate this format.
+  function opxParseStructuredAnalysis(raw) {
+    const text = (raw || '').toString().trim();
+    if (!/^Problem\s*:/i.test(text)) return null;
+    const issueM   = text.match(/-\s*Issue:\s*([\s\S]*?)(?=\n-\s*Root Cause:|\n\s*AI Analysis|$)/i);
+    const rootM    = text.match(/-\s*Root Cause:\s*([\s\S]*?)(?=\n-\s*Resolution:|\n\s*AI Analysis|$)/i);
+    const resM     = text.match(/-\s*Resolution:\s*([\s\S]*?)(?=\n-\s*Evidence:|\n\s*AI Analysis|$)/i);
+    const evM      = text.match(/-\s*Evidence:\s*([\s\S]*?)(?=\n\s*AI Analysis|$)/i);
+    const aiM      = text.match(/AI Analysis\s*\(([^)]*)\)\s*:\s*([\s\S]*)$/i);
+    if (!issueM && !rootM && !resM && !evM && !aiM) return null;
+    return {
+      issue: issueM ? issueM[1].trim() : '',
+      rootCause: rootM ? rootM[1].trim() : '',
+      resolution: resM ? resM[1].trim() : '',
+      evidence: evM ? evM[1].trim() : '',
+      reasoning: aiM ? aiM[2].trim() : ''
+    };
+  }
+
   function populateOpsProducts() {
     $('opsProduct').innerHTML = PRODUCT_LIST
       .map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
@@ -3064,8 +3085,6 @@
     // DetailedRootCause remains an optional canonical label shown separately in metadata.
     const drcRaw = (inc.DetailedRootCause || '').trim();
     const aiRaw  = (inc.AIAnalysis || '').trim();
-    const aiText = aiRaw;
-    const aiDisplay = aiText ? esc(aiText) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
 
     // Confidence badge — colour-code High/Medium/Low (same buckets the runbook emits).
     const confRaw = (inc.Confidence || '').toString().trim();
@@ -3076,6 +3095,43 @@
     else if (confKey === 'medium')  { confColor = '#d97706'; }
     else if (confKey === 'low')     { confColor = 'var(--danger)'; }
     const confBadge = '<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;background:' + confColor + ';color:#fff;font-size:0.72rem;font-weight:600;letter-spacing:0.3px;">' + esc(confLabel) + ' confidence</span>';
+
+    // New structured format ("Problem: - Issue / Root Cause / Resolution / Evidence" +
+    // separate "AI Analysis (Confidence): ..." rationale) renders as two labeled panels.
+    // Older rows without this structure fall back to the original plain-paragraph view.
+    const structured = opxParseStructuredAnalysis(aiRaw);
+    let analysisHtml;
+    if (structured) {
+      const problemRows = [
+        ['Issue', structured.issue],
+        ['Root Cause', structured.rootCause],
+        ['Resolution', structured.resolution],
+        ['Evidence', structured.evidence]
+      ].filter(([, val]) => val);
+      const problemRowsHtml = problemRows.map(([label, val]) =>
+        '<div style="margin-top:8px;">' +
+          '<div style="font-weight:700;color:var(--intel-classic);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.4px;">' + label + '</div>' +
+          '<div style="margin-top:2px;">' + esc(val) + '</div>' +
+        '</div>'
+      ).join('');
+      const reasoningDisplay = structured.reasoning ? esc(structured.reasoning) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      analysisHtml =
+        '<div style="margin-bottom:12px;">' +
+          '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
+          '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;line-height:1.5;">' + (problemRowsHtml || '<em style="color:var(--muted);">Not documented.</em>') + '</div>' +
+        '</div>' +
+        '<div>' +
+          '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
+          '<div style="margin-top:6px;padding:10px;background:#f8f9fa;border:1px solid var(--border);border-left:4px solid ' + confColor + ';border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + reasoningDisplay + '</div>' +
+        '</div>';
+    } else {
+      const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      analysisHtml =
+        '<div>' +
+          '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
+          '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + aiDisplay + '</div>' +
+        '</div>';
+    }
 
     const reportBlob = (inc.ReportBlobName || '').trim();
     const misrouted = inc.Misrouted === true || inc.Misrouted === 'true';
@@ -3091,10 +3147,7 @@
         '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Productivity Tools') + '</div>' +
         '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
       '</div>' +
-      '<div style="font-size:0.85rem;">' +
-        '<strong style="color:var(--intel-classic);">AI Analysis</strong>' + confBadge +
-        '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + aiDisplay + '</div>' +
-      '</div>' +
+      '<div style="font-size:0.85rem;">' + analysisHtml + '</div>' +
       (reportBlob ? '<div style="margin-top:8px;font-size:0.8rem;color:var(--muted);">Weekly report blob: <code>' + esc(reportBlob) + '</code></div>' : '') +
     '</div>';
   }

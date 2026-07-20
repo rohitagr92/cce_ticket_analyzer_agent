@@ -953,10 +953,19 @@ function ConvertFrom-AiCategoryResponse {
     # IMPORTANT: every primary_category/exclusion_reason lookahead MUST include
     # 'Sub-symptom' so the sub-symptom line does not bleed into the category text.
     $patterns = @{
-        'primary_category'     = "(?s)\*{0,2}Primary Category:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Exclusion|\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'exclusion_reason'     = "(?s)\*{0,2}Exclusion Reason:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'sub_symptom'          = "(?s)\*{0,2}Sub-symptom:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
-        'confidence_level'     = "(?s)\*{0,2}Confidence Level:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        'primary_category'     = "(?s)\*{0,2}Primary Category:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Exclusion|\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Issue|\n\*{0,2}Root Cause Narrative|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        'exclusion_reason'     = "(?s)\*{0,2}Exclusion Reason:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Sub-symptom|\n\*{0,2}Confidence|\n\*{0,2}Issue|\n\*{0,2}Root Cause Narrative|\n\*{0,2}Reasoning|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        'sub_symptom'          = "(?s)\*{0,2}Sub-symptom:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Confidence|\n\*{0,2}Issue|\n\*{0,2}Root Cause Narrative|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        'confidence_level'     = "(?s)\*{0,2}Confidence Level:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Issue|\n\*{0,2}Root Cause Narrative|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        # NOTE: colon after 'Issue' is REQUIRED (not optional) here. Unlike the other field
+        # names, the bare word "Issue" is a substring of "Issues" which appears at the end of
+        # almost every category/sub-symptom label in this system (e.g. "Microsoft OneDrive
+        # Issues", "Access & Permission Issues"). With an optional colon, this pattern would
+        # match that embedded "Issue" on the Primary Category/Sub-symptom line instead of the
+        # real "Issue:" field further down, truncating the captured value to a stray trailing
+        # "s" and leaking the next line into it. Requiring the colon avoids that false match.
+        'issue'                = "(?s)\*{0,2}Issue:\*{0,2}\s*(.+?)(?=\n\*{0,2}Root Cause Narrative|\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
+        'root_cause_narrative' = "(?s)\*{0,2}Root Cause Narrative:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Confidence|\n\*{0,2}Reasoning|\n\*{0,2}Key Evidence|\n\*{0,2}Resolution|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
         'reasoning'            = "(?s)\*{0,2}Reasoning:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Key Evidence|\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
         'key_evidence'         = "(?s)\*{0,2}Key Evidence:?\*{0,2}\s*(.+?)(?=\n\*{0,2}Resolution Summary|\n\*{0,2}How Do I|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
         'resolution_summary'   = "(?s)\*{0,2}Resolution Summary:?\*{0,2}\s*(.+?)(?=\n\*{0,2}How Do I|\n\*{0,2}KB Provided|\n\*{0,2}Possible Root|\n\*{0,2}Detailed Root|\Z)"
@@ -1468,6 +1477,8 @@ function Get-MergedWeeklyRunData {
                 $converted.Misrouted         = [bool]($converted.Category -eq 'Excluded')
                 $converted.ExclusionReason = [string]$ticket.ExclusionReason
                 $converted.Confidence = [string]$ticket.Confidence
+                $converted.Issue = [string]$ticket.Issue
+                $converted.RootCauseNarrative = [string]$ticket.RootCauseNarrative
                 $converted.Reasoning = [string]$ticket.Reasoning
                 $converted.Evidence = [string]$ticket.Evidence
                 $converted.Resolution = [string]$ticket.Resolution
@@ -1715,6 +1726,27 @@ function Invoke-TicketProcessing {
         $ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$categoryInfo.confidence_level) -RootCausesKnown $rootCausesKnown
         if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.confidence_level)) {
             Write-ScriptLog "Confidence not parsed for $($Incident.number) - defaulted to '$($ticket.Confidence)' (rootCausesKnown=$rootCausesKnown)" -Level Info -Category "Categorization"
+        }
+
+        # Fresh, ticket-specific Issue + Root Cause Narrative sentences for the Problem
+        # block shown in the web app. These are distinct from the strict PossibleRootCause
+        # catalog label above - the AI must write these based on THIS ticket's own work notes.
+        if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.issue)) {
+            $ticket.Issue = [string]$Incident.short_description
+            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] Issue empty from AI - using short_description fallback" -Level Warning -Category "TemplateCompliance"
+        } else {
+            $ticket.Issue = [string]$categoryInfo.issue
+        }
+
+        if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.root_cause_narrative)) {
+            $ticket.RootCauseNarrative = if (-not [string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
+                "Root cause not documented beyond the catalog classification of $($ticket.PossibleRootCause)."
+            } else {
+                'Root cause not documented in the available work notes.'
+            }
+            Write-ScriptLog "TEMPLATE-AI-ANALYSIS [$($Incident.number)] Root Cause Narrative empty from AI - using fallback" -Level Warning -Category "TemplateCompliance"
+        } else {
+            $ticket.RootCauseNarrative = [string]$categoryInfo.root_cause_narrative
         }
 
         # Always persist a non-empty reasoning narrative so AIAnalysis (and the AI
@@ -2045,9 +2077,13 @@ function Save-CategoryStatisticsToTable {
                     "ReportBlobName"    = [string]$ReportBlobName
                     # Free-form AI rationale + confidence shown in the web Ops report
                     # incident-detail modal alongside the canonical DetailedRootCause.
-                    # AIAnalysis is sourced from $ticket.Reasoning (the AI's narrative);
+                    # AIAnalysis is a structured "Problem: Issue/Root Cause/Resolution/Evidence"
+                    # block plus a separate AI Analysis (confidence) rationale paragraph;
                     # cap to keep Azure Table single-property size sane (64 KiB hard limit).
-                    "AIAnalysis"        = if (([string]$ticket.Reasoning).Length -gt 4000) { ([string]$ticket.Reasoning).Substring(0, 4000) + '...' } else { [string]$ticket.Reasoning }
+                    "AIAnalysis"        = $(
+                        $structuredAnalysis = Format-StructuredAiAnalysis -Ticket $ticket
+                        if ($structuredAnalysis.Length -gt 4000) { $structuredAnalysis.Substring(0, 4000) + '...' } else { $structuredAnalysis }
+                    )
                     "Confidence"        = [string]$ticket.Confidence
                 }
                 
@@ -2692,6 +2728,44 @@ function Get-FallbackReasoning {
     return (Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $CategoryInfo)
 }
 
+function Format-StructuredAiAnalysis {
+    <#
+    .SYNOPSIS
+        Composes the structured Problem/AI Analysis text stored in the Azure Table
+        AIAnalysis column and rendered by the web app's incident detail view:
+
+        Problem:
+        - Issue: ...
+        - Root Cause: ...
+        - Resolution: ...
+        - Evidence: ...
+
+        AI Analysis (<Confidence> Confidence): <reasoning>
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Ticket
+    )
+
+    $issue      = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) { 'Not documented.' } else { [string]$Ticket.Issue }
+    $rootCause  = if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) { 'Not documented.' } else { [string]$Ticket.RootCauseNarrative }
+    $resolution = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Resolution)) { 'Not documented in work notes.' } else { [string]$Ticket.Resolution }
+    $evidence   = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Evidence)) { 'Not documented in work notes.' } else { [string]$Ticket.Evidence }
+    $confidence = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Confidence)) { 'Unknown' } else { [string]$Ticket.Confidence }
+    $reasoning  = [string]$Ticket.Reasoning
+
+    return (
+        "Problem:`n" +
+        "- Issue: $issue`n" +
+        "- Root Cause: $rootCause`n" +
+        "- Resolution: $resolution`n" +
+        "- Evidence: $evidence`n" +
+        "`n" +
+        "AI Analysis ($confidence Confidence): $reasoning"
+    )
+}
+
 function Test-LabelStyleReasoning {
     [CmdletBinding()]
     param([string]$Text)
@@ -2716,6 +2790,17 @@ function Ensure-TicketAiFields {
         -not [string]::IsNullOrWhiteSpace([string]$Ticket.DetailedRootCause)
     )
     $Ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$Ticket.Confidence) -RootCausesKnown $rootCausesKnown
+
+    if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) {
+        $Ticket.Issue = if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.OriginalDescription)) { [string]$Ticket.OriginalDescription } else { 'Not documented.' }
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) {
+        $Ticket.RootCauseNarrative = if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.PossibleRootCause)) {
+            "Root cause not documented beyond the catalog classification of $($Ticket.PossibleRootCause)."
+        } else {
+            'Root cause not documented in the available work notes.'
+        }
+    }
 
     $fallbackInfo = if ($CategoryInfo) {
         $CategoryInfo
@@ -2994,6 +3079,8 @@ class TicketAnalysis {
     [bool]$Misrouted              # True if Category = "Excluded"
     [string]$ExclusionReason
     [string]$Confidence
+    [string]$Issue                # Fresh AI-written sentence: what the user reported (Problem block)
+    [string]$RootCauseNarrative   # Fresh AI-written sentence: ticket-specific root cause (Problem block)
     [string]$Reasoning
     [string]$Evidence
     [string]$Resolution

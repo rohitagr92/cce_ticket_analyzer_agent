@@ -108,12 +108,16 @@ $outputFormatInstruction = @'
 
 ## REQUIRED OUTPUT FORMAT (STRICT)
 
-You MUST end your response with exactly these four labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
+You MUST end your response with exactly these eight labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
 
 Primary Category: <one of the bold category names defined above, or "Excluded">
 Sub-symptom: <EXACT bold header label from the Sub-symptom reference above for the chosen category — e.g. "Sync Issues", "Licensing Issues". Do NOT invent or paraphrase.>
 Possible Root Cause: <EXACT bold label from the chosen product table in the Possible Root Cause reference above. Copy verbatim. If no label fits, write "Unknown".>
-AI Analysis: <Detailed 4-6 sentence incident narrative covering: (1) user-reported issue and impact, (2) strongest evidence from work/close notes, (3) most likely root cause, (4) exact remediation performed, and (5) preventive follow-up/checks.>
+Issue: <One fresh sentence, in your own words, stating what the user reported and its impact. Do NOT copy the short_description verbatim.>
+Root Cause Narrative: <1-2 fresh sentences, in your own words, on what the work notes show actually caused THIS ticket's issue. If not conclusively proven, say so plainly instead of guessing.>
+Resolution: <1-2 sentences on the exact remediation steps performed and the outcome, drawn from work/close notes. If not documented, write "Not documented in work notes.">
+Evidence: <The strongest supporting quote(s)/phrases from the work or close notes backing up the above. If none captured, write "Not documented in work notes.">
+AI Analysis: <A CATEGORY-JUSTIFICATION paragraph (not a retelling of Issue/Root Cause/Resolution/Evidence) explaining WHY the evidence supports this Primary Category, Sub-symptom, and Possible Root Cause over the next-most-plausible alternative.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
@@ -121,7 +125,7 @@ Rules:
 - Sub-symptom MUST be an exact bold header from the Sub-symptom catalog (not a bullet description).
 - Possible Root Cause MUST be an exact bold label from the Possible Root Cause catalog (not a sentence).
 - If unknown, write "Unknown".
-- Keep each value on a single line.
+- Keep each value on a single line, except Root Cause Narrative/Resolution/Evidence/AI Analysis which may be 1-2 sentences.
 '@
 # Build system prompt from all 4 canonical templates — same enforcement as incident-analyzer-rb-prodtools.ps1.
 # This ensures Sub-symptom and Possible Root Cause are always strict labels from the template catalogs,
@@ -225,17 +229,21 @@ function Get-FieldFromResponse {
 }
 $AllFieldLabels = @(
     'Primary Category', 'Sub-symptom', 'Subcategory', 'Sub symptom',
-    'Possible Root Cause', 'Root Cause', 'AI Analysis', 'Analysis',
-    'Exclusion Reason', 'Confidence', 'Reasoning', 'Key Evidence'
+    'Possible Root Cause', 'Root Cause', 'Root Cause Narrative', 'AI Analysis', 'Analysis',
+    'Exclusion Reason', 'Confidence', 'Reasoning', 'Key Evidence', 'Issue', 'Resolution', 'Evidence'
 )
 function Get-StructuredFields {
     param([string]$Text)
     return [PSCustomObject]@{
-        Category    = (Get-FieldFromResponse -Text $Text -Labels @('Primary Category') -StopLabels $AllFieldLabels)
-        Subcategory = (Get-FieldFromResponse -Text $Text -Labels @('Sub-symptom','Subcategory','Sub symptom') -StopLabels $AllFieldLabels)
-        RootCause   = (Get-FieldFromResponse -Text $Text -Labels @('Possible Root Cause','Root Cause') -StopLabels $AllFieldLabels)
-        Confidence  = (Get-FieldFromResponse -Text $Text -Labels @('Confidence','Confidence Level') -StopLabels $AllFieldLabels)
-        Analysis    = (Get-FieldFromResponse -Text $Text -Labels @('AI Analysis','Analysis') -StopLabels $AllFieldLabels)
+        Category           = (Get-FieldFromResponse -Text $Text -Labels @('Primary Category') -StopLabels $AllFieldLabels)
+        Subcategory        = (Get-FieldFromResponse -Text $Text -Labels @('Sub-symptom','Subcategory','Sub symptom') -StopLabels $AllFieldLabels)
+        RootCause          = (Get-FieldFromResponse -Text $Text -Labels @('Possible Root Cause','Root Cause') -StopLabels $AllFieldLabels)
+        Confidence         = (Get-FieldFromResponse -Text $Text -Labels @('Confidence','Confidence Level') -StopLabels $AllFieldLabels)
+        Issue              = (Get-FieldFromResponse -Text $Text -Labels @('Issue') -StopLabels $AllFieldLabels)
+        RootCauseNarrative = (Get-FieldFromResponse -Text $Text -Labels @('Root Cause Narrative') -StopLabels $AllFieldLabels)
+        Resolution         = (Get-FieldFromResponse -Text $Text -Labels @('Resolution') -StopLabels $AllFieldLabels)
+        Evidence           = (Get-FieldFromResponse -Text $Text -Labels @('Evidence') -StopLabels $AllFieldLabels)
+        Analysis           = (Get-FieldFromResponse -Text $Text -Labels @('AI Analysis','Analysis') -StopLabels $AllFieldLabels)
     }
 }
 
@@ -329,11 +337,42 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
             if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
 
+            # Problem-block fields (Issue / Root Cause Narrative / Resolution / Evidence) -
+            # same structured AIAnalysis format as incident-analyzer-rb-prodtools's
+            # Format-StructuredAiAnalysis, so rows written by this runbook render identically
+            # in the web app's bold-heading Problem section instead of falling back to
+            # "Not documented." placeholders.
+            $issue = $fields.Issue
+            if ([string]::IsNullOrWhiteSpace($issue)) {
+                $issue = if (-not [string]::IsNullOrWhiteSpace([string]$inc.short_description)) { [string]$inc.short_description } else { 'Not documented.' }
+            }
+            $rootNarrative = $fields.RootCauseNarrative
+            if ([string]::IsNullOrWhiteSpace($rootNarrative)) {
+                $rootNarrative = if (-not [string]::IsNullOrWhiteSpace($root)) { 'Root cause not documented beyond the catalog classification of ' + $root + '.' } else { 'Root cause not documented in the available work notes.' }
+            }
+            $resolution = $fields.Resolution
+            if ([string]::IsNullOrWhiteSpace($resolution)) { $resolution = 'Not documented in work notes.' }
+            $evidence = $fields.Evidence
+            if ([string]::IsNullOrWhiteSpace($evidence)) { $evidence = 'Not documented in work notes.' }
+            if ($issue.Length -gt 500)         { $issue = $issue.Substring(0, 500) + '...' }
+            if ($rootNarrative.Length -gt 800) { $rootNarrative = $rootNarrative.Substring(0, 800) + '...' }
+            if ($resolution.Length -gt 800)    { $resolution = $resolution.Substring(0, 800) + '...' }
+            if ($evidence.Length -gt 800)      { $evidence = $evidence.Substring(0, 800) + '...' }
+
+            $structuredAnalysis = "Problem:`n" +
+                "- Issue: $issue`n" +
+                "- Root Cause: $rootNarrative`n" +
+                "- Resolution: $resolution`n" +
+                "- Evidence: $evidence`n" +
+                "`n" +
+                "AI Analysis ($conf Confidence): $anal"
+            if ($structuredAnalysis.Length -gt 4000) { $structuredAnalysis = $structuredAnalysis.Substring(0, 4000) + '...' }
+
             $props = @{
                 'Category'       = [string]$category
                 'Subcategory'    = [string]$subcat
                 'RootCause'      = [string]$root
-                'AIAnalysis'     = [string]$anal
+                'AIAnalysis'     = [string]$structuredAnalysis
                 'Confidence'     = [string]$conf
                 'Date'           = [string]$resolvedDt.ToString('yyyy-MM-dd')
                 'YearWeek'       = [string]$yw.YearWeek

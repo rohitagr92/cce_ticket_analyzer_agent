@@ -39,9 +39,22 @@
   header h1 { margin: 0 0 4px 0; font-size: 1.8rem; font-weight: 600; }
   header p.subtitle { margin: 0 0 20px 0; color: rgba(255,255,255,0.85); font-size: 0.95rem; }
   .user-bar { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+  .user-actions { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
   .user-info { font-size: 0.85rem; color: rgba(255,255,255,0.9); margin-right: 12px; }
   .signout { color: #fff; text-decoration: none; background: rgba(255,255,255,0.15); padding: 6px 14px; border-radius: 999px; font-size: 0.85rem; border: 1px solid rgba(255,255,255,0.25); }
   .signout:hover { background: rgba(255,255,255,0.25); }
+  .feedback-portal {
+    display: inline-flex; align-items: center; gap: 8px;
+    color: rgba(255,255,255,0.92); text-decoration: none;
+    background: rgba(255,255,255,0.12); border: 1px solid rgba(255,255,255,0.22);
+    padding: 10px 16px; border-radius: 999px; font-size: 0.9rem; font-weight: 500;
+    transition: all .2s ease; box-shadow: 0 8px 18px rgba(0,0,0,0.12);
+  }
+  .feedback-portal:hover {
+    background: rgba(255,255,255,0.22); border-color: rgba(255,255,255,0.35);
+    color: #fff; transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
 
   .tabs { display: flex; gap: 4px; margin-top: 6px; }
   .tab {
@@ -73,7 +86,9 @@
     header { padding: 18px 18px 10px 18px; }
     .tabs { gap: 8px; }
     .tab { width: 100%; justify-content: center; }
-    #feedbackBtn { margin-left: 0; width: 100%; justify-content: center; }
+    .user-bar { align-items: stretch; }
+    .user-actions { align-items: flex-start; }
+    .feedback-portal { width: 100%; justify-content: center; }
   }
 
   main { max-width: 1400px; margin: 0 auto; padding: 28px 32px 40px; }
@@ -547,9 +562,12 @@
              visible, non-editable indicator per onboarding requirements. -->
         <span class="label-inline" style="font-size:0.76rem;">Service scope: <strong>End User Collaboration / End User Conferencing</strong></span>
       </div>
-      <div>
+      <div class="user-actions">
         <span class="user-info" id="userInfo">Loading...</span>
         <a class="signout" href="/.auth/logout">Sign out</a>
+        <a class="feedback-portal" id="feedbackBtn" href="https://intel.sharepoint.com/sites/aiincidentanalyzer/_layouts/15/listforms.aspx?cid=ZGFkYWRjODEtNDExNS00ZDMwLWE3MDUtZDk2YjAxNzE5ODU2&nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi" target="_blank" rel="noopener" title="Open the feedback and improvement portal">
+          <span class="icon">&#128231;</span> Feedback &amp; Improvement Portal
+        </a>
       </div>
     </div>
     <div class="tabs" role="tablist">
@@ -571,9 +589,6 @@
       <button class="tab" role="tab" data-tab="airecs">
         <span class="icon">&#129504;</span> AI Recommendation( Preview)
       </button>
-      <a class="tab" id="feedbackBtn" href="https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi" target="_blank" rel="noopener" style="margin-left:auto;text-decoration:none;" title="Open the feedback and improvement portal">
-        <span class="icon">&#128231;</span> Feedback &amp; Improvement Portal
-      </a>
     </div>
   </div>
 </header>
@@ -6065,44 +6080,6 @@
       err.style.display = 'block';
     }
   }
-
-  // --- Feedback button handler ---
-  $('feedbackBtn').addEventListener('click', () => {
-    const feedbackEmail = '7d20a744.intel.onmicrosoft.com@amer.teams.ms';
-    const subject = encodeURIComponent('[AI Incident Analyzer] Dashboard Feedback');
-    const body = encodeURIComponent(
-      `Dashboard Feedback Report\n` +
-      `================================\n\n` +
-      `Dashboard URL: ${window.location.href}\n` +
-      `Submitted: ${new Date().toLocaleString()}\n\n` +
-      `FEEDBACK CATEGORY\n` +
-      `- [ ] Feature Request\n` +
-      `- [ ] Bug Report\n` +
-      `- [ ] Data Issue\n` +
-      `- [ ] Performance Issue\n` +
-      `- [ ] UI/UX Improvement\n` +
-      `- [ ] Other\n\n` +
-      `ISSUE SUMMARY\n` +
-      `<Provide a clear, concise description of your feedback>\n\n` +
-      `SEVERITY LEVEL\n` +
-      `- [ ] Critical (Blocks Analysis)\n` +
-      `- [ ] High (Significant Impact)\n` +
-      `- [ ] Medium (Minor Impact)\n` +
-      `- [ ] Low (Enhancement)\n\n` +
-      `DETAILED DESCRIPTION\n` +
-      `<Describe what happened, expected behavior, and actual behavior>\n\n` +
-      `STEPS TO REPRODUCE (if applicable)\n` +
-      `1. \n` +
-      `2. \n` +
-      `3. \n\n` +
-      `SCREENSHOTS/ATTACHMENTS\n` +
-      `<Mention any attached files>\n\n` +
-      `ADDITIONAL CONTEXT\n` +
-      `<Any other relevant information>\n\n` +
-      `Submitter: ${document.getElementById('userInfo').textContent || 'Unknown'}\n`
-    );
-    window.location.href = `mailto:${feedbackEmail}?subject=${subject}&body=${body}`;
-  });
 
   // --- Tab navigation ---
   document.querySelectorAll('.tab[data-tab]').forEach((btn) => {

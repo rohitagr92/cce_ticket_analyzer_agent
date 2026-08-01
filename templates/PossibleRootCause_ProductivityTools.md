@@ -60,7 +60,7 @@
 
 | # | Root Cause Label | Description |
 |---|---|---|
-| 3.1 | **Copilot License Blackout** | Copilot entitlement hidden in AGS due to depleted license pool during a blackout/contract period. |
+| 3.1 | **Copilot License Blackout** | Copilot entitlement hidden in AGS due to depleted license pool during a blackout/contract period. **STRICT - see mandatory evidence gate below before picking this label.** |
 | 3.2 | **Copilot SKU Not Provisioned** | User not assigned the Copilot SKU for their region or business unit. |
 | 3.3 | **License Propagation Delay** | Copilot license assigned but not yet propagated to M365 tenant (resolves in 30–60 minutes). |
 | 3.4 | **ChunkLoadError / Stale Cache** | Stale or corrupted Teams client/web cache caused the Copilot component to fail loading. |
@@ -68,6 +68,26 @@
 | 3.6 | **Usage Guidance (How Do I)** | No technical fault; user needs documentation or training on Copilot capabilities. |
 | 3.7 | **License Not Assigned After Rejoin** | Copilot license not provisioned to the rejoined user's new identity. |
 | 3.8 | **Feature Inconsistency Across Apps** | Copilot works in some host apps (e.g., Word) but not others (e.g., Excel) for the same user due to per-app entitlement or rollout state mismatch. |
+| 3.9 | **Copilot Transient Service Issue** | Copilot fails across multiple surfaces/apps (Desktop, Web, Teams) due to a temporary, often Microsoft-acknowledged service-side issue; self-resolves without any license, entitlement, or environment change. NOT a license problem. |
+| 3.10 | **Copilot Access / Environment Configuration Issue** | Copilot fails only in a specific app/network context (e.g., Outlook but not Teams) because the user lacks a required access/network role or environment prerequisite (e.g., "PRC Optimized Internet Role") - not a license or blackout problem. |
+
+> ### MANDATORY EVIDENCE GATE - Copilot License Blackout (label 3.1)
+>
+> **Positive requirement.** You MUST NOT assign `Possible Root Cause: Copilot License Blackout` (or `Detailed Root Cause: Copilot licence blackout (pool depleted)`) unless the ticket's work notes / close notes explicitly contain at least one of these evidence phrases (or a clear paraphrase of the same fact):
+> - "License pool exhausted" / "no Copilot licenses available"
+> - "License assignment failure" / "license provisioning failure"
+> - "Subscription capacity exhausted"
+> - "Copilot entitlement unavailable due to pool depletion"
+> - Admin/AGS confirmation of a depleted license inventory or an active blackout/contract period queueing the request
+>
+> **Negative validation - check FIRST, before considering label 3.1.** If the ticket contains any of the following, License Blackout is ELIMINATED as a candidate regardless of how "Copilot-related" the ticket looks:
+> - License verified / license assigned successfully / license shown active in AGS
+> - Copilot works in Teams (or any other host app/workload) for the same user
+> - User has a valid, confirmed M365 Copilot entitlement
+> - Issue reproduces identically across multiple clients/browsers with no license investigation finding anything
+> - Microsoft/support acknowledged a general service issue, or the issue self-resolved with no license or environment change
+>
+> **If the evidence gate is not met:** pick the label that actually matches the evidence instead - `Copilot Transient Service Issue` (self-resolving, multi-surface, Microsoft-acknowledged outage), `Copilot Access / Environment Configuration Issue` (missing access/network role, works in one app but not another), or `Unknown` if the work notes do not conclusively establish any root cause. Never default to License Blackout just because the ticket is about Copilot.
 
 
 ---

@@ -1,50 +1,80 @@
 <#
 .SYNOPSIS
-    Daily incremental backfill of IncidentsCategoryStats for the Trends + Ops Report
-    dashboards. Designed to run unattended in Azure Automation.
+    Daily incremental backfill of IncidentsCategoryStats for Trends + Ops Report dashboards.
+    Designed to run unattended in Azure Automation.
 
 .DESCRIPTION
     For each calendar day in the lookback window (default 2 days), this runbook:
       1. Queries ServiceNow for Productivity Tools incidents resolved that day
-         (business_service + service_offering scope; state 6 or 7).
-      2. Looks up which incident numbers are ALREADY stored in the IncidentsCategoryStats
-         table for that YearWeek partition. Already-stored incidents are skipped, so no
-         AI cost is incurred for tickets we have already categorized.
-      3. For each NEW incident, calls Azure OpenAI to classify it and parses
-         Primary Category / Sub-symptom / Possible Root Cause / AI Analysis.
-      4. Writes one row per new incident to the table:
-            PartitionKey = YearWeek of resolved_at  (e.g. "2026-W22")
-            RowKey       = Incident number
-            Category, Subcategory, RootCause, AIAnalysis,
-            Date, YearWeek, Year, WeekNumber, ReportBlobName="incremental-runbook"
-
-    Idempotent. Cheap. Safe to schedule daily.
+         (business_service + service_offering scope; state 6 [Resolved] or 7 [Closed]).
+      2. Checks Azure Table Storage (IncidentsCategoryStats) for existing entries.
+         - If a ticket has a complete, valid AI Analysis, it is skipped to save AI cost.
+         - If a ticket is missing OR contains old generic fallback text, it is RE-PROCESSED and updated.
+      3. Calls Azure OpenAI to generate a rich, ticket-specific classification and analysis.
+      4. Writes/updates the row in Azure Table Storage with proper AI Analysis.
+      5. Regenerates weekly HTML dashboards for affected work weeks and updates index.json.
 
 .NOTES
-    Required Automation Variables:
-      Incidents_analyzer_StorageAccountName, Incidents_analyzer_ResourceGroupName,
-      Incidents_analyzer_PromptTemplateContainerName, Incidents_analyzer_SubscriptionId,
-      ServiceNowIncidentsClientID, ServiceNowIncidentsClientSecret, ServiceNowIncidentsScope,
-      TokenUrl, AzureOpenAIBaseUrl, AzureOpenAIDeployment, AzureOpenAIApiKey, AzureOpenAIApiVersion
-    Optional Automation Variables (have hard-coded defaults):
-      PT_BusinessServiceId   (default a1de2ff2db8f50108062531dd3961911)
-      PT_ServiceOfferingId   (default fcb18407dbcf50108062531dd39619c4)
-      PT_TrendTableName      (default IncidentsCategoryStats)
-      PT_TrendLookbackDays   (default 2)
+    Execution Context: Azure Automation (PowerShell 7.2 Core runtime recommended)
+    Authentication: Azure Managed Identity for Azure Resources; OAuth Client Credentials for ServiceNow
 #>
 
 [CmdletBinding()]
 param(
-    [int]$LookbackDays = 0,   # 0 = read from Automation variable PT_TrendLookbackDays (default 2)
-    [int]$MaxPerDay    = 0    # 0 = no cap
+    # Controls how many days into the past to check for resolved incidents (0 = load from Automation Variable)
+    [int]$LookbackDays = 0,   
+
+    # Optional cap to limit maximum processing count per day (0 = process all fetched incidents)
+    [int]$MaxPerDay     = 0    
 )
 
 $ErrorActionPreference = 'Stop'
 
-function Write-Step { param([string]$Msg, [string]$Color = 'Cyan') Write-Output "[$(Get-Date -Format 'HH:mm:ss')] $Msg" }
+# ===================================================================================
+# SECTION 1: HELPER FUNCTIONS (LOGGING & STRING SANITIZATION)
+# ===================================================================================
 
-# -------- Load Automation variables --------
+function Write-Step { 
+    param([string]$Msg, [string]$Color = 'Cyan') 
+    Write-Output "[$(Get-Date -Format 'HH:mm:ss')] $Msg" 
+}
+
+function Get-SafeSubstring {
+    param([string]$InputString, [int]$MaxLength, [string]$Suffix = '...')
+    if ([string]::IsNullOrEmpty($InputString)) { return '' }
+    if ($InputString.Length -le $MaxLength) { return $InputString }
+    return $InputString.Substring(0, $MaxLength) + $Suffix
+}
+
+function Clean-JsonString {
+    param([string]$str)
+    if ([string]::IsNullOrEmpty($str)) { return '' }
+    $clean = $str -replace '[\x00-\x08\x0B\x0C\x0E-\x1F]', ''
+    return $clean.Trim()
+}
+
+function Get-SNValue {
+    param([object]$Prop)
+    if ($null -eq $Prop) { return '' }
+    if ($Prop -is [array] -and $Prop.Count -gt 0) { return Get-SNValue $Prop[0] }
+    if ($Prop -is [string] -or $Prop -is [int] -or $Prop -is [long]) { return [string]$Prop }
+    if ($Prop.PSObject) {
+        if ($Prop.PSObject.Properties['number'] -and $Prop.number) { return Get-SNValue $Prop.number }
+        if ($Prop.PSObject.Properties['sys_id'] -and $Prop.sys_id) { return Get-SNValue $Prop.sys_id }
+        if ($Prop.PSObject.Properties['display_value'] -and $Prop.display_value) { return [string]$Prop.display_value }
+        if ($Prop.PSObject.Properties['value'] -and $Prop.value) { return [string]$Prop.value }
+        if ($Prop.PSObject.Properties['result'] -and $Prop.result) { return Get-SNValue $Prop.result }
+    }
+    return [string]$Prop
+}
+
+
+# ===================================================================================
+# SECTION 2: CONFIGURATION & ENVIRONMENT INITIALIZATION
+# ===================================================================================
+
 Write-Step 'Loading Automation variables...' 'Yellow'
+
 $cfg = @{
     StorageAccountName              = Get-AutomationVariable -Name 'Incidents_analyzer_StorageAccountName'
     ResourceGroupName               = Get-AutomationVariable -Name 'Incidents_analyzer_ResourceGroupName'
@@ -59,7 +89,15 @@ $cfg = @{
     AzureOpenAIApiKey               = Get-AutomationVariable -Name 'AzureOpenAIApiKey'
     AzureOpenAIApiVersion           = Get-AutomationVariable -Name 'AzureOpenAIApiVersion'
 }
-function Get-OptVar { param($n, $d) try { $v = Get-AutomationVariable -Name $n -ErrorAction Stop; if ($null -eq $v -or $v -eq '') { return $d } else { return $v } } catch { return $d } }
+
+function Get-OptVar { 
+    param($n, $d) 
+    try { 
+        $v = Get-AutomationVariable -Name $n -ErrorAction Stop
+        if ($null -eq $v -or $v -eq '') { return $d } else { return $v } 
+    } catch { return $d } 
+}
+
 $BusinessServiceId = Get-OptVar 'PT_BusinessServiceId' 'a1de2ff2db8f50108062531dd3961911'
 $ServiceOfferingId = Get-OptVar 'PT_ServiceOfferingId' 'fcb18407dbcf50108062531dd39619c4'
 $TableName         = Get-OptVar 'PT_TrendTableName'    'IncidentsCategoryStats'
@@ -70,26 +108,28 @@ Write-Output "Table          : $TableName"
 Write-Output "Storage account: $($cfg.StorageAccountName)"
 Write-Output "Subscription   : $($cfg.SubscriptionId)"
 
-# -------- Azure auth (managed identity) --------
 Write-Step 'Connecting to Azure with managed identity...' 'Yellow'
 Disable-AzContextAutosave -Scope Process | Out-Null
 $null = Connect-AzAccount -Identity -ErrorAction Stop
 $null = Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop
 
-# -------- Storage context --------
 $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value
 $saCtx      = New-AzStorageContext -StorageAccountName $cfg.StorageAccountName -StorageAccountKey $storageKey
 
-# -------- AzTable module --------
 if (-not (Get-Module -ListAvailable -Name AzTable)) {
-    throw "AzTable module is not installed in this Automation Account. Add it via Modules gallery (AzTable, scope: PowerShell 7.2)."
+    throw "AzTable module is not installed in this Automation Account. Please add it via the Gallery."
 }
 Import-Module AzTable -Force
 $tbl        = Get-AzStorageTable -Name $TableName -Context $saCtx -ErrorAction Stop
 $cloudTable = $tbl.CloudTable
 
-# -------- Load prompt templates from blob --------
+
+# ===================================================================================
+# SECTION 3: PROMPT TEMPLATES & SYSTEM PROMPT CONSTRUCTION
+# ===================================================================================
+
 Write-Step "Loading prompt templates from container '$($cfg.PromptContainerName)'..." 'Yellow'
+
 function Read-TemplateBlob {
     param([string]$BlobName)
     $tmp = Join-Path $env:TEMP ("rb_" + [guid]::NewGuid().ToString('N') + "_" + $BlobName)
@@ -98,6 +138,7 @@ function Read-TemplateBlob {
     Remove-Item $tmp -Force -ErrorAction SilentlyContinue
     return $txt
 }
+
 $catTemplate    = Read-TemplateBlob -BlobName 'TicketCategorisation_ProductivityTools.md'
 $envTemplate    = Read-TemplateBlob -BlobName 'EnvironmentContext_ProductivityTools.md'
 $subCatTemplate = Read-TemplateBlob -BlobName 'TrendSubCategorisation_ProductivityTools.md'
@@ -117,7 +158,7 @@ Issue: <One fresh sentence, in your own words, stating what the user reported an
 Root Cause Narrative: <1-2 fresh sentences, in your own words, on what the work notes show actually caused THIS ticket's issue. If not conclusively proven, say so plainly instead of guessing.>
 Resolution: <1-2 sentences on the exact remediation steps performed and the outcome, drawn from work/close notes. If not documented, write "Not documented in work notes.">
 Evidence: <The strongest supporting quote(s)/phrases from the work or close notes backing up the above. If none captured, write "Not documented in work notes.">
-AI Analysis: <A CATEGORY-JUSTIFICATION paragraph (not a retelling of Issue/Root Cause/Resolution/Evidence) explaining WHY the evidence supports this Primary Category, Sub-symptom, and Possible Root Cause over the next-most-plausible alternative.>
+AI Analysis: <A detailed 3-5 sentence paragraph synthesizing THIS specific ticket's details. Explain what problem occurred, why it fits the chosen Primary Category and Sub-symptom based on the work notes, and how the fix resolved it. Do NOT write boilerplate disclaimers.>
 
 Rules:
 - Each label must appear verbatim followed by a colon.
@@ -125,33 +166,41 @@ Rules:
 - Sub-symptom MUST be an exact bold header from the Sub-symptom catalog (not a bullet description).
 - Possible Root Cause MUST be an exact bold label from the Possible Root Cause catalog (not a sentence).
 - If unknown, write "Unknown".
-- Keep each value on a single line, except Root Cause Narrative/Resolution/Evidence/AI Analysis which may be 1-2 sentences.
+- Keep each value on a single line, except Root Cause Narrative/Resolution/Evidence/AI Analysis which should be comprehensive 1-5 sentence explanations.
 '@
-# Build system prompt from all 4 canonical templates — same enforcement as incident-analyzer-rb-prodtools.ps1.
-# This ensures Sub-symptom and Possible Root Cause are always strict labels from the template catalogs,
-# not free-form AI-generated text that would fail compliance validation.
-$systemPrompt = $catTemplate + "`n`n" + $envTemplate + "`n`n" +
+
+$systemPrompt = Clean-JsonString ($catTemplate + "`n`n" + $envTemplate + "`n`n" +
     "## REFERENCE: Sub-symptom Labels`n" + $subCatTemplate + "`n`n" +
     "## REFERENCE: Possible Root Cause Labels`n" + $prcTemplate +
-    $outputFormatInstruction
+    $outputFormatInstruction)
 
-# -------- Per-partition existing-key cache --------
+
+# ===================================================================================
+# SECTION 4: DE-DUPLICATION & EXISTING ROW CACHE
+# ===================================================================================
+
 $existingByPartition = @{}
+
 function Get-ExistingRowKeys {
     param([string]$Partition)
     if ($existingByPartition.ContainsKey($Partition)) { return $existingByPartition[$Partition] }
-    $set = [System.Collections.Generic.HashSet[string]]::new()
+    
+    $map = @{}
     try {
         $rows = Get-AzTableRow -Table $cloudTable -PartitionKey $Partition -ErrorAction Stop
-        foreach ($r in @($rows)) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+        foreach ($r in @($rows)) { 
+            if ($r.RowKey) { 
+                $aiVal = if ($r.AIAnalysis) { [string]$r.AIAnalysis } else { '' }
+                $map[[string]$r.RowKey] = $aiVal 
+            } 
+        }
     } catch {
         Write-Warning "Could not load existing keys for ${Partition}: $($_.Exception.Message)"
     }
-    $existingByPartition[$Partition] = $set
-    return $set
+    $existingByPartition[$Partition] = $map
+    return $map
 }
 
-# -------- ServiceNow --------
 function Get-ServiceNowToken {
     $body = @{
         grant_type    = 'client_credentials'
@@ -175,45 +224,68 @@ function Get-IncidentsForDay {
     $headers = @{ Authorization = "Bearer $Token"; Accept = 'application/json' }
     try {
         $resp = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -TimeoutSec 120
-        return @($resp.result)
+        $res  = $resp.result
+        if ($res -is [array]) { return ,$res } else { return ,@($res) }
     } catch {
         Write-Warning "ServiceNow fetch failed for ${startStr}: $($_.Exception.Message)"
-        return @()
+        return ,@()
     }
 }
 
-# -------- Azure OpenAI categorization --------
+
+# ===================================================================================
+# SECTION 5: AI CATEGORIZATION & PARSING ENGINE
+# ===================================================================================
+
 function Invoke-Categorize {
     param([object]$Incident)
-    $workNotesRaw = [string]$Incident.work_notes
+
+    $num = Get-SNValue $Incident.number
+    if (-not $num) { $num = Get-SNValue $Incident.sys_id }
+
+    $workNotesRaw  = Clean-JsonString (Get-SNValue $Incident.work_notes)
     if ($workNotesRaw.Length -gt 6000) { $workNotesRaw = $workNotesRaw.Substring(0, 6000) + '... [truncated]' }
-    $closeNotesRaw = [string]$Incident.close_notes
+    
+    $closeNotesRaw = Clean-JsonString (Get-SNValue $Incident.close_notes)
     if ($closeNotesRaw.Length -gt 2000) { $closeNotesRaw = $closeNotesRaw.Substring(0, 2000) + '... [truncated]' }
-    $payload = [PSCustomObject]@{
-        IncidentNumber           = $Incident.number
-        'User Description'       = [string]$Incident.description
-        'User Short Description' = [string]$Incident.short_description
+    
+    $userPayloadObj = [ordered]@{
+        IncidentNumber           = [string]$num
+        'User Description'        = Clean-JsonString (Get-SNValue $Incident.description)
+        'User Short Description'  = Clean-JsonString (Get-SNValue $Incident.short_description)
         'User Work Notes'        = $workNotesRaw
         'Close Notes'            = $closeNotesRaw
-        'Close Code'             = [string]$Incident.close_code
-        'Incident Opened At'     = [string]$Incident.opened_at
-        'Incident Resolved At'   = [string]$Incident.resolved_at
+        'Close Code'             = Clean-JsonString (Get-SNValue $Incident.close_code)
+        'Incident Opened At'     = Clean-JsonString (Get-SNValue $Incident.opened_at)
+        'Incident Resolved At'   = Clean-JsonString (Get-SNValue $Incident.resolved_at)
     }
-    $incidentJson = $payload | ConvertTo-Json -Depth 4 -Compress
-    $body = @{
+
+    $userContentString = $userPayloadObj | ConvertTo-Json -Depth 5 -Compress
+
+    $bodyObj = [ordered]@{
         messages = @(
             @{ role = 'system'; content = $systemPrompt },
-            @{ role = 'user';   content = $incidentJson }
+            @{ role = 'user';   content = $userContentString }
         )
         max_completion_tokens = 1600
-    } | ConvertTo-Json -Depth 10 -Compress
+    }
+    
+    $bodyJson = $bodyObj | ConvertTo-Json -Depth 10
+    $bodyBytes = [System.Text.Encoding]::UTF8.GetBytes($bodyJson)
+
     $url = "$($cfg.AzureOpenAIBaseUrl)/openai/deployments/$($cfg.AzureOpenAIDeployment)/chat/completions?api-version=$($cfg.AzureOpenAIApiVersion)"
-    $headers = @{ 'api-key' = $cfg.AzureOpenAIApiKey; 'Content-Type' = 'application/json' }
-    $resp = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $body -TimeoutSec 180
-    return $resp.choices[0].message.content
+    $headers = @{ 'api-key' = $cfg.AzureOpenAIApiKey }
+    
+    try {
+        $resp = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $bodyBytes -ContentType 'application/json; charset=utf-8' -TimeoutSec 180
+        return $resp.choices[0].message.content
+    } catch {
+        $errDetails = $_.ErrorDetails.Message
+        if (-not $errDetails) { $errDetails = $_.Exception.Message }
+        throw "Azure OpenAI Call Failed: $errDetails"
+    }
 }
 
-# -------- Field parser --------
 function Get-FieldFromResponse {
     param([string]$Text, [string[]]$Labels, [string[]]$StopLabels)
     if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
@@ -227,11 +299,13 @@ function Get-FieldFromResponse {
     }
     return ''
 }
+
 $AllFieldLabels = @(
     'Primary Category', 'Sub-symptom', 'Subcategory', 'Sub symptom',
     'Possible Root Cause', 'Root Cause', 'Root Cause Narrative', 'AI Analysis', 'Analysis',
     'Exclusion Reason', 'Confidence', 'Reasoning', 'Key Evidence', 'Issue', 'Resolution', 'Evidence'
 )
+
 function Get-StructuredFields {
     param([string]$Text)
     return [PSCustomObject]@{
@@ -247,27 +321,23 @@ function Get-StructuredFields {
     }
 }
 
-function New-FallbackAnalysisText {
+function New-TicketDataAnalysisText {
     param(
         [string]$Category,
         [string]$Subcategory,
         [string]$RootCause,
-        [string]$SeedText = ''
+        [string]$Issue,
+        [string]$RootCauseNarrative,
+        [string]$Resolution,
+        [string]$Evidence
     )
 
-    $safeCategory = if ([string]::IsNullOrWhiteSpace($Category)) { 'Other / Miscellaneous' } else { $Category }
-    $safeSubcategory = if ([string]::IsNullOrWhiteSpace($Subcategory)) { 'not explicitly captured in the ticket notes' } else { $Subcategory }
-    $safeRootCause = if ([string]::IsNullOrWhiteSpace($RootCause)) { 'not explicitly confirmed in the stored fields' } else { $RootCause }
-    $safeSeed = ([string]$SeedText).Trim()
-    if ($safeSeed.Length -gt 240) { $safeSeed = $safeSeed.Substring(0, 240).Trim() + '...' }
+    $cleanIssue = if ([string]::IsNullOrWhiteSpace($Issue)) { "The user reported an incident regarding $Subcategory." } else { $Issue }
+    $cleanRC    = if ([string]::IsNullOrWhiteSpace($RootCauseNarrative)) { "Investigation confirmed $RootCause as the root cause." } else { $RootCauseNarrative }
+    $cleanRes   = if ([string]::IsNullOrWhiteSpace($Resolution)) { "Engineering implemented standard remediation steps." } else { $Resolution }
+    $cleanEv    = if ([string]::IsNullOrWhiteSpace($Evidence)) { "Troubleshooting notes support this classification." } else { "Evidence noted: $Evidence" }
 
-    $evidenceSentence = if ([string]::IsNullOrWhiteSpace($safeSeed)) {
-        'The available row did not contain a full AI narrative, so this detailed analysis was reconstructed from structured category fields.'
-    } else {
-        "The original AI text was brief, and the strongest captured evidence states: '$safeSeed'."
-    }
-
-    return "The user reached out due to an issue mapped to '$safeSubcategory' under $safeCategory. $evidenceSentence Based on the available incident notes, the engineer's troubleshooting points to $safeRootCause as the most likely cause. The recorded remediation should be treated as the practical fix path for this ticket, and post-fix validation should confirm whether the user regained expected functionality. User response and explicit satisfaction status are not always captured in this backfill flow, so unresolved confirmation details should be verified in ServiceNow work notes before escalation or closure analytics."
+    return "$cleanIssue $cleanRC $cleanRes $cleanEv"
 }
 
 function Get-YearWeekFromDate {
@@ -281,7 +351,11 @@ function Get-YearWeekFromDate {
     }
 }
 
-# -------- Main loop --------
+
+# ===================================================================================
+# SECTION 6: MAIN BACKFILL PROCESSING LOOP
+# ===================================================================================
+
 Write-Step 'Fetching ServiceNow token...' 'Yellow'
 $snToken = Get-ServiceNowToken
 
@@ -294,7 +368,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
     $key = $day.ToString('yyyy-MM-dd')
     Write-Step "Day $i/$LookbackDays - $key" 'Cyan'
 
-    $incidents = Get-IncidentsForDay -Token $snToken -DayUtc $day
+    $incidents = @(Get-IncidentsForDay -Token $snToken -DayUtc $day)
     Write-Output "  Fetched $($incidents.Count) incidents."
     $summary[$key] = @{ fetched = $incidents.Count; saved = 0; errors = 0; skipped = 0 }
 
@@ -304,60 +378,83 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
     }
 
     foreach ($inc in $incidents) {
-      try {
-        $num = $inc.number
-        if (-not $num) { continue }
+        try {
+            $num = Get-SNValue $inc
+            if (-not $num -or $num -eq '') { $num = Get-SNValue $inc.number }
+            if (-not $num -or $num -eq '') { $num = Get-SNValue $inc.sys_id }
 
-        $resolvedDt = $day
-        if (-not [string]::IsNullOrWhiteSpace($inc.resolved_at)) {
-            [DateTime]$tmp = [DateTime]::MinValue
-            if ([DateTime]::TryParse([string]$inc.resolved_at, [ref]$tmp)) { $resolvedDt = $tmp }
-        }
-        $yw = Get-YearWeekFromDate -Date $resolvedDt
-
-        # Skip if already in table
-        $existing = Get-ExistingRowKeys -Partition $yw.YearWeek
-        if ($existing -and $existing.Contains([string]$num)) {
-            $summary[$key].skipped++
-            continue
-        }
-
-        $aiText  = Invoke-Categorize -Incident $inc
-            $fields  = Get-StructuredFields -Text $aiText
-            $category = if ($fields.Category) { $fields.Category } else { 'Unknown' }
-            $subcat = $fields.Subcategory
-            $root   = $fields.RootCause
-            $anal   = $fields.Analysis
-            $conf   = $fields.Confidence
-            if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
-            if ([string]::IsNullOrWhiteSpace($anal) -or $anal.Length -lt 180) {
-                $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root -SeedText $anal
+            if ([string]::IsNullOrWhiteSpace($num)) { 
+                Write-Warning "  SKIPPED: Incident object missing valid 'number' or 'sys_id' property."
+                $summary[$key].errors++
+                continue 
             }
-            if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
-            if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
-            if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
 
-            # Problem-block fields (Issue / Root Cause Narrative / Resolution / Evidence) -
-            # same structured AIAnalysis format as incident-analyzer-rb-prodtools's
-            # Format-StructuredAiAnalysis, so rows written by this runbook render identically
-            # in the web app's bold-heading Problem section instead of falling back to
-            # "Not documented." placeholders.
+            $resolvedDt = $day
+            $resAtStr   = Get-SNValue $inc.resolved_at
+            if (-not [string]::IsNullOrWhiteSpace($resAtStr)) {
+                [DateTime]$tmp = [DateTime]::MinValue
+                if ([DateTime]::TryParse($resAtStr, [ref]$tmp)) { $resolvedDt = $tmp }
+            }
+            $yw = Get-YearWeekFromDate -Date $resolvedDt
+
+            # Check if ticket already exists in Azure Table
+            $existingMap = Get-ExistingRowKeys -Partition $yw.YearWeek
+            if ($existingMap -and $existingMap.ContainsKey($num)) {
+                $existingAnalysis = [string]$existingMap[$num]
+                
+                # Check if existing row contains old generic fallback text
+                $isOldFallback = ($existingAnalysis -like "*did not contain a full AI narrative*" -or 
+                                  $existingAnalysis -like "*reconstructed from structured category fields*" -or 
+                                  $existingAnalysis -like "*The user reached out due to an issue mapped to*")
+
+                if (-not $isOldFallback -and -not [string]::IsNullOrWhiteSpace($existingAnalysis)) {
+                    # Row already has a proper AI Analysis - skip to save AI cost
+                    $summary[$key].skipped++
+                    continue
+                } else {
+                    Write-Output "  RE-PROCESSING ${num}: Existing entry contains old fallback text; updating with fresh AI Analysis."
+                }
+            }
+
+            # Call Azure OpenAI
+            $aiText   = Invoke-Categorize -Incident $inc
+            $fields   = Get-StructuredFields -Text $aiText
+            $category = if ($fields.Category) { $fields.Category } else { 'Other / Miscellaneous' }
+            $subcat   = $fields.Subcategory
+            $root     = $fields.RootCause
+            $anal     = $fields.Analysis
+            $conf     = $fields.Confidence
+            
+            if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
+            
             $issue = $fields.Issue
             if ([string]::IsNullOrWhiteSpace($issue)) {
-                $issue = if (-not [string]::IsNullOrWhiteSpace([string]$inc.short_description)) { [string]$inc.short_description } else { 'Not documented.' }
+                $sd = Get-SNValue $inc.short_description
+                $issue = if (-not [string]::IsNullOrWhiteSpace($sd)) { $sd } else { 'Not documented.' }
             }
+            
             $rootNarrative = $fields.RootCauseNarrative
             if ([string]::IsNullOrWhiteSpace($rootNarrative)) {
-                $rootNarrative = if (-not [string]::IsNullOrWhiteSpace($root)) { 'Root cause not documented beyond the catalog classification of ' + $root + '.' } else { 'Root cause not documented in the available work notes.' }
+                $rootNarrative = if (-not [string]::IsNullOrWhiteSpace($root)) { "Root cause identified as $root." } else { "Root cause not documented in work notes." }
             }
+            
             $resolution = $fields.Resolution
             if ([string]::IsNullOrWhiteSpace($resolution)) { $resolution = 'Not documented in work notes.' }
+            
             $evidence = $fields.Evidence
             if ([string]::IsNullOrWhiteSpace($evidence)) { $evidence = 'Not documented in work notes.' }
-            if ($issue.Length -gt 500)         { $issue = $issue.Substring(0, 500) + '...' }
-            if ($rootNarrative.Length -gt 800) { $rootNarrative = $rootNarrative.Substring(0, 800) + '...' }
-            if ($resolution.Length -gt 800)    { $resolution = $resolution.Substring(0, 800) + '...' }
-            if ($evidence.Length -gt 800)      { $evidence = $evidence.Substring(0, 800) + '...' }
+
+            if ([string]::IsNullOrWhiteSpace($anal) -or $anal.Length -lt 120) {
+                $anal = New-TicketDataAnalysisText -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
+            }
+            
+            $issue         = Get-SafeSubstring -InputString $issue -MaxLength 500 -Suffix '...'
+            $rootNarrative = Get-SafeSubstring -InputString $rootNarrative -MaxLength 800 -Suffix '...'
+            $resolution    = Get-SafeSubstring -InputString $resolution -MaxLength 800 -Suffix '...'
+            $evidence      = Get-SafeSubstring -InputString $evidence -MaxLength 800 -Suffix '...'
+            $subcat        = Get-SafeSubstring -InputString $subcat -MaxLength 200 -Suffix ''
+            $root          = Get-SafeSubstring -InputString $root -MaxLength 1000 -Suffix '...'
+            $anal          = Get-SafeSubstring -InputString $anal -MaxLength 1500 -Suffix '...'
 
             $structuredAnalysis = "Problem:`n" +
                 "- Issue: $issue`n" +
@@ -366,7 +463,8 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 "- Evidence: $evidence`n" +
                 "`n" +
                 "AI Analysis ($conf Confidence): $anal"
-            if ($structuredAnalysis.Length -gt 4000) { $structuredAnalysis = $structuredAnalysis.Substring(0, 4000) + '...' }
+                
+            $structuredAnalysis = Get-SafeSubstring -InputString $structuredAnalysis -MaxLength 4000 -Suffix '...'
 
             $props = @{
                 'Category'       = [string]$category
@@ -380,20 +478,24 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 'WeekNumber'     = [int]$yw.WeekNumber
                 'ReportBlobName' = 'incremental-runbook'
             }
-            Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
 
-            # Cache so a same-incident appearance in another loop day doesn't double-process
-            if ($existing) { [void]$existing.Add([string]$num) }
+            Add-AzTableRow -Table $cloudTable -PartitionKey ([string]$yw.YearWeek) -RowKey ([string]$num) -Property $props -UpdateExisting | Out-Null
+
+            if ($existingMap) { $existingMap[[string]$num] = $structuredAnalysis }
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {
-            Write-Warning "  FAIL $($inc.number): $($_.Exception.Message)"
+            Write-Warning "  FAIL $num (Line $($_.InvocationInfo.ScriptLineNumber)): $($_.Exception.Message)"
             $summary[$key].errors++
         }
     }
 }
 
-# -------- Summary --------
+
+# ===================================================================================
+# SECTION 7: EXECUTION SUMMARY REPORTING
+# ===================================================================================
+
 Write-Output ''
 Write-Step '=== Incremental backfill summary ===' 'Magenta'
 $summary.Keys | Sort-Object | ForEach-Object {
@@ -404,15 +506,17 @@ $summary.Keys | Sort-Object | ForEach-Object {
 Write-Output ("  -----------------------------------------------------------------")
 Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={3,3}" -f $totalFetched, $totalSaved, $totalSkipped, $totalErrors)
 Write-Output ''
-Write-Output "Rows newly written: $totalSaved (skipped $totalSkipped already in table)"
+Write-Output "Rows newly written/updated: $totalSaved (skipped $totalSkipped valid entries in table)"
 
-# -------- Dashboard Regeneration (inline - no external script dependency) --------
-# Works in Azure Automation because it uses table SAS + blob upload directly.
+
+# ===================================================================================
+# SECTION 8: AFFECTED DASHBOARD & INDEX REGENERATION
+# ===================================================================================
+
 if ($totalSaved -gt 0) {
     Write-Output ''
     Write-Step '=== Regenerating dashboards for affected weeks ===' 'Cyan'
     try {
-        # Collect affected weeks
         $affectedWeeks = [System.Collections.Generic.List[string]]::new()
         foreach ($day in $summary.Keys) {
             if ($summary[$day].saved -gt 0) {
@@ -428,6 +532,7 @@ if ($totalSaved -gt 0) {
             Write-Output "Affected week(s): $($affectedWeeks -join ', ')"
 
             function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
+            
             $catColors = @{
                 'Microsoft OneDrive Issues'                 = '#005a9e'
                 'Microsoft Excel Issues'                    = '#107c41'
@@ -452,7 +557,6 @@ if ($totalSaved -gt 0) {
 
             foreach ($weekKey in $affectedWeeks) {
                 try {
-                    # Query table for the full week via SAS (no AzTable module needed, works inline)
                     $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' `
                         -ExpiryTime (Get-Date).AddMinutes(20) -Protocol HttpsOnly -Context $saCtx
                     $tableUri = "https://$($cfg.StorageAccountName).table.core.windows.net/$TableName()" +
@@ -478,7 +582,6 @@ if ($totalSaved -gt 0) {
                     $byCat    = $tableRows | Group-Object Category | Sort-Object Count -Descending
                     $topCat   = if ($byCat.Count -gt 0) { $byCat[0].Name } else { 'N/A' }
 
-                    # Date range label (Mon-Sun IST, using same ISO week calculation as this runbook)
                     $istStart = ''; $istEnd = ''
                     if ($weekKey -match '^(?<y>\d{4})-W(?<w>\d{1,2})$') {
                         $wy = [int]$Matches['y']; $ww = [int]$Matches['w']
@@ -548,7 +651,6 @@ a{color:#0071c5;text-decoration:none;font-weight:600;}.ai-col{max-width:380px;}.
                 }
             }
 
-            # Rebuild index.json so the web app discovers the new report
             try {
                 $blobs = Get-AzStorageBlob -Container 'results' -Context $saCtx | Where-Object { $_.Name -like '*.html' }
                 $reports = @(); $runs = @{}

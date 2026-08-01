@@ -191,7 +191,18 @@ Office app shows "unlicensed product" or activation error despite an assigned li
 ### Copilot licence blackout (pool depleted)
 **Top Root Cause:** License / Entitlement Missing
 The Copilot license pool is depleted and the entitlement is hidden in AGS during a blackout window, so it cannot be assigned to new users.
-**Pick when:** AGS shows no Copilot SKU available, support cites blackout, request is queued.
+**Pick when:** AGS shows no Copilot SKU available, support cites blackout, request is queued, AND the work notes explicitly confirm depleted license inventory (e.g. "license pool exhausted", "no Copilot licenses available", "license assignment/provisioning failure", "subscription capacity exhausted", or an admin/AGS confirmation of depleted inventory).
+**Do NOT pick when (negative evidence - eliminates this entry):** license is verified/active/assigned successfully, Copilot works in another host app or workload (e.g. Teams) for the same user, the issue reproduces across clients/browsers with no license finding, or Microsoft acknowledged a general service issue / the issue self-resolved with no license change. In those cases use "Copilot transient service issue" or "Copilot access/environment configuration issue" below instead, or `Unknown` if truly unconfirmed.
+
+### Copilot transient service issue (self-resolving outage)
+**Top Root Cause:** Service-Side / Platform Issue
+Copilot fails across multiple surfaces (Desktop, Web, Teams) due to a temporary, often Microsoft-acknowledged service-side issue that self-resolves without any license, entitlement, or environment change.
+**Pick when:** issue reproduces across multiple Copilot surfaces, no license/entitlement problem is found, Microsoft/support confirms an ongoing service issue, and the ticket closes because the issue self-resolved.
+
+### Copilot access / environment configuration issue
+**Top Root Cause:** Access / Network / Environment Configuration
+Copilot fails only in a specific app or network context because the user lacks a required access/network role or environment prerequisite (e.g. "PRC Optimized Internet Role"), not because of a license or blackout problem.
+**Pick when:** Copilot works in one host app/workload but fails in another for the same user, and the difference is traced to a missing access/network role or environment setting rather than licensing.
 
 ### Copilot SKU not provisioned for region / BU
 **Top Root Cause:** License / Entitlement Missing

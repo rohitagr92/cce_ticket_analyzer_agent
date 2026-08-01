@@ -466,6 +466,7 @@ KB Provided: [Was a KB attached or provided a link or KB number in work notes/co
 - **"Excluded" is a category** only for tickets clearly outside Productivity Tools scope. Do not use Excluded for Copilot/Office licensing, rejoin scenarios, shared file permissions, or any documented Productivity Tools resolution.
 - **Single-app vs multi-app:** Failure isolated to one Office app → that app's category. Multi-app or suite-wide (install / update / F3 license / activation loop) → Microsoft 365 Apps for Enterprise Issues.
 - **Copilot always wins** when it is the root cause — never split into Excel / Word / PowerPoint / Teams.
+- **Copilot License Blackout is evidence-gated, not a default.** Do NOT pick `Copilot License Blackout` / `Copilot licence blackout (pool depleted)` just because the ticket mentions Copilot. See the mandatory evidence gate and negative validation rules in `PossibleRootCause_ProductivityTools.md` section 3 before selecting it — if license was verified/active, Copilot worked in another app/workload, or the issue was a self-resolving service-side outage, use `Copilot Transient Service Issue`, `Copilot Access / Environment Configuration Issue`, or `Unknown` instead.
 - **Rejoin scenarios** always route to Microsoft OneDrive Issues (for OneDrive/SharePoint content and permission issues).
 - **OneNote on a new laptop:** Default to Microsoft OneNote Issues unless the work notes specifically attribute the failure to the OneDrive client.
 - **"Always keep on this device" / Error 0x80070032** is Microsoft OneDrive Issues.

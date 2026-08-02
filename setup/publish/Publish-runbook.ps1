@@ -16,7 +16,10 @@ param(
     [string]$ScheduleName = 'Daily-Analyzer-02UTC',
 
     [Parameter()]
-    [int]$RunHourUTC = 2
+    [int]$RunHourUTC = 2,
+
+    [Parameter()]
+    [switch]$SkipSchedule
 
 )
 
@@ -116,6 +119,12 @@ try {
         Write-Host ""
         Write-Host "Runbook published successfully!" -ForegroundColor Green
         Write-Host ""
+
+        if ($SkipSchedule -or [string]::IsNullOrWhiteSpace($ScheduleName)) {
+            Write-Host "=== Skipping schedule link (manual/on-demand runbook) ===" -ForegroundColor Cyan
+            Write-Host "You can now run the runbook from Azure Portal or schedule it later." -ForegroundColor Cyan
+            return
+        }
 
         Write-Host "=== Ensuring schedule link ===" -ForegroundColor Cyan
         $existingSchedule = Get-AzAutomationSchedule -ResourceGroupName $ResourceGroupName `

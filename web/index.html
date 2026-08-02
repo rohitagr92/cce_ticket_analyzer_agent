@@ -1231,27 +1231,17 @@
     return week >= cutoff;
   }
 
-  // Short-lived cache so reloading/re-navigating the SPA within the same browser
-  // session doesn't re-fetch the entire table over the network every time.
-  // Kept intentionally short (5 min) so scheduled-run updates still show up promptly.
+  // Always fetch fresh table data so scheduled run updates appear immediately.
+  // This avoids stale rows hanging around in browser session storage after a run.
   const TABLE_CACHE_KEY = 'aiIncidentAnalyzer.tableCache.v1';
-  const TABLE_CACHE_TTL_MS = 5 * 60 * 1000;
+  const TABLE_CACHE_TTL_MS = 0;
 
   function readTableCache() {
-    try {
-      const raw = sessionStorage.getItem(TABLE_CACHE_KEY);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || !Array.isArray(parsed.entities)) return null;
-      if (Date.now() - parsed.savedAt > TABLE_CACHE_TTL_MS) return null;
-      return parsed.entities;
-    } catch (e) { return null; }
+    return null;
   }
 
   function writeTableCache(entities) {
-    try {
-      sessionStorage.setItem(TABLE_CACHE_KEY, JSON.stringify({ savedAt: Date.now(), entities }));
-    } catch (e) { /* quota or storage unavailable - just skip caching */ }
+    return;
   }
 
   async function ensureTableLoaded() {
@@ -2880,6 +2870,11 @@
     return matchesOffering(e, svc);
   }
 
+  function opxHasDisplayableRootCause(e) {
+    const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+    return !!rc && !/^unknown(?:\s*\/\s*unclear)?$/i.test(rc);
+  }
+
   function opxBaseFiltered() {
     if (!allEntities) return [];
     const product = $('opxProduct').value;
@@ -2887,6 +2882,7 @@
     const to      = $('opxWeekTo').value;
     return allEntities.filter(e => {
       if (!opxMatchesService(e)) return false;
+      if (!opxHasDisplayableRootCause(e)) return false;
       const w = e.PartitionKey || e.YearWeek;
       if (!w || w < from || w > to) return false;
       if (product && product !== 'All Products' && (e.Category || '') !== product) return false;
@@ -2916,8 +2912,8 @@
     const counts = {};
     for (const e of opxBaseFiltered()) {
       if (selectedSub !== '__all__' && (e.Subcategory || '').trim() !== selectedSub) continue;
-      const r = (e.PossibleRootCause || e.RootCause || '').trim();
-      if (r) counts[r] = (counts[r] || 0) + 1;
+      const r = opxDisplayRootCause(e);
+      counts[r] = (counts[r] || 0) + 1;
     }
     const ranked = Object.entries(counts).sort((a, b) => b[1] - a[1]);
     let html = '<option value="__all__">All Root Causes</option>';
@@ -2931,7 +2927,7 @@
     opxFirstSeenWeek.clear();
     opxAllInService = allEntities.filter(opxMatchesService);
     for (const e of opxAllInService) {
-      const rc = (e.PossibleRootCause || e.RootCause || '');
+      const rc = opxDisplayRootCause(e);
       const key = (e.Category || '') + '||' + rc;
       const rcKey = rc + '||ALL';
       const w = e.PartitionKey || e.YearWeek;
@@ -2950,7 +2946,7 @@
     const scoped = base.filter(e => {
       if (subValue !== '__all__' && (e.Subcategory || '').trim() !== subValue) return false;
       if (rcValue  !== '__all__') {
-        const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+        const rc = opxDisplayRootCause(e);
         if (rc !== rcValue) return false;
       }
       return true;
@@ -2978,7 +2974,7 @@
   function opxBuildTripleCounts(filtered) {
     const m = {};
     for (const e of filtered) {
-      const k = (e.PossibleRootCause || e.RootCause || '').trim();
+      const k = opxDisplayRootCause(e);
       m[k] = (m[k] || 0) + 1;
     }
     return m;
@@ -2993,6 +2989,15 @@
   function opxIsMisrouted(e)  { return e.Misrouted === true || e.Misrouted === 'true' || e.Misrouted === 'Yes'; }
   function opxConfLevel(e)    { return normalizedConfidenceValue(e).toLowerCase(); } // low | medium | high | unknown
   function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
+  function opxDisplayRootCause(e) {
+    const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+    return rc;
+  }
+  function opxIsDisplayablePatternKey(key) {
+    if (!key) return false;
+    if (key === '—' || key === '-') return false;
+    return !/^unknown(?:\s*\/\s*unclear)?$/i.test(key);
+  }
   function opxParseKey(k)     { return { product: '', subcategory: '', rootCause: k || '' }; }
 
   // Weeks (ascending) currently selected in the toolbar, scoped to the selected Service Offering.
@@ -3013,6 +3018,7 @@
     const patterns = {};
     for (const e of filtered) {
       const k = opxPatternKey(e);
+      if (!opxIsDisplayablePatternKey(k)) continue;
       if (!patterns[k]) patterns[k] = { key: k, count: 0, sample: e };
       patterns[k].count++;
     }
@@ -3042,7 +3048,7 @@
       patterns[k].repeat         = weeksSeenInLast6 >= 4;
       patterns[k].spike          = priorAvg > 0 && curCount > priorAvg * 2;
       // first-seen at Root Cause level — already pre-computed across history
-      const rc = (patterns[k].sample.PossibleRootCause || patterns[k].sample.RootCause || '');
+      const rc = opxDisplayRootCause(patterns[k].sample);
       const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
       patterns[k].firstSeen      = firstSeen || '';
       patterns[k].isNew          = firstSeen && currentWW && firstSeen === currentWW;
@@ -3054,7 +3060,7 @@
   function opxRowBadges(inc, pStats) {
     const out = [];
     const ps  = pStats[opxPatternKey(inc)];
-    const rc = (inc.PossibleRootCause || inc.RootCause || '');
+    const rc = opxDisplayRootCause(inc);
     const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
     const w = inc.PartitionKey || inc.YearWeek;
     if (firstSeen && firstSeen === w) {
@@ -3085,7 +3091,7 @@
   function opxIncidentFlagSet(inc, pStats) {
     const s = new Set();
     const ps = pStats[opxPatternKey(inc)];
-    const rc = (inc.PossibleRootCause || inc.RootCause || '');
+    const rc = opxDisplayRootCause(inc);
     const firstSeen = opxFirstSeenWeek.get(rc + '||ALL');
     const w = inc.PartitionKey || inc.YearWeek;
     if (firstSeen && firstSeen === w) s.add('new');
@@ -3182,8 +3188,8 @@
         case 'ww':          return i.PartitionKey || i.YearWeek || '';
         case 'product':     return (i.Category || '').toLowerCase();
         case 'subcategory': return (i.Subcategory || '').toLowerCase();
-        case 'rootcause':   return (i.PossibleRootCause || i.RootCause || '').toLowerCase();
-        case 'similar':     return triples[(i.PossibleRootCause || i.RootCause || '').trim()] || 1;
+        case 'rootcause':   return opxDisplayRootCause(i).toLowerCase();
+        case 'similar':     return triples[opxDisplayRootCause(i)] || 1;
         case 'date':
         default:            return i.Date || '';
       }
@@ -3369,7 +3375,7 @@
         '<div><span style="color:var(--muted);">Work Week:</span> ' + formatWW(inc.PartitionKey || '') + '</div>' +
         '<div><span style="color:var(--muted);">Product:</span> ' + esc(inc.Category || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Symptom:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
-        '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(inc.PossibleRootCause || inc.RootCause || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(opxDisplayRootCause(inc)) + '</div>' +
         '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(drcRaw || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Productivity Tools') + '</div>' +
         '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
@@ -3391,7 +3397,7 @@
     const td = (v, extra) => '<td style="padding:8px 12px;border-bottom:1px solid #f0f4f9;' + (extra || '') + '">' + v + '</td>';
     const rows = opxSortIncidents(filtered).map(i => {
       const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
-      const key = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + ((i.PossibleRootCause || i.RootCause || '').trim());
+      const key = (i.Category || '') + '||' + ((i.Subcategory || '').trim()) + '||' + opxDisplayRootCause(i);
       const similar = triples[key] || 1;
       const isOpen = opxExpanded.has(i.RowKey);
       const arrow = isOpen ? '&#9662;' : '&#9656;';
@@ -3406,7 +3412,7 @@
         td('<span style="white-space:nowrap;">' + formatWW(i.PartitionKey || '') + '</span>') +
         td(esc(i.Category || '')) +
         td(esc(i.Subcategory || '')) +
-        td(esc(i.PossibleRootCause || i.RootCause || '')) +
+        td(esc(opxDisplayRootCause(i))) +
         td(similarBadge) +
         td(spark) +
       '</tr>';
@@ -3450,7 +3456,11 @@
 
     // Bucket incidents by pattern key so we can list members on expand.
     const membersByKey = {};
-    for (const e of filtered) (membersByKey[opxPatternKey(e)] = membersByKey[opxPatternKey(e)] || []).push(e);
+    for (const e of filtered) {
+      const key = opxPatternKey(e);
+      if (!opxIsDisplayablePatternKey(key)) continue;
+      (membersByKey[key] = membersByKey[key] || []).push(e);
+    }
 
     const sortedPats = opxSortPatterns(Object.values(pStats));
 
@@ -3551,11 +3561,11 @@
     const lines  = [header.map(csvField).join(',')];
     for (const i of filtered.slice().sort((a, b) => (b.Date || '').localeCompare(a.Date || ''))) {
       const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(i.RowKey || '');
-      const tk = (i.PossibleRootCause || i.RootCause || '').trim();
-      const rc = (i.PossibleRootCause || i.RootCause || '').trim() + '||ALL';
+      const tk = opxDisplayRootCause(i);
+      const rc = tk + '||ALL';
       const isOutlier = opxFirstSeenWeek.get(rc) === (i.PartitionKey || i.YearWeek);
       const aiAssessment = (i.AIAnalysis || '').trim() ||
-        ('Assessment generated from fields: Symptom="' + (i.Subcategory || 'N/A') + '", Root Cause="' + (i.PossibleRootCause || i.RootCause || 'N/A') + '".');
+        ('Assessment generated from fields: Symptom="' + (i.Subcategory || 'N/A') + '", Root Cause="' + opxDisplayRootCause(i) + '".');
       lines.push([
         csvField(i.RowKey || ''),
         csvField(sn),
@@ -3563,7 +3573,7 @@
         csvField(formatWW(i.PartitionKey || '')),
         csvField(i.Category || ''),
         csvField(i.Subcategory || ''),
-        csvField(i.PossibleRootCause || i.RootCause || ''),
+        csvField(opxDisplayRootCause(i)),
         csvField(aiAssessment),
         csvField(normalizedConfidenceValue(i)),
         csvField(triples[tk] || 1),

@@ -1476,11 +1476,49 @@ function Get-MergedWeeklyRunData {
             }
         }
 
-        # Deduplicate by incident number, keeping latest version from latest artifact
+        # Deduplicate by incident number, keeping the freshest version and never
+        # letting a blank/weak root-cause row overwrite a better one.
         $ticketMap = @{}
         $summaryMap = @{}
 
+        function Test-UsefulRootCause {
+            param([object]$Ticket)
+            $rc = ([string]$Ticket.PossibleRootCause).Trim()
+            if ([string]::IsNullOrWhiteSpace($rc)) { return $false }
+            if ($rc -match '^unknown(?:\s*\/\s*unclear)?$') { return $false }
+            return $true
+        }
+
+        function Compare-MergedTicket {
+            param(
+                [object]$Existing,
+                [datetime]$ExistingArtifactTime,
+                [object]$Candidate,
+                [datetime]$CandidateArtifactTime
+            )
+
+            if (-not $Existing) { return $true }
+
+            $existingHasRc = Test-UsefulRootCause -Ticket $Existing
+            $candidateHasRc = Test-UsefulRootCause -Ticket $Candidate
+            if ($candidateHasRc -and -not $existingHasRc) { return $true }
+            if (-not $candidateHasRc -and $existingHasRc) { return $false }
+
+            if ($CandidateArtifactTime -gt $ExistingArtifactTime) { return $true }
+            if ($CandidateArtifactTime -lt $ExistingArtifactTime) { return $false }
+
+            $existingProcessed = [datetime]::MinValue
+            $candidateProcessed = [datetime]::MinValue
+            [void][datetime]::TryParse([string]$Existing.Processed, [ref]$existingProcessed)
+            [void][datetime]::TryParse([string]$Candidate.Processed, [ref]$candidateProcessed)
+            return $candidateProcessed -ge $existingProcessed
+        }
+
         foreach ($artifact in $artifacts) {
+            $artifactTime = [datetime]::MinValue
+            if ($artifact.RunGeneratedAtUtc) {
+                [void][datetime]::TryParse([string]$artifact.RunGeneratedAtUtc, [ref]$artifactTime)
+            }
             foreach ($ticket in @($artifact.ProcessedTickets)) {
                 if (-not $ticket.Number) { continue }
 
@@ -1512,7 +1550,20 @@ function Get-MergedWeeklyRunData {
 
                 $null = Ensure-TicketAiFields -Ticket $converted
 
-                $ticketMap[[string]$ticket.Number] = $converted
+                $existingEntry = $ticketMap[[string]$ticket.Number]
+                $existingTicket = $null
+                $existingArtifactTime = [datetime]::MinValue
+                if ($existingEntry) {
+                    $existingTicket = $existingEntry.Ticket
+                    $existingArtifactTime = $existingEntry.ArtifactTime
+                }
+
+                if (Compare-MergedTicket -Existing $existingTicket -ExistingArtifactTime $existingArtifactTime -Candidate $converted -CandidateArtifactTime $artifactTime) {
+                    $ticketMap[[string]$ticket.Number] = [PSCustomObject]@{
+                        Ticket = $converted
+                        ArtifactTime = $artifactTime
+                    }
+                }
             }
 
             foreach ($summary in @($artifact.DetailedSummaries)) {
@@ -1526,7 +1577,7 @@ function Get-MergedWeeklyRunData {
 
         $mergedTickets = [System.Collections.Generic.List[TicketAnalysis]]::new()
         foreach ($number in ($ticketMap.Keys | Sort-Object)) {
-            $mergedTickets.Add($ticketMap[$number])
+            $mergedTickets.Add($ticketMap[$number].Ticket)
         }
 
         $mergedSummaries = @()
@@ -2451,12 +2502,32 @@ function Build-ContentEngWeeklyDashboard {
         $startStr = if ($istStart) { $istStart.ToString('dddd, dd MMM yyyy') } else { '' }
         $endStr   = if ($istEnd)   { $istEnd.ToString('dddd, dd MMM yyyy')   } else { '' }
 
+        function Get-DisplayRootCause {
+            param([object]$Value)
+            $clean = ([string]$Value).Trim()
+            if ([string]::IsNullOrWhiteSpace($clean)) { return '' }
+            if ($clean -match '^unknown(?:\s*\/\s*unclear)?$') { return '' }
+            return $clean
+        }
+
         function BuildBreakdown {
             param([string]$Property,[string]$Heading,[string]$FilterKey)
-            $groups = $incidents | Group-Object $Property | Where-Object { $_.Name } | Sort-Object Count -Descending
+            $groups = $incidents |
+                ForEach-Object {
+                    $value = if ($Property -eq 'PossibleRootCause') {
+                        Get-DisplayRootCause -Value $_.PossibleRootCause
+                    } else {
+                        ([string]$_.PSObject.Properties[$Property].Value).Trim()
+                    }
+                    if (-not [string]::IsNullOrWhiteSpace($value)) {
+                        [PSCustomObject]@{ Name = $value }
+                    }
+                } |
+                Group-Object Name |
+                Sort-Object Count -Descending
             if ($groups.Count -eq 0) { return '' }
             $rowsHtml = ($groups | ForEach-Object {
-                $n    = $_.Name; $cnt = $_.Count
+                $n    = ([string]$_.Name).Trim(); $cnt = $_.Count
                 $pct  = if ($total -gt 0) { [math]::Round(($cnt/$total)*100,1) } else { 0 }
                 $col  = ColorFor $n
                 $attr = [System.Net.WebUtility]::HtmlEncode($n) -replace "'","&#39;"
@@ -2475,7 +2546,9 @@ function Build-ContentEngWeeklyDashboard {
         $incRows = ($incidents | ForEach-Object {
             $col  = ColorFor $_.Category
             $num  = HtmlEsc $_.RowKey;  $cat = HtmlEsc $_.Category;  $sub = HtmlEsc $_.Subcategory
-            $prc  = HtmlEsc $_.PossibleRootCause; $drc = HtmlEsc $_.DetailedRootCause
+            $prcRaw = Get-DisplayRootCause -Value $_.PossibleRootCause
+            $drcRaw = ([string]$_.DetailedRootCause).Trim()
+            $prc  = HtmlEsc $prcRaw; $drc = HtmlEsc $drcRaw
             $conf = HtmlEsc $_.Confidence; $anal = HtmlEsc $_.AIAnalysis; $date = HtmlEsc $_.Date
             $catA = $cat -replace "'","&#39;"; $subA = $sub -replace "'","&#39;"; $prcA = $prc -replace "'","&#39;"
             $url  = "https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=$num"

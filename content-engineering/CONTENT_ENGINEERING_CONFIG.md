@@ -167,6 +167,14 @@ cd setup\publish
 .\Publish-runbook.ps1 -SourceFile "..\..\content-engineering\runbooks\incident-trend-rb-contenteng.ps1"
 ```
 
+Preferred CE flow:
+```powershell
+cd content-engineering\setup
+.\Publish-ContentEngineeringRunbooks.ps1
+```
+
+That wrapper publishes the CE runbooks, relinks the two scheduled jobs, and leaves the trend runbook manual/on-demand.
+
 ### Trigger manual backfill (test run)
 ```powershell
 cd setup\publish

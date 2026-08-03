@@ -2,6 +2,8 @@
 
 Step-by-step guide for onboarding a new team that has **nothing set up** and wants the same AI Ticket Analyzer system. Covers what Azure infrastructure to create, what to reuse from the existing setup, and every code change needed.
 
+> **Use the onboarding agent first:** `.github/agents/service-onboarding.agent.md` is the workspace agent for zero-knowledge service or service-offering onboarding. It keeps service-scoped and offering-scoped assets separate, protects production behavior, and requires live web app validation before the onboarding is considered complete.
+
 > **Architecture note (updated 2026-07-09):** Each new offering now gets a **fully isolated stack** — its own **Automation Account**, **Key Vault** (for secrets), and **Storage Account** (blob + table). The only shared resources are the Resource Group, the Azure OpenAI deployment, and the Static Web App dashboard. Because the Automation Account is dedicated, runbooks keep the **same variable names** as Productivity Tools (no prefix rename needed) and secrets are read from Key Vault instead of encrypted Automation Variables. The running example below is **End User Conferencing → Meetings - Rooms and Hardware**.
 
 ---

@@ -23,6 +23,7 @@ param(
     [string]$WeekList   = '26,27',
     [int]   $Year       = (Get-Date).Year,
     [switch]$SkipAI,
+    [switch]$StrictMode,
     [string]$OutputRoot = ''
 )
 
@@ -160,6 +161,10 @@ if ($allIncidents.Count -eq 0) {
     Write-Step 'No incidents found. Exiting.' 'Yellow'; exit 0
 }
 
+if (-not $PSBoundParameters.ContainsKey('StrictMode')) {
+    $StrictMode = $true
+}
+
 if ($SkipAI) {
     Write-Step 'SkipAI flag set - skipping AI steps.' 'Yellow'
     Write-Step '=== Fetch complete ===' 'Yellow'
@@ -182,50 +187,136 @@ $fullSystemPrompt = $tplTicket + "`n`n" + $tplEnv + "`n`n" +
 
 
 ## REQUIRED OUTPUT FORMAT (STRICT)
-Respond with exactly these four lines — no markdown, no bullets, no extra text:
+Respond with exactly these nine lines — no markdown, no bullets, no extra text:
 
 Primary Category: <exact bold product name from the taxonomy above — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Use "Unknown / Unclear" only if nothing fits.>
 Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category — e.g. if category is "SharePoint Online" you MUST pick from: Permission Denied, Site Administration Request, File / Item Recovery, SPO How-To / User Education. Never use a label from a different product section. Do NOT invent.>
 Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the Root Cause reference. Never use a label from a different product section. Do NOT invent.>
 Confidence Level: <Apply the CONFIDENCE CALCULATION FRAMEWORK from the template. Start at 70% baseline. Add: +25% if application/platform is clearly identified and matches the category; +15% if a specific error message, error code, or permission/role name is present; +5% if a KB number or KB link is cited; +10% if the agent used Content-Engineering-specific terminology (AEM, Sitecore, DAM, SSO, SPO permissions, publishing pipeline, workflow approval); +15% if the resolution matches the category examples exactly. Subtract: -20% if platform is unclear/ambiguous/contradictory; -10% if only user symptom language is present with no agent technical detail; -10% if multiple categories apply equally; -25% if description, work notes, and close notes contradict each other. Final score above 89% = High; 70-89% = Medium; below 70% = Low. If Primary Category is Unknown / Unclear, always output Low.>
-AI Analysis: <3–5 plain sentences: (1) Why the user raised this ticket — what problem they reported. (2) What technically happened or was found. (3) What the support agent did to address it. (4) Whether the issue was fully resolved, partially resolved, or still open. Plain language, no markdown, anyone should be able to understand it.>
+Issue: <Describe the actual issue and observed impact using only ServiceNow work notes, close notes, and investigation notes. Do not repeat the category or symptom label as the answer.>
+Root Cause Detail: <Describe the actual underlying cause from investigation notes and engineer updates. Do not output only the root cause label.>
+Resolution Detail: <Describe the exact corrective or recovery action taken to resolve the incident.>
+Evidence Detail: <Describe the concrete findings, checks, logs, or validation evidence that support the diagnosis and resolution.>
+AI Analysis: <3–5 plain sentences summarizing the incident using only validated ServiceNow details from work notes and close notes.>
 
 Rules: Each label appears verbatim followed by a colon. Plain ASCII only. One line per field.
 '@
+
+function Get-StructuredProblemAnalysis {
+    param([object]$Incident)
+
+    $confidence = if ($Incident.ai_confidence) { [string]$Incident.ai_confidence } else { 'Low' }
+
+    return @(
+        'Problem:',
+        "Issue: $([string]$Incident.ai_issue)",
+        "Root Cause: $([string]$Incident.ai_rootcause_detail)",
+        "Resolution: $([string]$Incident.ai_resolution_detail)",
+        "Evidence: $([string]$Incident.ai_evidence_detail)",
+        '',
+        "AI Analysis ($confidence confidence): $([string]$Incident.ai_analysis)"
+    ) -join "`n"
+}
 
 # Step 1: categorise each incident with full analysis
 Write-Step ('Step 1/3 - Categorising {0} incidents with full analysis...' -f $allIncidents.Count) 'Cyan'
 $categorised = [System.Collections.Generic.List[psobject]]::new()
 
 foreach ($inc in $allIncidents) {
-    $workNotes = [string]$inc.work_notes
-    if ($workNotes.Length -gt 4000) { $workNotes = $workNotes.Substring(0, 4000) + '...[truncated]' }
-    $userMsg = @"
+    function Sanitize-Text {
+        param([string]$Text)
+        if ([string]::IsNullOrEmpty($Text)) { return '' }
+        $clean = $Text -replace "[\x00-\x08\x0B\x0C\x0E-\x1F]", ' '
+        $clean = $clean -replace '[^\u0009\u000A\u000D\u0020-\u007E]', ' '
+        $clean = $clean -replace '\s+', ' '
+        return $clean.Trim()
+    }
+
+    $rawWorkNotes = Sanitize-Text -Text ([string]$inc.work_notes)
+    $rawCloseNotes = Sanitize-Text -Text ([string]$inc.close_notes)
+    $shortDescription = Sanitize-Text -Text ([string]$inc.short_description)
+
+    function New-IncidentPrompt {
+        param([int]$WorkNotesMaxChars)
+        $workNotes = $rawWorkNotes
+        if ($workNotes.Length -gt $WorkNotesMaxChars) {
+            $workNotes = $workNotes.Substring(0, $WorkNotesMaxChars) + '...[truncated]'
+        }
+        $closeNotes = $rawCloseNotes
+        if ($closeNotes.Length -gt 1500) {
+            $closeNotes = $closeNotes.Substring(0, 1500) + '...[truncated]'
+        }
+        return @"
 Incident: $($inc.number)
-Short description: $($inc.short_description)
+Short description: $shortDescription
 Work notes: $workNotes
-Close notes: $($inc.close_notes)
+Close notes: $closeNotes
 Close code: $($inc.close_code)
 Resolved at: $($inc.resolved_at)
 "@
+    }
     try {
-        $raw = Invoke-OpenAI -SystemPrompt $fullSystemPrompt -UserMessage $userMsg
-        $cat  = if ($raw -match '(?im)^Primary Category:\s*(.+)$')   { $matches[1].Trim() -replace '\*','' } else { 'Unknown / Unclear' }
-        $sub  = if ($raw -match '(?im)^Sub-symptom:\s*(.+)$')          { $matches[1].Trim() -replace '\*','' } else { 'Insufficient Information' }
-        $rc   = if ($raw -match '(?im)^Possible Root Cause:\s*(.+)$')  { $matches[1].Trim() -replace '\*','' } else { 'Unknown' }
-        $conf = if ($raw -match '(?im)^Confidence Level:\s*(High|Medium|Low)') { $matches[1].Trim() } else { if ($cat -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' } }
-        $anal = if ($raw -match '(?im)^AI Analysis:\s*(.+)$')           { $matches[1].Trim() } else { '' }
+        $raw = $null; $cat = $null; $sub = $null; $rc = $null; $conf = $null; $issue = $null; $rootDetail = $null; $resolutionDetail = $null; $evidenceDetail = $null; $anal = $null
+        $parsedOk = $false
+        $attemptLimits = @(4000, 2200, 1000)
+        for ($attempt = 1; $attempt -le 3; $attempt++) {
+            $userMsg = New-IncidentPrompt -WorkNotesMaxChars $attemptLimits[$attempt - 1]
+            $raw = Invoke-OpenAI -SystemPrompt $fullSystemPrompt -UserMessage $userMsg
+            $cat  = if ($raw -match '(?im)^Primary Category:\s*(.+)$')   { $matches[1].Trim() -replace '\*','' } else { '' }
+            $sub  = if ($raw -match '(?im)^Sub-symptom:\s*(.+)$')          { $matches[1].Trim() -replace '\*','' } else { '' }
+            $rc   = if ($raw -match '(?im)^Possible Root Cause:\s*(.+)$')  { $matches[1].Trim() -replace '\*','' } else { '' }
+            $conf = if ($raw -match '(?im)^Confidence Level:\s*(High|Medium|Low)') { $matches[1].Trim() } else { '' }
+            $issue = if ($raw -match '(?im)^Issue:\s*(.+)$')               { $matches[1].Trim() } else { '' }
+            $rootDetail = if ($raw -match '(?im)^Root Cause Detail:\s*(.+)$') { $matches[1].Trim() } else { '' }
+            $resolutionDetail = if ($raw -match '(?im)^Resolution Detail:\s*(.+)$') { $matches[1].Trim() } else { '' }
+            $evidenceDetail = if ($raw -match '(?im)^Evidence Detail:\s*(.+)$') { $matches[1].Trim() } else { '' }
+            $anal = if ($raw -match '(?im)^AI Analysis:\s*(.+)$')           { $matches[1].Trim() } else { '' }
+
+            $parsedOk = -not [string]::IsNullOrWhiteSpace($cat) -and
+                        -not [string]::IsNullOrWhiteSpace($sub) -and
+                        -not [string]::IsNullOrWhiteSpace($rc) -and
+                        -not [string]::IsNullOrWhiteSpace($conf) -and
+                        -not [string]::IsNullOrWhiteSpace($issue) -and
+                        -not [string]::IsNullOrWhiteSpace($rootDetail) -and
+                        -not [string]::IsNullOrWhiteSpace($resolutionDetail) -and
+                        -not [string]::IsNullOrWhiteSpace($evidenceDetail) -and
+                        -not [string]::IsNullOrWhiteSpace($anal) -and
+                        ($anal -notmatch '(?i)fallback|automated fallback')
+            if ($parsedOk) { break }
+            Write-Step ("  {0}: retrying AI parse attempt {1}/3" -f $inc.number, $attempt) 'Yellow'
+        }
+
+        if (-not $parsedOk -and $StrictMode) {
+            throw "Strict mode: missing or fallback AI fields after retries"
+        }
+
+        if ([string]::IsNullOrWhiteSpace($cat))  { $cat = 'Unknown / Unclear' }
+        if ([string]::IsNullOrWhiteSpace($sub))  { $sub = 'Insufficient Information' }
+        if ([string]::IsNullOrWhiteSpace($rc))   { $rc = 'Unknown' }
+        if ([string]::IsNullOrWhiteSpace($conf)) { $conf = if ($cat -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' } }
+        if ([string]::IsNullOrWhiteSpace($anal)) { $anal = '' }
         $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue $cat  -Force
         $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue $sub  -Force
         $inc | Add-Member -NotePropertyName 'ai_rootcause'   -NotePropertyValue $rc   -Force
         $inc | Add-Member -NotePropertyName 'ai_confidence'  -NotePropertyValue $conf -Force
+        $inc | Add-Member -NotePropertyName 'ai_issue'       -NotePropertyValue $issue -Force
+        $inc | Add-Member -NotePropertyName 'ai_rootcause_detail' -NotePropertyValue $rootDetail -Force
+        $inc | Add-Member -NotePropertyName 'ai_resolution_detail' -NotePropertyValue $resolutionDetail -Force
+        $inc | Add-Member -NotePropertyName 'ai_evidence_detail' -NotePropertyValue $evidenceDetail -Force
         $inc | Add-Member -NotePropertyName 'ai_analysis'    -NotePropertyValue $anal -Force
         Write-Host ('    {0}  [{1}] {2} / {3}' -f $inc.number, $cat, $sub, $rc) -ForegroundColor DarkGray
     } catch {
+        if ($StrictMode) {
+            throw ("Strict mode failure for {0}: {1}" -f $inc.number, $_.Exception.Message)
+        }
         $inc | Add-Member -NotePropertyName 'ai_category'    -NotePropertyValue 'Unknown / Unclear'        -Force
         $inc | Add-Member -NotePropertyName 'ai_subcategory' -NotePropertyValue 'Insufficient Information'  -Force
         $inc | Add-Member -NotePropertyName 'ai_rootcause'   -NotePropertyValue 'Unknown'                  -Force
         $inc | Add-Member -NotePropertyName 'ai_confidence'  -NotePropertyValue 'Low'                      -Force
+        $inc | Add-Member -NotePropertyName 'ai_issue'       -NotePropertyValue ''                         -Force
+        $inc | Add-Member -NotePropertyName 'ai_rootcause_detail' -NotePropertyValue ''                    -Force
+        $inc | Add-Member -NotePropertyName 'ai_resolution_detail' -NotePropertyValue ''                   -Force
+        $inc | Add-Member -NotePropertyName 'ai_evidence_detail' -NotePropertyValue ''                     -Force
         $inc | Add-Member -NotePropertyName 'ai_analysis'    -NotePropertyValue ''                         -Force
         Write-Step ('  {0}: failed - {1}' -f $inc.number, $_.Exception.Message) 'Yellow'
     }
@@ -379,22 +470,24 @@ try {
         $weekLabel  = [string]$inc.YearWeek
         $rowKey     = [string]$inc.number
 
-        $existing = Get-AzTableRow -Table $cloud -PartitionKey $weekLabel -RowKey $rowKey -ErrorAction SilentlyContinue
-        if ($existing) { $skipped++; continue }
-
         $row = @{
             Category       = [string]$inc.ai_category
             Subcategory    = [string]$inc.ai_subcategory
+            PossibleRootCause = if ($inc.ai_rootcause)   { [string]$inc.ai_rootcause }   else { 'Unknown' }
+            DetailedRootCause = ''
             RootCause      = if ($inc.ai_rootcause)   { [string]$inc.ai_rootcause }   else { 'Unknown' }
             Confidence     = if ($inc.ai_confidence)  { [string]$inc.ai_confidence }  else { if ($inc.ai_category -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' } }
-            AIAnalysis     = if ($inc.ai_analysis)    { [string]$inc.ai_analysis }    else { '' }
+            AIAnalysis     = Get-StructuredProblemAnalysis -Incident $inc
             Date           = $resolvedAt
             YearWeek       = $weekLabel
-            Year           = [string]$Year
-            WeekNumber     = [string](($weekLabel -split '-W')[1])
+            Year           = [int]$Year
+            WeekNumber     = [int](($weekLabel -split '-W')[1])
+            Service        = 'Content Engineering'
+            Misrouted      = $false
+            OriginalDescription = [string]$inc.short_description
             ReportBlobName = 'local-analyze-script'
         }
-        Add-AzTableRow -Table $cloud -PartitionKey $weekLabel -RowKey $rowKey -Property $row | Out-Null
+        Add-AzTableRow -Table $cloud -PartitionKey $weekLabel -RowKey $rowKey -Property $row -UpdateExisting | Out-Null
         $written++
     }
     Write-Step ("  Azure Table: $written rows written, $skipped already existed") 'Green'

@@ -1224,11 +1224,12 @@
     'Content Engineering':   '2026-W26'
   };
   function isWeekAllowedForService(week, svcName) {
-    if (!week) return false;
+    const normalizedWeek = normalizeYearWeek(week);
+    if (!normalizedWeek) return false;
     const svc = svcName || 'Productivity Tools';
-    const cutoff = SERVICE_WW_CUTOFF[svc];
+    const cutoff = normalizeYearWeek(SERVICE_WW_CUTOFF[svc]);
     if (!cutoff) return true; // no cutoff configured for this offering
-    return week >= cutoff;
+    return normalizedWeek >= cutoff;
   }
 
   // Always fetch fresh table data so scheduled run updates appear immediately.
@@ -1389,12 +1390,18 @@
         const rows = await fetchOneTable(svc);
         // Tag each row with its service (overrides whatever the row carried) so
         // the Service dropdown filter works consistently across both tables.
+        const normalizedRows = [];
         for (const r of rows) {
+          const wk = normalizeYearWeek(r.PartitionKey || r.YearWeek);
+          if (!wk) continue;
+          r.PartitionKey = wk;
+          r.YearWeek = wk;
           r.Service = svc.name;
           r.ServiceOffering = svc.name;
           r.ServiceGroup = svc.serviceGroup || 'End User Collaboration';
+          normalizedRows.push(r);
         }
-        return rows;
+        return normalizedRows;
       } catch (e) {
         console.warn('Failed to load service "' + svc.name + '":', e.message);
         return [];
@@ -1455,10 +1462,10 @@
     const set = new Set();
     for (const e of pool) {
       if (!matchesOffering(e, svc)) continue;
-      const w = e.PartitionKey || e.YearWeek;
+      const w = normalizeYearWeek(e.PartitionKey || e.YearWeek);
       if (w) set.add(w);
     }
-    return [...set].sort();
+    return [...set].sort(compareYearWeek);
   }
 
   function populateServiceDropdown(selId) {
@@ -1695,11 +1702,58 @@
     'Other / Miscellaneous'
   ];
 
+  function normalizeYearWeek(raw) {
+    const s = (raw == null ? '' : String(raw)).trim();
+    const m = /^(\d{4})-W(\d{1,2})$/i.exec(s);
+    if (!m) return '';
+    const y = Number(m[1]);
+    const w = Number(m[2]);
+    if (!Number.isFinite(y) || !Number.isFinite(w) || w < 1 || w > 53) return '';
+    return String(y) + '-W' + String(w).padStart(2, '0');
+  }
+
+  function compareYearWeek(a, b) {
+    const na = normalizeYearWeek(a);
+    const nb = normalizeYearWeek(b);
+    if (!na && !nb) return 0;
+    if (!na) return -1;
+    if (!nb) return 1;
+    const ya = Number(na.slice(0, 4));
+    const yb = Number(nb.slice(0, 4));
+    if (ya !== yb) return ya - yb;
+    const wa = Number(na.slice(6));
+    const wb = Number(nb.slice(6));
+    return wa - wb;
+  }
+
   // Convert "2026-W20" → "26-WW20" for display
   function formatWW(yw) {
-    const m = /^(\d{4})-W(\d{2})$/.exec(yw);
+    const normalized = normalizeYearWeek(yw);
+    const m = /^(\d{4})-W(\d{2})$/.exec(normalized);
     if (!m) return yw;
     return m[1].slice(2) + '-WW' + m[2];
+  }
+
+  function opxCleanValue(raw) {
+    const v = (raw == null ? '' : String(raw)).trim();
+    if (!v) return '';
+    if (/^[-\u2013\u2014]+$/.test(v)) return '';
+    if (/^unknown(?:\s*\/\s*unclear)?$/i.test(v)) return '';
+    if (/^n\/?a$/i.test(v)) return '';
+    if (/^not\s+(available|provided|documented)$/i.test(v)) return '';
+    return v;
+  }
+
+  function opxResolvedDate(raw) {
+    const v = (raw == null ? '' : String(raw)).trim();
+    if (!v) return '-';
+    const isoDate = v.match(/^(\d{4}-\d{2}-\d{2})/);
+    if (isoDate) return isoDate[1];
+    const parsed = new Date(v);
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed.toISOString().slice(0, 10);
+    }
+    return v;
   }
 
   function esc(s) {
@@ -3023,7 +3077,7 @@
   function opxConfLevel(e)    { return normalizedConfidenceValue(e).toLowerCase(); } // low | medium | high | unknown
   function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
   function opxDisplayRootCause(e) {
-    const rc = (e.PossibleRootCause || e.RootCause || '').trim();
+    const rc = opxCleanValue(e.PossibleRootCause || e.RootCause || '');
     return rc;
   }
   function opxIsDisplayablePatternKey(key) {
@@ -3349,8 +3403,14 @@
     const sn = 'https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=' + encodeURIComponent(inc.RowKey || '');
     // AIAnalysis is the rich free-form reasoning narrative used by the incident detail view.
     // DetailedRootCause remains an optional canonical label shown separately in metadata.
-    const drcRaw = (inc.DetailedRootCause || '').trim();
+    const drcRaw = opxCleanValue(inc.DetailedRootCause || '');
     const aiRaw  = (inc.AIAnalysis || '').trim();
+    const sourceIssue = opxCleanValue(inc.Subcategory || '') ||
+                        opxCleanValue(inc.OriginalDescription || '') ||
+                        opxCleanValue(inc.Category || '') ||
+                        'Not documented in source incident notes';
+    const sourceRootCause = opxDisplayRootCause(inc) || 'Not documented in source incident notes';
+    const sourceDetailedRoot = drcRaw || 'Not documented in source incident notes';
 
     // Confidence badge — colour-code High/Medium/Low (same buckets the runbook emits).
     const confRaw = (inc.Confidence || '').toString().trim();
@@ -3369,11 +3429,14 @@
     let analysisHtml;
     if (structured) {
       const problemRows = [
-        ['Issue', structured.issue],
-        ['Root Cause', structured.rootCause],
-        ['Resolution', structured.resolution],
-        ['Evidence', structured.evidence]
+        ['Issue', opxCleanValue(structured.issue)],
+        ['Root Cause', opxCleanValue(structured.rootCause)],
+        ['Resolution', opxCleanValue(structured.resolution)],
+        ['Evidence', opxCleanValue(structured.evidence)]
       ].filter(([, val]) => val);
+      if (problemRows.length === 0) {
+        problemRows.push(['Issue', sourceIssue]);
+      }
       const problemRowsHtml = problemRows.map(([label, val]) =>
         '<div style="margin-top:8px;">' +
           '<div style="font-weight:700;color:var(--intel-classic);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.4px;">' + label + '</div>' +
@@ -3392,7 +3455,22 @@
         '</div>';
     } else {
       const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      const inferredRows = [
+        ['Issue', sourceIssue],
+        ['Root Cause', sourceRootCause],
+        ['Detailed Root Cause', sourceDetailedRoot]
+      ];
+      const inferredRowsHtml = inferredRows.map(([label, val]) =>
+        '<div style="margin-top:8px;">' +
+          '<div style="font-weight:700;color:var(--intel-classic);font-size:0.85rem;text-transform:uppercase;letter-spacing:0.4px;">' + label + '</div>' +
+          '<div style="margin-top:2px;">' + esc(val) + '</div>' +
+        '</div>'
+      ).join('');
       analysisHtml =
+        '<div style="margin-bottom:12px;">' +
+          '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
+          '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;line-height:1.5;">' + (inferredRowsHtml || '<em style="color:var(--muted);">Not documented.</em>') + '</div>' +
+        '</div>' +
         '<div>' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
           '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + aiDisplay + '</div>' +
@@ -3401,16 +3479,18 @@
 
     const reportBlob = (inc.ReportBlobName || '').trim();
     const misrouted = inc.Misrouted === true || inc.Misrouted === 'true';
+    const displayRootCause = opxDisplayRootCause(inc) || 'Not documented in source incident notes';
+    const displayDetailedRoot = drcRaw || 'Not documented in source incident notes';
     return '<div style="padding:12px 18px;background:#fafcff;border-left:3px solid var(--intel-blue);">' +
       '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px 18px;font-size:0.85rem;margin-bottom:10px;">' +
         '<div><span style="color:var(--muted);">Incident:</span> <a href="' + sn + '" target="_blank" rel="noopener" style="color:var(--intel-blue);font-weight:600;">' + esc(inc.RowKey || '') + '</a></div>' +
-        '<div><span style="color:var(--muted);">Resolved:</span> ' + esc(inc.Date || '-') + '</div>' +
+        '<div><span style="color:var(--muted);">Resolved:</span> ' + esc(opxResolvedDate(inc.Date)) + '</div>' +
         '<div><span style="color:var(--muted);">Work Week:</span> ' + formatWW(inc.PartitionKey || '') + '</div>' +
         '<div><span style="color:var(--muted);">Product:</span> ' + esc(inc.Category || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Symptom:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
-        '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(opxDisplayRootCause(inc)) + '</div>' +
-        '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(drcRaw || '-') + '</div>' +
-        '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Productivity Tools') + '</div>' +
+        '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(displayRootCause) + '</div>' +
+        '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(displayDetailedRoot) + '</div>' +
+        '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Unknown') + '</div>' +
         '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
       '</div>' +
       '<div style="font-size:0.85rem;">' + analysisHtml + '</div>' +

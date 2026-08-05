@@ -161,20 +161,20 @@ $systemPrompt = $catTemplate + "`n`n" + $envTemplate + "`n`n" +
     "## REFERENCE: Possible Root Cause Labels`n" + $prcTemplate +
     $outputFormatInstruction
 
-# -------- Per-partition existing-key cache --------
+# -------- Per-partition existing-row cache --------
 $existingByPartition = @{}
-function Get-ExistingRowKeys {
+function Get-ExistingRowsByKey {
     param([string]$Partition)
     if ($existingByPartition.ContainsKey($Partition)) { return $existingByPartition[$Partition] }
-    $set = [System.Collections.Generic.HashSet[string]]::new()
+    $map = @{}
     try {
         $rows = Get-AzTableRow -Table $cloudTable -PartitionKey $Partition -ErrorAction Stop
-        foreach ($r in @($rows)) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+        foreach ($r in @($rows)) { if ($r.RowKey) { $map[[string]$r.RowKey] = $r } }
     } catch {
         Write-Warning "Could not load existing keys for ${Partition}: $($_.Exception.Message)"
     }
-    $existingByPartition[$Partition] = $set
-    return $set
+    $existingByPartition[$Partition] = $map
+    return $map
 }
 
 # -------- ServiceNow --------
@@ -269,29 +269,17 @@ function Get-StructuredFields {
     }
 }
 
-function New-FallbackAnalysisText {
-    param(
-        [string]$Category,
-        [string]$Subcategory,
-        [string]$RootCause
-    )
-    $parts = @()
-    if (-not [string]::IsNullOrWhiteSpace($Subcategory)) { $parts += "Symptom: $Subcategory" }
-    if (-not [string]::IsNullOrWhiteSpace($RootCause))   { $parts += "Possible root cause: $RootCause" }
-    if ($parts.Count -eq 0) {
-        return "${Category}: fallback analysis generated because AI analysis text was missing in backfill output."
-    }
-    return "$Category :: " + ($parts -join '. ') + '.'
-}
-
 function Get-YearWeekFromDate {
     param([DateTime]$Date)
     $cal = [System.Globalization.CultureInfo]::InvariantCulture.Calendar
     $wn  = $cal.GetWeekOfYear($Date, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
+    $isoYear = $Date.Year
+    if ($Date.Month -eq 1 -and $wn -ge 52) { $isoYear = $Date.Year - 1 }
+    elseif ($Date.Month -eq 12 -and $wn -eq 1) { $isoYear = $Date.Year + 1 }
     return [PSCustomObject]@{
-        Year       = $Date.Year
+        Year       = $isoYear
         WeekNumber = $wn
-        YearWeek   = ('{0:D4}-W{1:D2}' -f $Date.Year, $wn)
+        YearWeek   = ('{0:D4}-W{1:D2}' -f $isoYear, $wn)
     }
 }
 
@@ -330,11 +318,16 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
         }
         $yw = Get-YearWeekFromDate -Date $resolvedDt
 
-        # Skip if already in table
-        $existing = Get-ExistingRowKeys -Partition $yw.YearWeek
-        if ($null -ne $existing -and $existing.Contains($num)) {
-            $summary[$key].skipped++
-            continue
+        # Skip only when an existing row is complete and usable.
+        $existingRows = Get-ExistingRowsByKey -Partition $yw.YearWeek
+        if ($existingRows.ContainsKey($num)) {
+            $existingRow = $existingRows[$num]
+            $hasAnalysis = -not [string]::IsNullOrWhiteSpace([string]$existingRow.AIAnalysis)
+            $hasProblemData = (-not [string]::IsNullOrWhiteSpace([string]$existingRow.Subcategory)) -or (-not [string]::IsNullOrWhiteSpace([string]$existingRow.OriginalDescription))
+            if ($hasAnalysis -and $hasProblemData) {
+                $summary[$key].skipped++
+                continue
+            }
         }
 
         try {
@@ -346,7 +339,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             $anal   = $fields.Analysis
             $conf   = $fields.Confidence
             if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
-            if ([string]::IsNullOrWhiteSpace($anal)) { $anal = New-FallbackAnalysisText -Category $category -Subcategory $subcat -RootCause $root }
+            if ([string]::IsNullOrWhiteSpace($anal)) { throw "AI analysis is empty for incident $num. Row not written in strict mode." }
             if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
             if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
             if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
@@ -361,12 +354,19 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 'YearWeek'       = [string]$yw.YearWeek
                 'Year'           = [int]$yw.Year
                 'WeekNumber'     = [int]$yw.WeekNumber
+                'Service'        = 'Content Engineering'
+                'OriginalDescription' = [string]$inc.short_description
                 'ReportBlobName' = 'incremental-runbook'
             }
             Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
 
-            # Cache so a same-incident appearance in another loop day doesn't double-process
-            [void]$existing.Add([string]$num)
+            # Cache update so same-incident appearances in this run are treated as complete.
+            $existingRows[[string]$num] = [pscustomobject]@{
+                RowKey = [string]$num
+                AIAnalysis = [string]$anal
+                Subcategory = [string]$subcat
+                OriginalDescription = [string]$inc.short_description
+            }
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {

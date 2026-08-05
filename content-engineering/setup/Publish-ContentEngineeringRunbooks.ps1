@@ -21,7 +21,7 @@
 [CmdletBinding()]
 param(
     [string]$ResourceGroupName     = 'OPSW-Ticket-Analyzer',
-    [string]$AutomationAccountName = 'OPSW-ProductivityTools-account'
+    [string]$AutomationAccountName = 'OPSW-contentengg-account'
 )
 
 $ErrorActionPreference = 'Stop'

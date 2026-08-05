@@ -45,7 +45,7 @@ $key = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroup -Name $Storage
 $ctx = New-AzStorageContext -StorageAccountName $StorageAccount -StorageAccountKey $key
 
 $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' -ExpiryTime (Get-Date).AddMinutes(15) -Protocol HttpsOnly -Context $ctx
-$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,Date,YearWeek,AIAnalysis,Confidence,State'
+$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,Date,YearWeek,AIAnalysis,Confidence,State,Service'
 $base = "https://$StorageAccount.table.core.windows.net/$TableName()?`$select=$selectedFields&$sas"
 
 $rows = @()
@@ -60,6 +60,7 @@ while ($url) {
         if ($nrk) { $url += '&NextRowKey=' + [Uri]::EscapeDataString([string]$nrk) }
     } else { $url = $null }
 }
+$rows = @($rows | Where-Object { [string]$_.Service -eq 'Content Engineering' })
 Write-Host "Loaded $($rows.Count) rows from table." -ForegroundColor Green
 
 # ── Build a report per week ───────────────────────────────────────────────────

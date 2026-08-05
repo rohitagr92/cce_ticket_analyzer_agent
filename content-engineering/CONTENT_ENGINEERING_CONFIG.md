@@ -11,7 +11,7 @@ Quick reference for all Azure resources, variables, runbooks, and schedules for 
 | Subscription | Azure Subscription | OPSW Resources (`1c6d384e-bc83-4b02-859c-76eeb87f7676`) |
 | Resource Group | Resource Group | `OPSW-Ticket-Analyzer` |
 | Storage Account | Azure Storage | `opswcontentenggblob` (East US, LRS) |
-| Automation Account | Azure Automation | `OPSW-ProductivityTools-account` (shared) |
+| Automation Account | Azure Automation | `OPSW-contentengg-account` (shared) |
 | Azure OpenAI | Cognitive Services | `opsw-ticket-analyzer-foundary` (shared) |
 | Static Web App | Web App | `opsw-prodtools-reports` (shared) |
 
@@ -100,13 +100,12 @@ Quick reference for all Azure resources, variables, runbooks, and schedules for 
 
 ## Runbooks
 
-All 4 runbooks are in `content-engineering/runbooks/` and published to the `OPSW-ProductivityTools-account` automation account.
+All 3 runbooks are in `content-engineering/runbooks/` and published to the `OPSW-contentengg-account` automation account.
 
 | Runbook File | Published Name | Purpose |
 |---|---|---|
 | `incident-trend-backfill-rb-contenteng.ps1` | `incident-trend-backfill-rb-contenteng` | Daily incremental AI categorization — reads new incidents, calls OpenAI, writes to table |
 | `incident-analyzer-rb-contenteng.ps1` | `incident-analyzer-rb-contenteng` | Main weekly analyzer — full analysis + HTML report generation |
-| `incident-reconcile-rb-contenteng.ps1` | `incident-reconcile-rb-contenteng` | SN ↔ table count reconciliation with auto-heal |
 | `incident-trend-rb-contenteng.ps1` | `incident-trend-rb-contenteng` | Rolling 7-day trend analysis — sub-categorizes spikes, generates trend report |
 
 ---
@@ -115,18 +114,41 @@ All 4 runbooks are in `content-engineering/runbooks/` and published to the `OPSW
 
 Staggered 30 min after the Productivity Tools schedules to avoid Automation Account contention.
 
+Operational note: during CE historical-week rebuilds, the backfill schedules may be temporarily disabled to avoid stale backfill jobs overwriting structured analyzer output. Re-enable only after week data validation is complete.
+
 | Schedule Name | Time (UTC) | Runbook |
 |---|---|---|
 | `IncidentTrendBackfill-ContentEng-Daily-0330UTC` | 03:30 | `incident-trend-backfill-rb-contenteng` |
 | `IncidentAnalyzer-ContentEng-Daily-0630UTC` | 06:30 | `incident-analyzer-rb-contenteng` |
-| `IncidentReconcile-ContentEng-Daily-0730UTC` | 07:30 | `incident-reconcile-rb-contenteng` |
 | `IncidentTrend-ContentEng-Daily-0830UTC` | 08:30 | `incident-trend-rb-contenteng` |
+
+### Historical Week Recovery
+
+Preferred order for CE historical week recovery:
+
+1. Retrieve the target week directly from ServiceNow using the Content Engineering service offering scope.
+2. Regenerate the week only from validated incident records, work notes, investigation notes, close notes, and engineer updates.
+3. Normalize AIAnalysis into the structured incident detail format used by the web app:
+   - `Problem:`
+   - `Issue:`
+   - `Root Cause:`
+   - `Resolution:`
+   - `Evidence:`
+   - `AI Analysis (...)`
+4. Validate table rows before considering the week complete:
+   - `Category`, `Subcategory`, `Date`, and `YearWeek` must all be populated.
+   - `AIAnalysis` must use the structured Problem format.
+
+Restrictions:
+
+- Do not use cached reports, historical artifacts, placeholder content, or prior generated summaries as the report data source for WW30 or future work weeks.
+- Existing week output may be retained only when it is validated against current ServiceNow incident records and fully conforms to the approved Problem Analysis template.
 
 ---
 
 ## Template Files
 
-All 7 templates are in `content-engineering/templates/` and must be uploaded to the `templates` container of `opswcontentenggblob`.
+All 6 templates are in `content-engineering/templates/` and must be uploaded to the `templates` container of `opswcontentenggblob`.
 
 | File | Used by | Purpose |
 |---|---|---|
@@ -134,7 +156,6 @@ All 7 templates are in `content-engineering/templates/` and must be uploaded to 
 | `EnvironmentContext_ContentEngineering.md` | backfill, analyzer, trend | In-scope/out-of-scope context for AI |
 | `TrendSubCategorisation_ContentEngineering.md` | backfill, trend | Sub-symptom bold labels for trend analysis |
 | `PossibleRootCause_ContentEngineering.md` | backfill, trend | Root cause bold labels |
-| `DetailedRootCause_ContentEngineering.md` | analyzer | Extended RCA descriptions |
 | `WorkNotesCleanup_ContentEngineering.md` | analyzer | Work notes noise-removal rules |
 | `WorkNotesSummary_ContentEngineering.md` | analyzer | Summary output format guidance |
 
@@ -150,12 +171,8 @@ cd content-engineering\setup
 
 ### Upload templates
 ```powershell
-cd setup\publish
-.\Upload-TemplateFiles.ps1 `
-  -StorageAccountName opswcontentenggblob `
-  -ResourceGroupName "OPSW-Ticket-Analyzer" `
-  -LocalTemplatesFolder "..\..\content-engineering\templates" `
-  -ContainerName templates
+cd content-engineering\setup
+.\Upload-ContentEngineeringTemplates.ps1
 ```
 
 ### Publish runbooks
@@ -163,7 +180,6 @@ cd setup\publish
 cd setup\publish
 .\Publish-runbook.ps1 -SourceFile "..\..\content-engineering\runbooks\incident-trend-backfill-rb-contenteng.ps1"
 .\Publish-runbook.ps1 -SourceFile "..\..\content-engineering\runbooks\incident-analyzer-rb-contenteng.ps1"
-.\Publish-runbook.ps1 -SourceFile "..\..\content-engineering\runbooks\incident-reconcile-rb-contenteng.ps1"
 .\Publish-runbook.ps1 -SourceFile "..\..\content-engineering\runbooks\incident-trend-rb-contenteng.ps1"
 ```
 

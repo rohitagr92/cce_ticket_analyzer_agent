@@ -29,10 +29,15 @@
 param(
     [string[]]$FlushWeeks     = @('2026-W26', '2026-W27'),
     [string]  $SourceJsonPath = '',
-    [switch]  $SkipReports
+    [switch]  $SkipReports,
+    [switch]  $StrictRequireAnalysis
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (-not $PSBoundParameters.ContainsKey('StrictRequireAnalysis')) {
+    $StrictRequireAnalysis = $true
+}
 
 $repoRoot           = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 $templateDir        = Join-Path $repoRoot 'content-engineering\templates'
@@ -118,18 +123,22 @@ Write-Step 'STEP 3/4 - Inserting corrected rows from local JSON...' 'Yellow'
 $incidents = Get-Content -Path $SourceJsonPath -Raw -Encoding UTF8 | ConvertFrom-Json
 $written = 0
 $skipped = 0
+$seenRowKeys = New-Object 'System.Collections.Generic.HashSet[string]'
 
 foreach ($inc in $incidents) {
     $weekLabel = [string]$inc.YearWeek
     if (-not ($FlushWeeks -contains $weekLabel)) { $skipped++; continue }
 
     $cat  = [string]$inc.ai_category
-    $sub  = [string]$inc.ai_subcategory
+    $sub  = if ($inc.sub_symptom) { [string]$inc.sub_symptom } else { [string]$inc.ai_subcategory }
     $rc   = if ($inc.ai_rootcause)  { [string]$inc.ai_rootcause }  else { 'Unknown' }
     $conf = if ($inc.ai_confidence) { [string]$inc.ai_confidence } else {
                 if ($cat -eq 'Unknown / Unclear') { 'Low' } else { 'Medium' }
             }
     $anal  = if ($inc.ai_analysis) { [string]$inc.ai_analysis } else { '' }
+    if ($StrictRequireAnalysis -and ([string]::IsNullOrWhiteSpace($anal) -or $anal -match '(?i)fallback|automated fallback')) {
+        throw "Strict mode rejected incident $($inc.number): AI analysis is blank or fallback."
+    }
     $date  = [string]($inc.resolved_at -replace ' ', 'T')
     $year  = $weekLabel -replace '-W\d+', ''
     $wkNum = ($weekLabel -split '-W')[1]
@@ -137,7 +146,12 @@ foreach ($inc in $incidents) {
     $row = @{
         Category       = $cat
         Subcategory    = $sub
+        PossibleRootCause = $rc
         RootCause      = $rc
+        DetailedRootCause = '-'
+        Service        = 'Content Engineering'
+        ServiceOffering = 'Content Engineering'
+        Misrouted      = $false
         Confidence     = $conf
         AIAnalysis     = $anal
         Date           = $date
@@ -146,9 +160,14 @@ foreach ($inc in $incidents) {
         WeekNumber     = $wkNum
         ReportBlobName = 'local-fix-script'
     }
+    $rowKey = [string]$inc.number
+    if (-not $seenRowKeys.Add($rowKey)) {
+        continue
+    }
+
     Add-AzTableRow -Table $cloudTable `
-        -PartitionKey $weekLabel -RowKey ([string]$inc.number) `
-        -Property $row -ErrorAction Stop | Out-Null
+        -PartitionKey $weekLabel -RowKey $rowKey `
+        -Property $row -UpdateExisting -ErrorAction Stop | Out-Null
     $written++
 }
 Write-Step ("{0} row(s) inserted, {1} incident(s) outside target weeks." -f $written, $skipped) 'Green'

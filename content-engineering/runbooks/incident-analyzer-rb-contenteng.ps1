@@ -1754,8 +1754,8 @@ function Invoke-TicketProcessing {
             $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
         }
 
-        # Service is hardcoded for this runbook (separate runbook will handle Email and Calendaring)
-        $ticket.Service   = 'Productivity Tools'
+        # Service is fixed for this runbook.
+        $ticket.Service   = 'Content Engineering'
         $ticket.Misrouted = ($ticket.Category -eq 'Excluded')
 
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
@@ -1769,19 +1769,16 @@ function Invoke-TicketProcessing {
             Write-ScriptLog "Confidence not parsed for $($Incident.number) - defaulted to '$($ticket.Confidence)' (rootCausesKnown=$rootCausesKnown)" -Level Info -Category "Categorization"
         }
 
-        # Always persist a non-empty reasoning narrative so AIAnalysis (and the AI
-        # Recommendations tab) always has something to show / distil.
         if ([string]::IsNullOrWhiteSpace([string]$categoryInfo.reasoning)) {
-            $ticket.Reasoning = Get-FallbackReasoning -Ticket $ticket -CategoryInfo $categoryInfo
-            Write-ScriptLog "Reasoning empty for $($Incident.number) - composed fallback narrative from canonical fields" -Level Info -Category "Categorization"
-        } else {
-            $ticket.Reasoning = [string]$categoryInfo.reasoning
+            throw "AI reasoning is empty for incident $($Incident.number). Skipping write to prevent fallback/blank analysis pollution."
         }
+        $ticket.Reasoning = [string]$categoryInfo.reasoning
         $ticket.Evidence = $categoryInfo.key_evidence
         $ticket.Resolution = $categoryInfo.resolution_summary
         $ticket.Type = $categoryInfo.how_do_i_or_error
         $ticket.KnowledgeBase = $categoryInfo.kb_provided
         $ticket.OriginalDescription = $Incident.short_description
+        $ticket.SummarisedNotes = [string]$summary
         $ticket.ResolvedAt = [string]$Incident.resolved_at
         
         $null = Ensure-TicketAiFields -Ticket $ticket -CategoryInfo $categoryInfo
@@ -1798,50 +1795,6 @@ function Invoke-TicketProcessing {
         Write-ScriptLog "Failed to process $ticketType $($Incident.number): $($_.Exception.Message)" -Level Error -Category "Processing"
         throw
     }
-}
-
-function New-FallbackTicketAnalysis {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory)]
-        [object]$Incident,
-
-        [string]$FailureReason = ''
-    )
-
-    $ticket = [TicketAnalysis]::new([string]$Incident.number)
-    $ticket.Category = 'Other / Miscellaneous'
-    $ticket.SubSymptom = 'Unclassified'
-    $ticket.Subcategory = 'Unclassified'
-    $ticket.PossibleRootCause = 'Usage Guidance (How Do I)'
-    $ticket.DetailedRootCause = 'Automated fallback classification'
-    $ticket.Service = 'Productivity Tools'
-    $ticket.Misrouted = $false
-    $ticket.ExclusionReason = ''
-    $ticket.Confidence = 'Low'
-
-    $short = ([string]$Incident.short_description).Trim()
-    if ([string]::IsNullOrWhiteSpace($short)) {
-        $short = ([string]$Incident.description).Trim()
-    }
-    if ([string]::IsNullOrWhiteSpace($short)) {
-        $short = 'No incident summary available from source payload.'
-    }
-
-    $reasoning = "Fallback analysis generated because AI categorization failed after retries. Incident: $short"
-    if (-not [string]::IsNullOrWhiteSpace($FailureReason)) {
-        $reasoning += ". Error: $FailureReason"
-    }
-    $ticket.Reasoning = $reasoning
-    $ticket.Evidence = ''
-    $ticket.Resolution = ''
-    $ticket.Type = ''
-    $ticket.KnowledgeBase = ''
-    $ticket.OriginalDescription = [string]$Incident.short_description
-    $ticket.ResolvedAt = [string]$Incident.resolved_at
-
-    $null = Ensure-TicketAiFields -Ticket $ticket
-    return $ticket
 }
 
 function Get-CategoryStatistics {
@@ -1934,6 +1887,8 @@ function Save-CategoryStatisticsToTable {
     param(
         [Parameter(Mandatory)]
         [array]$CategoryData,  # Kept for backward compatibility, but we use ProcessedTickets
+
+        [array]$DetailedSummaries = @(),
         
         [DateTime]$ReportDate = (Get-Date),
 
@@ -1960,15 +1915,32 @@ function Save-CategoryStatisticsToTable {
             return
         }
         
+        function Get-IsoYearWeek {
+            param([DateTime]$Date)
+
+            $weekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
+                $Date,
+                [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
+                [System.DayOfWeek]::Monday
+            )
+
+            $isoYear = $Date.Year
+            if ($Date.Month -eq 1 -and $weekNumber -ge 52) { $isoYear = $Date.Year - 1 }
+            elseif ($Date.Month -eq 12 -and $weekNumber -eq 1) { $isoYear = $Date.Year + 1 }
+
+            return [PSCustomObject]@{
+                Year       = $isoYear
+                WeekNumber = $weekNumber
+                YearWeek   = ('{0:D4}-W{1:D2}' -f $isoYear, $weekNumber)
+            }
+        }
+
         # Fallback date components (used only if a ticket has no parseable resolved_at)
         $fallbackDateString = $ReportDate.ToString("yyyy-MM-dd")
-        $fallbackYear = $ReportDate.Year
-        $fallbackWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-            $ReportDate, 
-            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, 
-            [System.DayOfWeek]::Monday
-        )
-        $fallbackYearWeek = "{0:D4}-W{1:D2}" -f $fallbackYear, $fallbackWeekNumber
+        $fallbackIso = Get-IsoYearWeek -Date $ReportDate
+        $fallbackYear = $fallbackIso.Year
+        $fallbackWeekNumber = $fallbackIso.WeekNumber
+        $fallbackYearWeek = $fallbackIso.YearWeek
         
         Write-ScriptLog "Saving $($Script:ProcessedTickets.Count) incident records to Azure Table (per-ticket week partition; fallback Week=$fallbackYearWeek)" -Level Info
         
@@ -1976,6 +1948,12 @@ function Save-CategoryStatisticsToTable {
         $errorCount = 0
         $analysisFallbackCount = 0
         $confidenceFallbackCount = 0
+        $summaryLookup = @{}
+        foreach ($summary in @($DetailedSummaries)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$summary.IncidentNumber)) {
+                $summaryLookup[[string]$summary.IncidentNumber] = [string]$summary.SummarisedNotes
+            }
+        }
         
         foreach ($ticket in $Script:ProcessedTickets) {
             try {
@@ -1984,6 +1962,9 @@ function Save-CategoryStatisticsToTable {
                 $null = Ensure-TicketAiFields -Ticket $ticket
                 if ($reasoningWasBlank) { $analysisFallbackCount++ }
                 if ($confidenceWasBlank) { $confidenceFallbackCount++ }
+                if ($summaryLookup.ContainsKey([string]$ticket.Number)) {
+                    $ticket.SummarisedNotes = $summaryLookup[[string]$ticket.Number]
+                }
 
                 # Per-ticket partitioning: use the ticket's own resolved_at so cross-week runs
                 # (e.g. backfills, Monday catch-ups) land in the correct week partition.
@@ -2001,13 +1982,10 @@ function Save-CategoryStatisticsToTable {
                     $yearWeekString = $fallbackYearWeek
                 } else {
                     $dateString     = $resolvedDt.ToString("yyyy-MM-dd")
-                    $year           = $resolvedDt.Year
-                    $weekNumber     = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-                        $resolvedDt,
-                        [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-                        [System.DayOfWeek]::Monday
-                    )
-                    $yearWeekString = "{0:D4}-W{1:D2}" -f $year, $weekNumber
+                    $resolvedIso    = Get-IsoYearWeek -Date $resolvedDt
+                    $year           = $resolvedIso.Year
+                    $weekNumber     = $resolvedIso.WeekNumber
+                    $yearWeekString = $resolvedIso.YearWeek
                 }
                 
                 # Create entity properties for individual incident.
@@ -2024,12 +2002,11 @@ function Save-CategoryStatisticsToTable {
                     "Year"              = [int]$year
                     "WeekNumber"        = [int]$weekNumber
                     "ReportBlobName"    = [string]$ReportBlobName
-                    # Free-form AI rationale + confidence shown in the web Ops report
-                    # incident-detail modal alongside the canonical DetailedRootCause.
-                    # AIAnalysis is sourced from $ticket.Reasoning (the AI's narrative);
-                    # cap to keep Azure Table single-property size sane (64 KiB hard limit).
-                    "AIAnalysis"        = if (([string]$ticket.Reasoning).Length -gt 4000) { ([string]$ticket.Reasoning).Substring(0, 4000) + '...' } else { [string]$ticket.Reasoning }
+                    # Structured analysis keeps incident detail sections stable in web
+                    # (Problem, Root Cause, Resolution, Evidence, AI Analysis).
+                    "AIAnalysis"        = (Format-StructuredAiAnalysis -Ticket $ticket)
                     "Confidence"        = [string]$ticket.Confidence
+                    "OriginalDescription" = [string]$ticket.OriginalDescription
                 }
                 
                 # Save incident record
@@ -2757,21 +2734,6 @@ function Get-NormalizedConfidence {
     return 'Low'
 }
 
-# Build a minimal analysis narrative from canonical fields so AIAnalysis is never
-# blank in the dashboards when the model returned no reasoning text.
-function Get-FallbackReasoning {
-    [CmdletBinding()]
-    param([object]$Ticket, [object]$CategoryInfo)
-    $parts = @()
-    if ($Ticket.Subcategory)                                                    { $parts += "Symptom: $($Ticket.Subcategory)" }
-    if ($Ticket.PossibleRootCause -and $Ticket.PossibleRootCause -ne 'Unknown') { $parts += "Possible root cause: $($Ticket.PossibleRootCause)" }
-    if ($Ticket.DetailedRootCause -and $Ticket.DetailedRootCause -ne 'Unknown') { $parts += "Detailed root cause: $($Ticket.DetailedRootCause)" }
-    $resolution = [string]$CategoryInfo.resolution_summary
-    if (-not [string]::IsNullOrWhiteSpace($resolution))                         { $parts += "Resolution: $resolution" }
-    if ($parts.Count -gt 0) { return ("$($Ticket.Category) :: " + ($parts -join '. ') + '.') }
-    return "$($Ticket.Category): detailed analysis was not captured for this ticket."
-}
-
 function Ensure-TicketAiFields {
     [CmdletBinding()]
     param(
@@ -2787,16 +2749,123 @@ function Ensure-TicketAiFields {
     )
     $Ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$Ticket.Confidence) -RootCausesKnown $rootCausesKnown
 
-    if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
-        $fallbackInfo = if ($CategoryInfo) {
-            $CategoryInfo
-        } else {
-            [PSCustomObject]@{ resolution_summary = [string]$Ticket.Resolution }
-        }
-        $Ticket.Reasoning = Get-FallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
-    }
+    if ($null -eq $Ticket.Reasoning) { $Ticket.Reasoning = '' }
+    $Ticket.Reasoning = [string]$Ticket.Reasoning
 
     return $Ticket
+}
+
+function Get-FirstNonPlaceholderText {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [string[]]$Candidates,
+
+        [string]$DefaultValue = 'Not documented in work notes.'
+    )
+
+    foreach ($candidate in $Candidates) {
+        $text = [string]$candidate
+        if ([string]::IsNullOrWhiteSpace($text)) { continue }
+        $trimmed = $text.Trim()
+        if ($trimmed -match '^(?:-|n/?a|unknown(?:\s*/\s*unclear)?)$') { continue }
+        return $trimmed
+    }
+
+    return $DefaultValue
+}
+
+function Get-ReasoningSentence {
+    [CmdletBinding()]
+    param(
+        [string]$Reasoning,
+        [string]$Regex,
+        [string]$Fallback = ''
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Reasoning)) { return $Fallback }
+
+    $sentences = ($Reasoning -split '(?<=[\.!?])\s+' | ForEach-Object { $_.Trim() } | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+    foreach ($sentence in $sentences) {
+        if ($sentence -match $Regex) {
+            return $sentence
+        }
+    }
+
+    if ($sentences.Count -gt 0) { return $sentences[0] }
+    return $Fallback
+}
+
+function Get-SummarySection {
+    [CmdletBinding()]
+    param(
+        [string]$Summary,
+        [string]$SectionName
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Summary)) { return '' }
+
+    $pattern = '(?ms)^' + [regex]::Escape($SectionName) + ':\s*(.+?)(?=^Problem:|^Environment:|^Actions Taken:|^Resolution:|\z)'
+    if ($Summary -match $pattern) {
+        return ($matches[1] -replace '\s+', ' ').Trim()
+    }
+
+    return ''
+}
+
+function Format-StructuredAiAnalysis {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)]
+        [object]$Ticket
+    )
+
+    $summaryText = [string]$Ticket.SummarisedNotes
+    $summaryProblem = Get-SummarySection -Summary $summaryText -SectionName 'Problem'
+    $summaryActions = Get-SummarySection -Summary $summaryText -SectionName 'Actions Taken'
+    $summaryResolution = Get-SummarySection -Summary $summaryText -SectionName 'Resolution'
+
+    $issue = Get-FirstNonPlaceholderText -Candidates @(
+        $summaryProblem,
+        (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)^the user raised|reported|unable to|issue|problem'),
+        [string]($Ticket.OriginalDescription)
+    ) -DefaultValue 'Issue details were not explicitly documented in ServiceNow notes.'
+
+    $rootCauseNarrative = Get-FirstNonPlaceholderText -Candidates @(
+        (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)root cause|because|due to|caused by|tied to|permission|policy|identity'),
+        [string]($Ticket.Evidence)
+    ) -DefaultValue 'Root cause details were not explicitly documented in ServiceNow notes.'
+
+    $resolution = Get-FirstNonPlaceholderText -Candidates @(
+        $summaryResolution,
+        [string]($Ticket.Resolution),
+        (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)resolved|advised|instructed|fixed|restored|workaround|updated|removed|re-?shared')
+    ) -DefaultValue 'Resolution details were not explicitly documented in ServiceNow notes.'
+
+    $evidence = Get-FirstNonPlaceholderText -Candidates @(
+        $summaryActions,
+        [string]($Ticket.Evidence),
+        (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)notes|ticket|error|observed|confirmed|shows|indicates')
+    ) -DefaultValue 'Evidence was not explicitly documented in ServiceNow notes.'
+
+    $confidence = Get-NormalizedConfidence -Raw ([string]($Ticket.Confidence))
+    $analysisBody = Get-FirstNonPlaceholderText -Candidates @([string]($Ticket.Reasoning)) -DefaultValue 'AI analysis details were not explicitly documented.'
+
+    $structured = @(
+        'Problem:',
+        "Issue: $issue",
+        "Root Cause: $rootCauseNarrative",
+        "Resolution: $resolution",
+        "Evidence: $evidence",
+        '',
+        "AI Analysis ($confidence confidence): $analysisBody"
+    ) -join "`n"
+
+    if ($structured.Length -gt 4000) {
+        return $structured.Substring(0, 4000)
+    }
+
+    return $structured
 }
 
 function Normalize-CanonicalText {
@@ -3066,6 +3135,7 @@ class TicketAnalysis {
     [string]$Type
     [string]$KnowledgeBase
     [string]$OriginalDescription
+    [string]$SummarisedNotes
     [string]$ResolvedAt          # Raw ServiceNow resolved_at string (used for week partitioning)
     [datetime]$Processed = (Get-Date)
     
@@ -3218,17 +3288,8 @@ foreach ($incident in $incidents) {
                 Write-ScriptLog "Rate limit hit for incident $($incident.number). Waiting $waitTime seconds before retry $retryCount/$maxRetries" -Level Warning
                 Start-Sleep -Seconds $waitTime
             } elseif ($retryCount -ge $maxRetries) {
-                Write-ScriptLog "Failed to process incident $($incident.number) after $maxRetries attempts: $errorMessage" -Level Warning
-
-                $fallbackTicket = New-FallbackTicketAnalysis -Incident $incident -FailureReason $errorMessage
-                $Script:ProcessedTickets.Add($fallbackTicket)
-                $allsummarisednotes.Add([PSCustomObject]@{
-                    IncidentNumber = $incident.number
-                    SummarisedNotes = "Fallback summary generated because AI categorization failed after retries."
-                })
-                $processedIncidentCount++
-                $success = $true
-                Write-ScriptLog "Applied no-skip fallback ticket for incident $($incident.number)" -Level Warning -Category "Processing"
+                Write-ScriptLog "Failed to process incident $($incident.number) after $maxRetries attempts: $errorMessage" -Level Error
+                throw "CE strict mode: incident $($incident.number) failed after retries. No fallback row will be written."
             } else {
                 Write-ScriptLog "Retry $retryCount/$maxRetries for incident $($incident.number): $errorMessage" -Level Warning
                 Start-Sleep -Seconds 2
@@ -3388,7 +3449,7 @@ Write-ScriptLog "Service request processing disabled - focusing on incidents onl
             Write-ScriptLog "Using date $($targetThursday.ToString('yyyy-MM-dd')) for PartitionKey (artifact week: $reportYearWeek, current week: W$currentWeekNum)" -Level Info
         }
     }
-    Save-CategoryStatisticsToTable -CategoryData $CategoryData -ReportDate $reportDateForTable -ReportBlobName $reportBlobName
+    Save-CategoryStatisticsToTable -CategoryData $CategoryData -DetailedSummaries $allsummarisednotes -ReportDate $reportDateForTable -ReportBlobName $reportBlobName
     
     # Always save report to blob/local storage (needed for static web app viewer)
     if ($Script:IsAzureAutomation) {

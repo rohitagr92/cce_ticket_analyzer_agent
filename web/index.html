@@ -1724,19 +1724,52 @@
   // rendering) for older AIAnalysis rows that predate this format.
   function opxParseStructuredAnalysis(raw) {
     const text = (raw || '').toString().trim();
-    if (!/^Problem\s*:/i.test(text)) return null;
-    const issueM   = text.match(/-\s*Issue:\s*([\s\S]*?)(?=\n-\s*Root Cause:|\n\s*AI Analysis|$)/i);
-    const rootM    = text.match(/-\s*Root Cause:\s*([\s\S]*?)(?=\n-\s*Resolution:|\n\s*AI Analysis|$)/i);
-    const resM     = text.match(/-\s*Resolution:\s*([\s\S]*?)(?=\n-\s*Evidence:|\n\s*AI Analysis|$)/i);
-    const evM      = text.match(/-\s*Evidence:\s*([\s\S]*?)(?=\n\s*AI Analysis|$)/i);
-    const aiM      = text.match(/AI Analysis\s*\(([^)]*)\)\s*:\s*([\s\S]*)$/i);
-    if (!issueM && !rootM && !resM && !evM && !aiM) return null;
+    if (!text) return null;
+
+    // Normalize markdown noise and spacing so both legacy and new templates parse.
+    const normalized = text
+      .replace(/\*\*/g, '')
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      .trim();
+
+    if (!/(^|\n)\s*(Problem|Issue|Root Cause|Resolution|Evidence|AI Analysis)\s*:?/i.test(normalized)) {
+      return null;
+    }
+
+    const capture = (labels, stops) => {
+      const lhs = labels.join('|');
+      const rhs = stops.join('|');
+      const re = new RegExp(
+        '(?:^|\\n|\\s-\\s*)\\s*(?:' + lhs + ')\\s*:?\\s*([\\s\\S]*?)' +
+        '(?=\\n\\s*(?:' + rhs + ')\\s*:?|\\s-\\s*(?:' + rhs + ')\\s*:?|$)',
+        'i'
+      );
+      const m = normalized.match(re);
+      return m ? m[1].trim() : '';
+    };
+
+    // Legacy format has "- Issue:" under Problem; new format has "Problem:" directly.
+    let issue = capture(['Issue'], ['Root Cause','Resolution','Evidence','AI Analysis']);
+    if (!issue) {
+      issue = capture(['Problem'], ['Root Cause','Resolution','Evidence','AI Analysis']);
+    }
+    let rootCause = capture(['Root Cause'], ['Resolution','Evidence','AI Analysis']);
+    let resolution = capture(['Resolution'], ['Evidence','AI Analysis']);
+    let evidence = capture(['Evidence'], ['AI Analysis']);
+
+    // AI section may be "AI Analysis (High Confidence): ..." OR "AI Analysis: ...".
+    const aiM = normalized.match(/(?:^|\n|\s-\s*)\s*AI Analysis\s*(?:\(([^)]*)\))?\s*:?\s*([\s\S]*)$/i);
+    const reasoning = aiM ? (aiM[2] || '').trim() : '';
+
+    if (!issue && !rootCause && !resolution && !evidence && !reasoning) return null;
+
     return {
-      issue: issueM ? issueM[1].trim() : '',
-      rootCause: rootM ? rootM[1].trim() : '',
-      resolution: resM ? resM[1].trim() : '',
-      evidence: evM ? evM[1].trim() : '',
-      reasoning: aiM ? aiM[2].trim() : ''
+      issue,
+      rootCause,
+      resolution,
+      evidence,
+      reasoning
     };
   }
 

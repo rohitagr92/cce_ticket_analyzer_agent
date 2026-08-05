@@ -34,6 +34,92 @@ $ErrorActionPreference = 'Stop'
 
 function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
 
+function Get-DisplayAiAnalysis {
+  param([object]$Row)
+
+  $raw = [string]$Row.AIAnalysis
+  if ([string]::IsNullOrWhiteSpace($raw)) { $raw = '' }
+
+  $clean = $raw
+  $clean = $clean -replace '(?is)<style[^>]*>.*?</style>', ' '
+  $clean = $clean -replace '(?is)<script[^>]*>.*?</script>', ' '
+  $clean = $clean -replace '(?is)<[^>]+>', ' '
+  $clean = $clean -replace '(?is)\b[a-z][a-z0-9\s\.#:_\-]*\{[^{}]*\}', ' '
+  $clean = $clean -replace '\*\*', ''
+  $clean = $clean -replace '[\r\n]+', "`n"
+  $clean = $clean -replace '\s{2,}', ' '
+  $clean = $clean.Trim()
+
+  function Get-Field {
+    param([string]$Text, [string[]]$Labels)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+    $labelAlt = ($Labels | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    $allStops = 'Problem|Issue|Root Cause|Resolution|Evidence|AI Analysis'
+    $pat = "(?ims)^\s*(?:$labelAlt)\s*:\s*(.+?)\s*(?=\n\s*(?:$allStops)\s*:|\z)"
+    $m = [regex]::Match($Text, $pat)
+    if ($m.Success) { return ($m.Groups[1].Value -replace '\s{2,}',' ').Trim() }
+    return ''
+  }
+
+  $problem = Get-Field -Text $clean -Labels @('Problem','Issue')
+  $rootCause = Get-Field -Text $clean -Labels @('Root Cause')
+  $resolution = Get-Field -Text $clean -Labels @('Resolution')
+  $evidence = Get-Field -Text $clean -Labels @('Evidence')
+  $analysis = Get-Field -Text $clean -Labels @('AI Analysis')
+
+  if ([string]::IsNullOrWhiteSpace($problem)) {
+    $problem = if (-not [string]::IsNullOrWhiteSpace([string]$Row.Subcategory)) {
+      "Incident related to $([string]$Row.Subcategory) in $([string]$Row.Category)."
+    } elseif (-not [string]::IsNullOrWhiteSpace($clean)) {
+      ($clean -split '(?<=[.!?])\s+' | Select-Object -First 1)
+    } else {
+      'Not documented in work notes.'
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($rootCause)) {
+    if (-not [string]::IsNullOrWhiteSpace([string]$Row.DetailedRootCause)) {
+      $rootCause = [string]$Row.DetailedRootCause
+    } elseif (-not [string]::IsNullOrWhiteSpace([string]$Row.PossibleRootCause)) {
+      $rootCause = [string]$Row.PossibleRootCause
+    } elseif (-not [string]::IsNullOrWhiteSpace([string]$Row.RootCause)) {
+      $rootCause = [string]$Row.RootCause
+    } else {
+      $rootCause = 'Not documented in work notes.'
+    }
+  }
+
+  if ([string]::IsNullOrWhiteSpace($resolution)) {
+    $resolution = 'Not documented in work notes.'
+  }
+  if ([string]::IsNullOrWhiteSpace($evidence)) {
+    $evidence = 'Not documented in work notes.'
+  }
+
+  if ([string]::IsNullOrWhiteSpace($analysis)) {
+    if (-not [string]::IsNullOrWhiteSpace($clean)) {
+      $analysis = $clean
+    } else {
+      $analysis = 'Analysis not available.'
+    }
+  }
+
+  $toSingleLine = {
+    param([string]$t, [int]$max)
+    $x = ($t -replace '[\r\n]+', ' ' -replace '\s{2,}', ' ').Trim(' ', '.', ',', ';')
+    if ($x.Length -gt $max) { return $x.Substring(0, $max).Trim() + '...' }
+    return $x
+  }
+
+  $problem = & $toSingleLine $problem 500
+  $rootCause = & $toSingleLine $rootCause 700
+  $resolution = & $toSingleLine $resolution 700
+  $evidence = & $toSingleLine $evidence 700
+  $analysis = & $toSingleLine $analysis 1800
+
+  return "Problem: $problem`nRoot Cause: $rootCause`nResolution: $resolution`nEvidence: $evidence`nAI Analysis: $analysis"
+}
+
 # Category color palette (matches web/index.html)
 $CategoryColors = @{
     'Hardware Issues'                          = '#e74c3c'
@@ -177,7 +263,7 @@ $rowsHtml
             $topRaw = if ($_.TopRootCause) { $_.TopRootCause } elseif ($_.PossibleRootCause) { $_.PossibleRootCause } else { $_.RootCause }
             $top   = HtmlEsc $topRaw
             $det   = HtmlEsc $_.DetailedRootCause
-            $anal  = HtmlEsc $_.AIAnalysis
+            $anal  = HtmlEsc (Get-DisplayAiAnalysis -Row $_)
             $date  = HtmlEsc $_.Date
             $catAttr = $cat -replace "'", '&#39;'
             $subAttr = $sub -replace "'", '&#39;'
@@ -331,13 +417,16 @@ $incRows
 "@
 
     $blobName = "ProductivityTools_Weekly_Report_$yearWeek.html"
+    $legacyBlobName = "EUC_Weekly_Report_$yearWeek.html"
     $tmp = Join-Path $env:TEMP $blobName
     Set-Content -Path $tmp -Value $html -Encoding UTF8
 
     Set-AzStorageBlobContent -File $tmp -Container $ContainerName -Blob $blobName -Context $ctx -Properties @{ ContentType = 'text/html; charset=utf-8' } -Force | Out-Null
+    Set-AzStorageBlobContent -File $tmp -Container $ContainerName -Blob $legacyBlobName -Context $ctx -Properties @{ ContentType = 'text/html; charset=utf-8' } -Force | Out-Null
     Remove-Item $tmp -Force
 
     Write-Host ("  Uploaded {0,-50} ({1} incidents)" -f $blobName, $total) -ForegroundColor Green
+    Write-Host ("  Uploaded {0,-50} ({1} incidents)" -f $legacyBlobName, $total) -ForegroundColor Green
 }
 
 Write-Host "`nDone. Reload the Reports tab to see the new weekly reports." -ForegroundColor Cyan

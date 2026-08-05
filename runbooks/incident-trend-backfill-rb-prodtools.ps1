@@ -53,6 +53,24 @@ function Clean-JsonString {
     return $clean.Trim()
 }
 
+function Sanitize-AiNarrativeText {
+    param([string]$Text, [int]$MaxLength = 2000)
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+
+    $clean = [string]$Text
+    $clean = $clean -replace '(?is)<style[^>]*>.*?</style>', ' '
+    $clean = $clean -replace '(?is)<script[^>]*>.*?</script>', ' '
+    $clean = $clean -replace '(?is)<[^>]+>', ' '
+    $clean = $clean -replace '(?is)\b[a-z][a-z0-9\s\.#:_\-]*\{[^{}]*\}', ' '
+    $clean = $clean | Clean-JsonString
+    $clean = $clean -replace '(?im)^\s*(corrected\s+ai\s+analysis|ai\s+analysis|medium\s+confidence|high\s+confidence|low\s+confidence)\s*:?\s*', ''
+    $clean = $clean -replace '[\r\n]+', ' '
+    $clean = $clean -replace '\s{2,}', ' '
+    $clean = $clean.Trim(' ', '.', ',', ';', ':')
+    if ($clean.Length -gt $MaxLength) { $clean = $clean.Substring(0, $MaxLength).Trim() + '...' }
+    return $clean
+}
+
 function Get-SNValue {
     param([object]$Prop)
     if ($null -eq $Prop) { return '' }
@@ -344,11 +362,70 @@ function Get-YearWeekFromDate {
     param([DateTime]$Date)
     $cal = [System.Globalization.CultureInfo]::InvariantCulture.Calendar
     $wn  = $cal.GetWeekOfYear($Date, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
-    return [PSCustomObject]@{
-        Year       = $Date.Year
-        WeekNumber = $wn
-        YearWeek   = ('{0:D4}-W{1:D2}' -f $Date.Year, $wn)
+    $isoYear = $Date.Year
+    if ($Date.Month -eq 1 -and $wn -ge 52) {
+        $isoYear--
+    } elseif ($Date.Month -eq 12 -and $wn -eq 1) {
+        $isoYear++
     }
+    return [PSCustomObject]@{
+        Year       = $isoYear
+        WeekNumber = $wn
+        YearWeek   = ('{0:D4}-W{1:D2}' -f $isoYear, $wn)
+    }
+}
+
+function Test-NeedsAiReprocess {
+    param([string]$ExistingAnalysis)
+
+    if ([string]::IsNullOrWhiteSpace($ExistingAnalysis)) { return $true }
+
+    $text = [string]$ExistingAnalysis
+
+    # Hard failures: CSS/HTML leakage or malformed injected content.
+    $badMarkupPattern = '(?is)<style|</?[a-z][^>]*>|\{\s*text-decoration\s*:|\btr\s+th\b|\bcolor\s*:\s*#[0-9a-fA-F]{3,6}'
+    if ($text -match $badMarkupPattern) { return $true }
+
+    # Required sections in strict format.
+    if ($text -notmatch '(?im)^\s*Problem\s*:') { return $true }
+    if ($text -notmatch '(?im)^\s*Root\s*Cause\s*:') { return $true }
+    if ($text -notmatch '(?im)^\s*Resolution\s*:') { return $true }
+    if ($text -notmatch '(?im)^\s*Evidence\s*:') { return $true }
+    if ($text -notmatch '(?im)^\s*AI\s*Analysis\s*\(') { return $true }
+
+    function Get-SectionValue {
+        param([string]$Source, [string[]]$Labels, [string[]]$Stops)
+        $lhs = ($Labels | ForEach-Object { [regex]::Escape($_) }) -join '|'
+        $rhs = ($Stops | ForEach-Object { [regex]::Escape($_) }) -join '|'
+        $m = [regex]::Match($Source, "(?ims)^\s*(?:$lhs)\s*:\s*(.*?)\s*(?=\n\s*(?:$rhs)\s*:|\z)")
+        if (-not $m.Success) { return '' }
+        return ($m.Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    }
+
+    function Is-PlaceholderText {
+        param([string]$Value)
+        if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
+        $v = $Value.Trim()
+        if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $true }
+        if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+        return $false
+    }
+
+    $problemText = Get-SectionValue -Source $text -Labels @('Problem','Issue') -Stops @('Root Cause','Resolution','Evidence','AI Analysis')
+    $rootText    = Get-SectionValue -Source $text -Labels @('Root Cause') -Stops @('Resolution','Evidence','AI Analysis')
+    $resText     = Get-SectionValue -Source $text -Labels @('Resolution') -Stops @('Evidence','AI Analysis')
+    $evText      = Get-SectionValue -Source $text -Labels @('Evidence') -Stops @('AI Analysis')
+    $aiMatch     = [regex]::Match($text, '(?ims)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:\s*(.*?)\s*$')
+    $aiText      = if ($aiMatch.Success) { ($aiMatch.Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':') } else { '' }
+
+    if (Is-PlaceholderText -Value $problemText) { return $true }
+    if (Is-PlaceholderText -Value $rootText) { return $true }
+    if (Is-PlaceholderText -Value $resText) { return $true }
+    if (Is-PlaceholderText -Value $evText) { return $true }
+    if (Is-PlaceholderText -Value $aiText) { return $true }
+    if ($aiText.Length -lt 60) { return $true }
+
+    return $false
 }
 
 
@@ -361,12 +438,13 @@ $snToken = Get-ServiceNowToken
 
 $today = (Get-Date).ToUniversalTime().Date
 $summary = @{}
+$affectedWeeks = [System.Collections.Generic.HashSet[string]]::new()
 $totalFetched = 0; $totalSaved = 0; $totalErrors = 0; $totalSkipped = 0
 
-for ($i = 1; $i -le $LookbackDays; $i++) {
+for ($i = 0; $i -lt $LookbackDays; $i++) {
     $day = $today.AddDays(-$i)
     $key = $day.ToString('yyyy-MM-dd')
-    Write-Step "Day $i/$LookbackDays - $key" 'Cyan'
+    Write-Step "Day $($i + 1)/$LookbackDays - $key" 'Cyan'
 
     $incidents = @(Get-IncidentsForDay -Token $snToken -DayUtc $day)
     Write-Output "  Fetched $($incidents.Count) incidents."
@@ -401,18 +479,16 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             $existingMap = Get-ExistingRowKeys -Partition $yw.YearWeek
             if ($existingMap -and $existingMap.ContainsKey($num)) {
                 $existingAnalysis = [string]$existingMap[$num]
-                
-                # Check if existing row contains old generic fallback text
-                $isOldFallback = ($existingAnalysis -like "*did not contain a full AI narrative*" -or 
-                                  $existingAnalysis -like "*reconstructed from structured category fields*" -or 
-                                  $existingAnalysis -like "*The user reached out due to an issue mapped to*")
 
-                if (-not $isOldFallback -and -not [string]::IsNullOrWhiteSpace($existingAnalysis)) {
+                # Reprocess when existing entry is missing strict sections or contains malformed output.
+                $needsReprocess = Test-NeedsAiReprocess -ExistingAnalysis $existingAnalysis
+
+                if (-not $needsReprocess) {
                     # Row already has a proper AI Analysis - skip to save AI cost
                     $summary[$key].skipped++
                     continue
                 } else {
-                    Write-Output "  RE-PROCESSING ${num}: Existing entry contains old fallback text; updating with fresh AI Analysis."
+                    Write-Output "  RE-PROCESSING ${num}: Existing AI Analysis is missing/invalid; updating from ServiceNow with strict format."
                 }
             }
 
@@ -448,20 +524,18 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
                 $anal = New-TicketDataAnalysisText -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
             }
             
-            $issue         = Get-SafeSubstring -InputString $issue -MaxLength 500 -Suffix '...'
-            $rootNarrative = Get-SafeSubstring -InputString $rootNarrative -MaxLength 800 -Suffix '...'
-            $resolution    = Get-SafeSubstring -InputString $resolution -MaxLength 800 -Suffix '...'
-            $evidence      = Get-SafeSubstring -InputString $evidence -MaxLength 800 -Suffix '...'
+            $issue         = Sanitize-AiNarrativeText -Text $issue -MaxLength 500
+            $rootNarrative = Sanitize-AiNarrativeText -Text $rootNarrative -MaxLength 800
+            $resolution    = Sanitize-AiNarrativeText -Text $resolution -MaxLength 800
+            $evidence      = Sanitize-AiNarrativeText -Text $evidence -MaxLength 800
             $subcat        = Get-SafeSubstring -InputString $subcat -MaxLength 200 -Suffix ''
             $root          = Get-SafeSubstring -InputString $root -MaxLength 1000 -Suffix '...'
-            $anal          = Get-SafeSubstring -InputString $anal -MaxLength 1500 -Suffix '...'
+            $anal          = Sanitize-AiNarrativeText -Text $anal -MaxLength 1800
 
-            $structuredAnalysis = "Problem:`n" +
-                "- Issue: $issue`n" +
-                "- Root Cause: $rootNarrative`n" +
-                "- Resolution: $resolution`n" +
-                "- Evidence: $evidence`n" +
-                "`n" +
+            $structuredAnalysis = "Problem: $issue`n" +
+                "Root Cause: $rootNarrative`n" +
+                "Resolution: $resolution`n" +
+                "Evidence: $evidence`n" +
                 "AI Analysis ($conf Confidence): $anal"
                 
             $structuredAnalysis = Get-SafeSubstring -InputString $structuredAnalysis -MaxLength 4000 -Suffix '...'
@@ -482,6 +556,7 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             Add-AzTableRow -Table $cloudTable -PartitionKey ([string]$yw.YearWeek) -RowKey ([string]$num) -Property $props -UpdateExisting | Out-Null
 
             if ($existingMap) { $existingMap[[string]$num] = $structuredAnalysis }
+            [void]$affectedWeeks.Add([string]$yw.YearWeek)
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {
@@ -517,19 +592,12 @@ if ($totalSaved -gt 0) {
     Write-Output ''
     Write-Step '=== Regenerating dashboards for affected weeks ===' 'Cyan'
     try {
-        $affectedWeeks = [System.Collections.Generic.List[string]]::new()
-        foreach ($day in $summary.Keys) {
-            if ($summary[$day].saved -gt 0) {
-                $dayDate = [DateTime]::ParseExact($day, 'yyyy-MM-dd', $null)
-                $yw = Get-YearWeekFromDate -Date $dayDate
-                if (-not $affectedWeeks.Contains($yw.YearWeek)) { $affectedWeeks.Add($yw.YearWeek) }
-            }
-        }
+        $affectedWeekList = @($affectedWeeks)
 
-        if ($affectedWeeks.Count -eq 0) {
+        if ($affectedWeekList.Count -eq 0) {
             Write-Output 'No affected weeks identified.'
         } else {
-            Write-Output "Affected week(s): $($affectedWeeks -join ', ')"
+            Write-Output "Affected week(s): $($affectedWeekList -join ', ')"
 
             function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
             
@@ -555,7 +623,7 @@ if ($totalSaved -gt 0) {
             }
             function ColorFor { param([string]$c) if ($catColors.ContainsKey($c)) { $catColors[$c] } else { '#5b6abf' } }
 
-            foreach ($weekKey in $affectedWeeks) {
+            foreach ($weekKey in $affectedWeekList) {
                 try {
                     $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' `
                         -ExpiryTime (Get-Date).AddMinutes(20) -Protocol HttpsOnly -Context $saCtx

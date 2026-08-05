@@ -2110,10 +2110,38 @@ function Test-ReasoningNeedsReanalysis {
     $clean = $Text.Trim()
     if ($clean.Length -lt 120) { return $true }
 
+    # Re-run if output contains CSS/HTML fragments.
+    $htmlCssPattern = '(?is)<style|</?[a-z][^>]*>|\{\s*text-decoration\s*:|\btr\s+th\b|\bcolor\s*:\s*#[0-9a-fA-F]{3,6}'
+    if ($clean -match $htmlCssPattern) { return $true }
+
     # Re-run any reasoning that still looks like labels or a fallback template.
     $labelPattern = '(?im)(^|\n)\s*(category|symptom|possible root cause|detailed root cause|ai analysis)\s*:'
     $fallbackPattern = '(?im)(generic fallback|fallback classification|the ticket notes do not clearly state|not documented in the available work notes|not documented beyond the catalog classification)'
     return [bool]($clean -match $labelPattern -or $clean -match $fallbackPattern)
+}
+
+function Sanitize-AiNarrativeText {
+    [CmdletBinding()]
+    param(
+        [string]$Text,
+        [int]$MaxLength = 2000
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return '' }
+
+    $clean = [string]$Text
+    $clean = $clean -replace '(?is)<style[^>]*>.*?</style>', ' '
+    $clean = $clean -replace '(?is)<script[^>]*>.*?</script>', ' '
+    $clean = $clean -replace '(?is)<[^>]+>', ' '
+    $clean = $clean -replace '(?is)\b[a-z][a-z0-9\s\.#:_\-]*\{[^{}]*\}', ' '
+    $clean = $clean -replace '(?im)^\s*(corrected\s+ai\s+analysis|ai\s+analysis|medium\s+confidence|high\s+confidence|low\s+confidence)\s*:?\s*', ''
+    $clean = $clean | Invoke-TextCleanup -ProcessingType Markdown
+    $clean = $clean -replace '[\r\n]+', ' '
+    $clean = $clean -replace '\s{2,}', ' '
+    $clean = $clean.Trim(' ', '.', ',', ';', ':')
+
+    if ($clean.Length -gt $MaxLength) { $clean = $clean.Substring(0, $MaxLength).Trim() + '...' }
+    return $clean
 }
 
 function Invoke-ReasoningReanalysis {
@@ -2204,20 +2232,18 @@ function Format-StructuredAiAnalysis {
     [CmdletBinding()]
     param([Parameter(Mandatory)][object]$Ticket)
 
-    $issue      = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) { 'Not documented.' } else { [string]$Ticket.Issue }
-    $rootCause  = if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) { 'Not documented.' } else { [string]$Ticket.RootCauseNarrative }
-    $resolution = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Resolution)) { 'Not documented in work notes.' } else { [string]$Ticket.Resolution }
-    $evidence   = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Evidence)) { 'Not documented in work notes.' } else { [string]$Ticket.Evidence }
+    $issue      = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) { 'Not documented.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Issue) -MaxLength 600 }
+    $rootCause  = if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) { 'Not documented.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.RootCauseNarrative) -MaxLength 900 }
+    $resolution = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Resolution)) { 'Not documented in work notes.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Resolution) -MaxLength 900 }
+    $evidence   = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Evidence)) { 'Not documented in work notes.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Evidence) -MaxLength 900 }
     $confidence = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Confidence)) { 'Unknown' } else { [string]$Ticket.Confidence }
-    $reasoning  = [string]$Ticket.Reasoning
+    $reasoning  = Sanitize-AiNarrativeText -Text ([string]$Ticket.Reasoning) -MaxLength 2200
 
     return (
-        "Problem:`n" +
-        "- Issue: $issue`n" +
-        "- Root Cause: $rootCause`n" +
-        "- Resolution: $resolution`n" +
-        "- Evidence: $evidence`n" +
-        "`n" +
+        "Problem: $issue`n" +
+        "Root Cause: $rootCause`n" +
+        "Resolution: $resolution`n" +
+        "Evidence: $evidence`n" +
         "AI Analysis ($confidence Confidence): $reasoning"
     )
 }
@@ -2263,7 +2289,37 @@ function Ensure-TicketAiFields {
         $Ticket.Reasoning = Get-EnhancedFallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
     }
 
+    $Ticket.Reasoning = Sanitize-AiNarrativeText -Text ([string]$Ticket.Reasoning) -MaxLength 2200
+    if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
+        $Ticket.Reasoning = Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo -Expanded
+    }
+
     return $Ticket
+}
+
+function Test-ExistingAiAnalysisUsable {
+    [CmdletBinding()]
+    param([string]$Text)
+
+    if ([string]::IsNullOrWhiteSpace($Text)) { return $false }
+
+    $clean = ([string]$Text) -replace '\*\*', ''
+    if ($clean -match '(?is)<style|</?[a-z][^>]*>|\{\s*text-decoration\s*:|\btr\s+th\b|\bcolor\s*:\s*#[0-9a-fA-F]{3,6}') { return $false }
+
+    if ($clean -notmatch '(?im)^\s*Problem\s*:') { return $false }
+    if ($clean -notmatch '(?im)^\s*Root\s*Cause\s*:') { return $false }
+    if ($clean -notmatch '(?im)^\s*Resolution\s*:') { return $false }
+    if ($clean -notmatch '(?im)^\s*Evidence\s*:') { return $false }
+    if ($clean -notmatch '(?im)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:') { return $false }
+
+    $problem = ([regex]::Match($clean, '(?ims)^\s*Problem\s*:\s*(.*?)\s*(?=\n\s*Root\s*Cause\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    $analysis = ([regex]::Match($clean, '(?ims)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:\s*(.*?)\s*$').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+
+    if ([string]::IsNullOrWhiteSpace($problem)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($analysis)) { return $false }
+    if ($problem -match '^(not documented|unknown|n/?a)$') { return $false }
+    if ($analysis.Length -lt 60) { return $false }
+    return $true
 }
 
 function Normalize-CanonicalText {
@@ -2596,7 +2652,7 @@ try {
 
     Write-ScriptLog "Processing $totalIncidents incidents..." -Level Info
 
-    $existingKeysByWeek = @{}
+    $existingRowsByWeek = @{}
     $dedupTable = $null
     try { $dedupTable = Initialize-StatisticsTable } catch { $dedupTable = $null }
     $skippedAlreadyStored = 0
@@ -2607,19 +2663,29 @@ try {
             if ([DateTime]::TryParse([string]$incident.resolved_at, [ref]$rdt)) {
                 $wn = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear($rdt, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
                 $wk = '{0:D4}-W{1:D2}' -f $rdt.Year, $wn
-                if (-not $existingKeysByWeek.ContainsKey($wk)) {
-                    $set = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+                if (-not $existingRowsByWeek.ContainsKey($wk)) {
+                    $map = @{}
                     try {
                         $rows = Get-AzTableRow -Table $dedupTable -PartitionKey $wk -ErrorAction Stop
-                        foreach ($r in @($rows)) { if ($r.RowKey) { [void]$set.Add([string]$r.RowKey) } }
+                        foreach ($r in @($rows)) {
+                            if ($r.RowKey) {
+                                $map[[string]$r.RowKey] = [string]$r.AIAnalysis
+                            }
+                        }
                     } catch {
                         Write-ScriptLog "Dedup: could not load existing keys for ${wk}: $($_.Exception.Message)" -Level Warning
                     }
-                    $existingKeysByWeek[$wk] = $set
+                    $existingRowsByWeek[$wk] = $map
                 }
-                if ($existingKeysByWeek[$wk].Contains([string]$incident.number)) {
-                    $skippedAlreadyStored++
-                    continue
+
+                $incidentKey = [string]$incident.number
+                if ($existingRowsByWeek[$wk].ContainsKey($incidentKey)) {
+                    $existingAi = [string]$existingRowsByWeek[$wk][$incidentKey]
+                    if (Test-ExistingAiAnalysisUsable -Text $existingAi) {
+                        $skippedAlreadyStored++
+                        continue
+                    }
+                    Write-ScriptLog "Dedup: reprocessing $incidentKey in $wk because existing AIAnalysis is incomplete or malformed." -Level Warning
                 }
             }
         }

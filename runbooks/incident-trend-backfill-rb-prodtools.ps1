@@ -71,6 +71,15 @@ function Sanitize-AiNarrativeText {
     return $clean
 }
 
+function Test-PlaceholderText {
+    param([string]$Value)
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
+    $v = $Value.Trim()
+    if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $true }
+    if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+    return $false
+}
+
 function Get-SNValue {
     param([object]$Prop)
     if ($null -eq $Prop) { return '' }
@@ -532,6 +541,31 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
             $root          = Get-SafeSubstring -InputString $root -MaxLength 1000 -Suffix '...'
             $anal          = Sanitize-AiNarrativeText -Text $anal -MaxLength 1800
 
+            if (Test-PlaceholderText -Value $issue) {
+                $sd = Sanitize-AiNarrativeText -Text (Get-SNValue $inc.short_description) -MaxLength 500
+                $issue = if (-not [string]::IsNullOrWhiteSpace($sd)) { $sd } else { 'User reported a service issue that requires triage.' }
+            }
+            if (Test-PlaceholderText -Value $root) { $root = 'Unknown' }
+            if (Test-PlaceholderText -Value $subcat) { $subcat = 'Unknown' }
+            if (Test-PlaceholderText -Value $rootNarrative) {
+                $rootNarrative = if ($root -eq 'Unknown') { 'Root cause not documented in source incident notes.' } else { "Root cause identified as $root." }
+            }
+            if (Test-PlaceholderText -Value $resolution) { $resolution = 'Not documented in work notes.' }
+            if (Test-PlaceholderText -Value $evidence) { $evidence = 'Not documented in work notes.' }
+
+            if (Test-PlaceholderText -Value $anal -or $anal.Length -lt 120) {
+                $anal = New-TicketDataAnalysisText -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
+                $anal = Sanitize-AiNarrativeText -Text $anal -MaxLength 1800
+            }
+
+            if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
+            switch -Regex ($conf.ToLower()) {
+                '^high$' { $conf = 'High'; break }
+                '^(medium|med|moderate)$' { $conf = 'Medium'; break }
+                '^low$' { $conf = 'Low'; break }
+                default { $conf = 'Medium'; break }
+            }
+
             $structuredAnalysis = "Problem: $issue`n" +
                 "Root Cause: $rootNarrative`n" +
                 "Resolution: $resolution`n" +
@@ -540,17 +574,21 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
                 
             $structuredAnalysis = Get-SafeSubstring -InputString $structuredAnalysis -MaxLength 4000 -Suffix '...'
 
+            $reportBlobName = "EUC_Weekly_Report_$($yw.YearWeek).html"
+
             $props = @{
-                'Category'       = [string]$category
-                'Subcategory'    = [string]$subcat
-                'RootCause'      = [string]$root
-                'AIAnalysis'     = [string]$structuredAnalysis
-                'Confidence'     = [string]$conf
-                'Date'           = [string]$resolvedDt.ToString('yyyy-MM-dd')
-                'YearWeek'       = [string]$yw.YearWeek
-                'Year'           = [int]$yw.Year
-                'WeekNumber'     = [int]$yw.WeekNumber
-                'ReportBlobName' = 'incremental-runbook'
+                'Category'          = [string]$category
+                'Subcategory'       = [string]$subcat
+                'RootCause'         = [string]$root
+                'PossibleRootCause' = [string]$root
+                'DetailedRootCause' = [string](Get-SafeSubstring -InputString $rootNarrative -MaxLength 1000 -Suffix '...')
+                'AIAnalysis'        = [string]$structuredAnalysis
+                'Confidence'        = [string]$conf
+                'Date'              = [string]$resolvedDt.ToString('yyyy-MM-dd')
+                'YearWeek'          = [string]$yw.YearWeek
+                'Year'              = [int]$yw.Year
+                'WeekNumber'        = [int]$yw.WeekNumber
+                'ReportBlobName'    = [string]$reportBlobName
             }
 
             Add-AzTableRow -Table $cloudTable -PartitionKey ([string]$yw.YearWeek) -RowKey ([string]$num) -Property $props -UpdateExisting | Out-Null

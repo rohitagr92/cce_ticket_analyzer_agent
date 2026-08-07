@@ -564,9 +564,9 @@
       </div>
       <div class="user-actions">
         <span class="user-info" id="userInfo">Loading...</span>
-        <a class="signout" href="/.auth/logout">Sign out</a>
-        <a class="feedback-portal" id="feedbackBtn" href="https://intel.sharepoint.com/sites/aiincidentanalyzer/_layouts/15/listforms.aspx?cid=ZGFkYWRjODEtNDExNS00ZDMwLWE3MDUtZDk2YjAxNzE5ODU2&nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi" target="_blank" rel="noopener" title="Open the feedback and improvement portal">
-          <span class="icon">&#128231;</span> Feedback &amp; Improvement Portal
+        <a class="signout" id="authLink" href="/.auth/login/aad">Sign in</a>
+        <a class="feedback-portal" id="feedbackBtn" href="https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi" target="_blank" rel="noopener" title="Open the feedback and improvement portal">
+          <span class="icon">&#128231;</span> AI Incident Analyzer – Feedback &amp; Improvement Portal
         </a>
       </div>
     </div>
@@ -988,7 +988,11 @@
     const meRes = await fetch('/.auth/me');
     if (meRes.ok) {
       const p = (await meRes.json()).clientPrincipal;
-      $('userInfo').textContent = (p && p.userDetails) ? p.userDetails : 'Anonymous';
+      const userDetails = (p && p.userDetails) ? String(p.userDetails).trim() : '';
+      const isAnonymous = !userDetails || userDetails.toLowerCase() === 'anonymous';
+      $('userInfo').textContent = isAnonymous ? '' : userDetails;
+      $('authLink').textContent = isAnonymous ? 'Sign in' : 'Sign out';
+      $('authLink').href = isAnonymous ? '/.auth/login/aad' : '/.auth/logout';
     }
   } catch (e) { $('userInfo').textContent = ''; }
 
@@ -1701,6 +1705,27 @@
     'Canva Issues',
     'Other / Miscellaneous'
   ];
+
+  // Exact product category names from TicketCategorisation_ContentEngineering.md
+  const CONTENT_ENGINEERING_PRODUCT_LIST = [
+    'All Products',
+    'Microsoft Teams',
+    'SharePoint Online',
+    'SharePoint Subscription Edition (SSE)',
+    'Viva Engage (Yammer)',
+    'Guest Onboarding Tool',
+    'Collaboration Workspace Management Tool (WMT)'
+  ];
+  const CONTENT_ENGINEERING_PRODUCT_SET = new Set(CONTENT_ENGINEERING_PRODUCT_LIST.slice(1));
+
+  function isContentEngineeringServiceSelected() {
+    const sel = $('smService');
+    return !!sel && sel.value === 'Content Engineering';
+  }
+
+  function isAllowedContentEngineeringProduct(value) {
+    return CONTENT_ENGINEERING_PRODUCT_SET.has((value == null ? '' : String(value)).trim());
+  }
 
   function normalizeYearWeek(raw) {
     const s = (raw == null ? '' : String(raw)).trim();
@@ -2928,6 +2953,7 @@
     const svc = $('opxService').value;
     // For PT, use known list; for other services, derive from data
     if (svc === 'all' || svc === OFFERING_ALL) return PRODUCT_LIST;
+    if (svc === 'Content Engineering') return CONTENT_ENGINEERING_PRODUCT_LIST;
     const cats = new Set();
     for (const e of allEntities) {
       if (matchesOffering(e, svc)) cats.add((e.Category || '').trim() || 'Unknown');
@@ -4076,6 +4102,7 @@
   function airServiceProducts() {
     const svc = $('airService').value;
     if (svc === 'all' || svc === OFFERING_ALL) return PRODUCT_LIST;
+    if (svc === 'Content Engineering') return CONTENT_ENGINEERING_PRODUCT_LIST;
     const cats = new Set();
     for (const e of allEntities) if (matchesOffering(e, svc)) cats.add((e.Category || '').trim() || 'Unknown');
     return ['All Products', ...[...cats].sort()];
@@ -5122,8 +5149,11 @@
   }
 
   function smRenderMovers(curEnts, priorEnts, priorWk) {
-    const cur = smCountByField(curEnts, 'Category');
-    const prior = smCountByField(priorEnts, 'Category');
+    const ceOnly = isContentEngineeringServiceSelected();
+    const curPool = ceOnly ? (curEnts || []).filter(e => isAllowedContentEngineeringProduct(e.Category)) : (curEnts || []);
+    const priorPool = ceOnly ? (priorEnts || []).filter(e => isAllowedContentEngineeringProduct(e.Category)) : (priorEnts || []);
+    const cur = smCountByField(curPool, 'Category');
+    const prior = smCountByField(priorPool, 'Category');
     const keys = new Set([...Object.keys(cur), ...Object.keys(prior)]);
     const rows = [];
     for (const k of keys) {
@@ -5507,6 +5537,7 @@
         if (!rc || rc.toLowerCase() === 'unknown' || rc === '-') continue;
         if (!prodsByRc[rc]) prodsByRc[rc] = new Map();
         const p = e.Category || 'Unknown';
+        if (ceOnly && !isAllowedContentEngineeringProduct(p)) continue;
         prodsByRc[rc].set(p, (prodsByRc[rc].get(p) || 0) + 1);
       }
       const clusters = Object.entries(prodsByRc)
@@ -5609,6 +5640,9 @@
     }
     // Filter to selected product (Category). Exclude "Excluded" always.
     let pool = rangeEnts.filter(e => (e.Category || '') !== 'Excluded');
+    if (isContentEngineeringServiceSelected()) {
+      pool = pool.filter(e => isAllowedContentEngineeringProduct(e.Category));
+    }
     if (product && product !== '__all__') {
       pool = pool.filter(e => (e.Category || 'Unknown') === product);
     }
@@ -5680,6 +5714,7 @@
     const counts = {};
     for (const e of rangeEnts) {
       const cat = (e.Category || 'Unknown');
+      if (isContentEngineeringServiceSelected() && !isAllowedContentEngineeringProduct(cat)) continue;
       if (cat === 'Excluded') continue;
       const w = e.PartitionKey || e.YearWeek; if (!w) continue;
       counts[cat] = counts[cat] || {};
@@ -6061,7 +6096,12 @@
       // Build the Product (Category) dropdown from the entities in the selected range.
       const rebuildDrillProductOptions = () => {
         const { ents } = getRangeEnts();
-        const usable = (ents || []).filter(e => (e.Category || '') !== 'Excluded');
+        const usable = (ents || []).filter(e => {
+          const cat = (e.Category || '').trim();
+          if (cat === 'Excluded') return false;
+          if (isContentEngineeringServiceSelected()) return isAllowedContentEngineeringProduct(cat);
+          return true;
+        });
         const counts = smCountByField(usable, 'Category');
         const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
         const prevValue = drillProd.value;

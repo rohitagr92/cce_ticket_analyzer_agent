@@ -175,7 +175,6 @@ function Initialize-BlobLogging {
     try {
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $Script:LogConfig.CurrentLogFile = "$($Script:LogConfig.LogFilePrefix)-$timestamp.log"
-        
         Write-Host "Initializing blob logging to: $($Script:LogConfig.CurrentLogFile)" -ForegroundColor Cyan
         
         $azContext = Get-AzContext
@@ -183,7 +182,7 @@ function Initialize-BlobLogging {
             Write-Host "Connecting with Managed Identity..." -ForegroundColor Yellow
             Connect-AzAccount -Identity -ErrorAction Stop | Out-Null
         }
-        
+
         $storageKey = (Get-AzStorageAccountKey -ResourceGroupName $Script:BlobConfig.ResourceGroupName -Name $Script:BlobConfig.StorageAccountName)[0].Value
         $Script:LogConfig.StorageContext = New-AzStorageContext -StorageAccountName $Script:BlobConfig.StorageAccountName -StorageAccountKey $storageKey
         
@@ -1560,6 +1559,7 @@ function Save-CategoryStatisticsToTable {
                     "Year"              = [int]$year
                     "WeekNumber"        = [int]$weekNumber
                     "ReportBlobName"    = [string]$ReportBlobName
+                    "AnalysisStatus"    = [string]$ticket.AnalysisStatus
                     "AIAnalysis"        = $(
                         $structuredAnalysis = Format-StructuredAiAnalysis -Ticket $ticket
                         if ($structuredAnalysis.Length -gt 4000) { $structuredAnalysis.Substring(0, 4000) + '...' } else { $structuredAnalysis }
@@ -2098,7 +2098,76 @@ function Get-PlainLanguageFallbackReasoning {
 function Get-EnhancedFallbackReasoning {
     [CmdletBinding()]
     param([object]$Ticket, [object]$CategoryInfo)
-    return (Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $CategoryInfo -Expanded)
+    return (Get-StructuredReasoningNarrative -Ticket $Ticket -CategoryInfo $CategoryInfo)
+}
+
+function Test-NotesInsufficient {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Ticket,
+        [object]$CategoryInfo
+    )
+
+    $candidateFields = @(
+        [string]$Ticket.OriginalDescription
+        [string]$Ticket.Issue
+        [string]$Ticket.RootCauseNarrative
+        [string]$Ticket.Evidence
+        [string]$Ticket.Resolution
+        [string]$CategoryInfo.issue
+        [string]$CategoryInfo.key_evidence
+        [string]$CategoryInfo.resolution_summary
+        [string]$CategoryInfo.how_do_i_or_error
+    )
+
+    $meaningfulFields = @()
+    foreach ($fieldValue in $candidateFields) {
+        $cleanValue = ([string]$fieldValue).Trim()
+        if ([string]::IsNullOrWhiteSpace($cleanValue)) { continue }
+        if ($cleanValue -match '(?im)^(not documented|unknown|unclassified|unable to determine|not identified|automated fallback|no incident summary available)') { continue }
+        if ($cleanValue.Length -lt 25) { continue }
+        $meaningfulFields += $cleanValue
+    }
+
+    $meaningfulText = ($meaningfulFields -join ' ').Trim()
+    if ($meaningfulFields.Count -lt 2) { return $true }
+    if ($meaningfulText.Length -lt 140) { return $true }
+
+    return $false
+}
+
+function Get-InsufficientNotesReasoning {
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory)][object]$Ticket,
+        [object]$CategoryInfo
+    )
+
+    $category = ([string]$Ticket.Category).Trim()
+    if ([string]::IsNullOrWhiteSpace($category)) { $category = 'Unclassified' }
+
+    $subcategory = ([string]$Ticket.Subcategory).Trim()
+    if ([string]::IsNullOrWhiteSpace($subcategory)) { $subcategory = 'Unclassified' }
+
+    $possibleRootCause = ([string]$Ticket.PossibleRootCause).Trim()
+    if ([string]::IsNullOrWhiteSpace($possibleRootCause)) { $possibleRootCause = 'Unknown' }
+
+    $detailRootCause = ([string]$Ticket.DetailedRootCause).Trim()
+    if ([string]::IsNullOrWhiteSpace($detailRootCause)) { $detailRootCause = 'Unknown' }
+
+    $analysis = "Insufficient notes: the available work notes do not support a confident narrative without inventing details. The ticket remains categorized as '$category' / '$subcategory' with root cause '$possibleRootCause' and detailed root cause '$detailRootCause'."
+
+    $resolution = ([string]$CategoryInfo.resolution_summary).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($resolution)) {
+        $analysis += " Recorded resolution context: $resolution."
+    }
+
+    $evidence = ([string]$CategoryInfo.key_evidence).Trim()
+    if (-not [string]::IsNullOrWhiteSpace($evidence)) {
+        $analysis += " Key evidence: $evidence."
+    }
+
+    return $analysis.Trim()
 }
 
 function Test-ReasoningNeedsReanalysis {
@@ -2282,6 +2351,7 @@ function Ensure-TicketAiFields {
     }
 
     $fallbackInfo = if ($CategoryInfo) { $CategoryInfo } else { [PSCustomObject]@{ resolution_summary = [string]$Ticket.Resolution } }
+    $notesInsufficient = Test-NotesInsufficient -Ticket $Ticket -CategoryInfo $fallbackInfo
 
     if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
         $Ticket.Reasoning = Get-FallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
@@ -2291,7 +2361,12 @@ function Ensure-TicketAiFields {
 
     $Ticket.Reasoning = Sanitize-AiNarrativeText -Text ([string]$Ticket.Reasoning) -MaxLength 2200
     if ([string]::IsNullOrWhiteSpace([string]$Ticket.Reasoning)) {
-        $Ticket.Reasoning = Get-PlainLanguageFallbackReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo -Expanded
+        if ($notesInsufficient) {
+            $Ticket.AnalysisStatus = 'Insufficient notes'
+            $Ticket.Reasoning = Get-InsufficientNotesReasoning -Ticket $Ticket -CategoryInfo $fallbackInfo
+        }
+    } elseif ($notesInsufficient) {
+        $Ticket.AnalysisStatus = 'Insufficient notes'
     }
 
     return $Ticket
@@ -2563,6 +2638,7 @@ class TicketAnalysis {
     [string]$KnowledgeBase
     [string]$OriginalDescription
     [string]$ResolvedAt
+    [string]$AnalysisStatus
     [datetime]$Processed = (Get-Date)
     
     TicketAnalysis([string]$ticketNumber) {

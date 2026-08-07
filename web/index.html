@@ -3411,6 +3411,7 @@
                         'Not documented in source incident notes';
     const sourceRootCause = opxDisplayRootCause(inc) || 'Not documented in source incident notes';
     const sourceDetailedRoot = drcRaw || 'Not documented in source incident notes';
+    const analysisStatus = opxCleanValue(inc.AnalysisStatus || '');
 
     // Confidence badge — colour-code High/Medium/Low (same buckets the runbook emits).
     const confRaw = (inc.Confidence || '').toString().trim();
@@ -3444,6 +3445,7 @@
         '</div>'
       ).join('');
       const reasoningDisplay = structured.reasoning ? esc(structured.reasoning) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      const statusBadge = analysisStatus ? '<div style="margin-top:8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</div>' : '';
       analysisHtml =
         '<div style="margin-bottom:12px;">' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
@@ -3451,6 +3453,7 @@
         '</div>' +
         '<div>' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
+          statusBadge +
           '<div style="margin-top:6px;padding:10px;background:#f8f9fa;border:1px solid var(--border);border-left:4px solid ' + confColor + ';border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + reasoningDisplay + '</div>' +
         '</div>';
     } else {
@@ -3466,6 +3469,7 @@
           '<div style="margin-top:2px;">' + esc(val) + '</div>' +
         '</div>'
       ).join('');
+      const statusBadge = analysisStatus ? '<div style="margin-top:8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</div>' : '';
       analysisHtml =
         '<div style="margin-bottom:12px;">' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
@@ -3473,6 +3477,7 @@
         '</div>' +
         '<div>' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
+          statusBadge +
           '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + aiDisplay + '</div>' +
         '</div>';
     }

@@ -282,16 +282,16 @@ function Get-TableRowProperties {
         [Parameter(Mandatory)][object]$Incident,
         [Parameter(Mandatory)][object]$Fields,
         [Parameter(Mandatory)][object]$WeekWindow,
-        [Parameter(Mandatory)][string]$OfferingName
+        [Parameter(Mandatory)][string]$OfferingName,
+        [string]$RawResponse = ''
     )
 
     $resolvedDate = [datetime]::Parse([string]$Incident.resolved_at)
     $category = if ($Fields.PrimaryCategory) { $Fields.PrimaryCategory.Trim() } else { 'Unknown' }
     $subcategory = if ($Fields.Subsymptom) { $Fields.Subsymptom.Trim() } else { '' }
     $rootCause = if ($Fields.PossibleRootCause) { $Fields.PossibleRootCause.Trim() } else { '' }
-    $analysis = if ($Fields.AIAnalysis) { $Fields.AIAnalysis.Trim() } else { '' }
-    if ([string]::IsNullOrWhiteSpace($analysis)) { $analysis = 'AI analysis unavailable.' }
-    $confidence = if ($Fields.ConfidenceLevel) { $Fields.ConfidenceLevel.Trim() } else { 'Unknown' }
+    $analysis = Format-EucStructuredAiAnalysis -Fields $Fields -RawResponse $RawResponse
+    $confidence = Get-EucNormalizedConfidence -Raw ([string]$Fields.ConfidenceLevel)
     $misrouted = $false
 
     if ($category -eq 'Excluded' -or $category -eq 'Out of Scope') {
@@ -401,10 +401,15 @@ foreach ($serviceDef in $serviceDefs) {
     $headers = @{ Authorization = "Bearer $token"; Accept = 'application/json' }
     $response = Invoke-RestMethod -Method Get -Uri $incidentUrl -Headers $headers -TimeoutSec 180
     $incidents = @($response.result)
+    $exclusionResult = Apply-EucOfferingIncidentExclusions -OfferingName $offeringName -Incidents $incidents
+    $incidents = @($exclusionResult.Included)
     $reportRows = New-Object System.Collections.Generic.List[object]
     $reportBlobName = Get-ReportBlobName -OfferingName $offeringName -YearWeek $weekWindow.YearWeek
 
-    Write-Log ("Fetched {0} incident(s) for {1} (limit {2})." -f $incidents.Count, $offeringName, $LimitPerOffering) 'Green'
+    Write-Log ("Fetched {0} incident(s) for {1} (limit {2})." -f ($incidents.Count + $exclusionResult.ExcludedCount), $offeringName, $LimitPerOffering) 'Green'
+    if ($exclusionResult.ExcludedCount -gt 0) {
+        Write-Log ("Excluded {0} incident(s) for {1} where Channel='Proactive System Alert' and Assigned To is empty." -f $exclusionResult.ExcludedCount, $offeringName) 'Yellow'
+    }
     $weeklySummary[$offeringName] = [ordered]@{ fetched = $incidents.Count; saved = 0; skipped = 0; errors = 0; reportBlob = $reportBlobName }
 
     foreach ($incident in $incidents) {
@@ -427,7 +432,7 @@ foreach ($serviceDef in $serviceDefs) {
 
             $analysisText = Invoke-LocalEucAnalysis -Context $context -TemplateContent $templateContent -IncidentJson $incidentJson
             $fields = Get-EucAnalysisFields -Text $analysisText
-            $props = Get-TableRowProperties -Incident $incident -Fields $fields -WeekWindow $weekWindow -OfferingName $offeringName
+            $props = Get-TableRowProperties -Incident $incident -Fields $fields -WeekWindow $weekWindow -OfferingName $offeringName -RawResponse $analysisText
             $props.ReportBlobName = $reportBlobName
 
             if ($DryRun) {

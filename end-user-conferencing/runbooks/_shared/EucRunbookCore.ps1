@@ -183,6 +183,82 @@ function Get-EucOpenAiApiKey {
     return $apiKey
 }
 
+function Get-EucFieldText {
+    param([object]$Value)
+
+    if ($null -eq $Value) { return '' }
+    if ($Value -is [string]) { return $Value }
+
+    $displayValueProp = $Value.PSObject.Properties['display_value']
+    if ($displayValueProp -and -not [string]::IsNullOrWhiteSpace([string]$displayValueProp.Value)) {
+        return [string]$displayValueProp.Value
+    }
+
+    $valueProp = $Value.PSObject.Properties['value']
+    if ($valueProp -and -not [string]::IsNullOrWhiteSpace([string]$valueProp.Value)) {
+        return [string]$valueProp.Value
+    }
+
+    return [string]$Value
+}
+
+function Test-EucRoomsProactiveUnassignedIncident {
+    param(
+        [Parameter(Mandatory)][string]$OfferingName,
+        [Parameter(Mandatory)][object]$Incident
+    )
+
+    if ($OfferingName -ne 'Meetings - Rooms and Hardware') {
+        return $false
+    }
+
+    $channelCandidates = @(
+        (Get-EucFieldText -Value $Incident.contact_type),
+        (Get-EucFieldText -Value $Incident.u_channel),
+        (Get-EucFieldText -Value $Incident.channel),
+        (Get-EucFieldText -Value $Incident.u_contact_channel)
+    )
+
+    $channel = ($channelCandidates | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -First 1)
+    $assignedTo = Get-EucFieldText -Value $Incident.assigned_to
+
+    $isProactiveSystemAlert = [string]::Equals(([string]$channel).Trim(), 'Proactive System Alert', [System.StringComparison]::OrdinalIgnoreCase)
+    $isAssignedToEmpty = [string]::IsNullOrWhiteSpace([string]$assignedTo)
+
+    return ($isProactiveSystemAlert -and $isAssignedToEmpty)
+}
+
+function Apply-EucOfferingIncidentExclusions {
+    param(
+        [Parameter(Mandatory)][string]$OfferingName,
+        [Parameter(Mandatory)][object[]]$Incidents
+    )
+
+    if ($OfferingName -ne 'Meetings - Rooms and Hardware') {
+        return [pscustomobject]@{
+            Included = @($Incidents)
+            ExcludedCount = 0
+        }
+    }
+
+    $included = New-Object System.Collections.Generic.List[object]
+    $excludedCount = 0
+
+    foreach ($incident in @($Incidents)) {
+        if (Test-EucRoomsProactiveUnassignedIncident -OfferingName $OfferingName -Incident $incident) {
+            $excludedCount++
+            continue
+        }
+
+        [void]$included.Add($incident)
+    }
+
+    return [pscustomobject]@{
+        Included = $included.ToArray()
+        ExcludedCount = $excludedCount
+    }
+}
+
 function Get-EucIncidents {
     param(
         [object]$Context,
@@ -206,18 +282,27 @@ function Get-EucIncidents {
         default { '' }
     }
 
+    $incidents = @()
     if (-not [string]::IsNullOrWhiteSpace($directUrl)) {
         $headers = @{ Authorization = "Bearer $Token"; Accept = 'application/json' }
         if ($directUrl -match 'sysparm_query=') {
             $response = Invoke-RestMethod -Method Get -Uri $directUrl -Headers $headers -TimeoutSec 180
-            return @($response.result)
+            $incidents = @($response.result)
         }
 
-        if ($directUrl -match 'sys_id=([0-9a-fA-F]{32})') {
+        elseif ($directUrl -match 'sys_id=([0-9a-fA-F]{32})') {
             $incidentSysId = $matches[1]
             $url = "https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=sys_id=$incidentSysId&sysparm_display_value=true&sysparm_limit=1"
             $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -TimeoutSec 180
-            return @($response.result)
+            $incidents = @($response.result)
+        }
+
+        if ($incidents.Count -gt 0) {
+            $filtered = Apply-EucOfferingIncidentExclusions -OfferingName $Context.OfferingName -Incidents $incidents
+            if ($filtered.ExcludedCount -gt 0) {
+                Write-Output "Excluded $($filtered.ExcludedCount) incident(s) for $($Context.OfferingName) where Channel='Proactive System Alert' and Assigned To is empty."
+            }
+            return @($filtered.Included)
         }
     }
 
@@ -229,7 +314,12 @@ function Get-EucIncidents {
     $url = "https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=$([uri]::EscapeDataString($query))&sysparm_display_value=true&sysparm_limit=1000"
     $headers = @{ Authorization = "Bearer $Token"; Accept = 'application/json' }
     $response = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -TimeoutSec 180
-    return @($response.result)
+    $incidents = @($response.result)
+    $filtered = Apply-EucOfferingIncidentExclusions -OfferingName $Context.OfferingName -Incidents $incidents
+    if ($filtered.ExcludedCount -gt 0) {
+        Write-Output "Excluded $($filtered.ExcludedCount) incident(s) for $($Context.OfferingName) where Channel='Proactive System Alert' and Assigned To is empty."
+    }
+    return @($filtered.Included)
 }
 
 function Invoke-EucAnalysis {
@@ -251,6 +341,97 @@ function Invoke-EucAnalysis {
     return [string]$response.choices[0].message.content
 }
 
+function Get-EucSectionValue {
+    param(
+        [Parameter(Mandatory)][string]$Text,
+        [Parameter(Mandatory)][string]$Label,
+        [Parameter(Mandatory)][string[]]$AllLabels
+    )
+
+    $trimmed = ([string]$Text).Trim()
+    if ([string]::IsNullOrWhiteSpace($trimmed)) { return '' }
+
+    $otherLabels = @($AllLabels | Where-Object { $_ -ne $Label })
+    $escapedLabel = [regex]::Escape($Label)
+    $nextPattern = if ($otherLabels.Count -gt 0) {
+        ($otherLabels | ForEach-Object { [regex]::Escape($_) }) -join '|'
+    } else {
+        '$^'
+    }
+
+    $pattern = '(?is)(?:^|\n)\s*\*{0,2}' + $escapedLabel + '\*{0,2}\s*:\s*(?<value>.*?)(?=\n\s*\*{0,2}(?:' + $nextPattern + ')\*{0,2}\s*:|\z)'
+    $match = [regex]::Match($trimmed, $pattern)
+    if (-not $match.Success) { return '' }
+
+    return $match.Groups['value'].Value.Trim()
+}
+
+function Get-EucNormalizedConfidence {
+    param([string]$Raw)
+
+    $v = ([string]$Raw).Trim().ToLowerInvariant()
+    if ($v -match '\bhigh\b') { return 'High' }
+    if ($v -match '\bmedium\b') { return 'Medium' }
+    if ($v -match '\blow\b') { return 'Low' }
+    return 'Medium'
+}
+
+function Convert-EucToAscii {
+    param([string]$Text)
+
+    $v = [string]$Text
+    if ([string]::IsNullOrWhiteSpace($v)) { return '' }
+
+    $v = $v -replace '[\u2018\u2019\u2032]', "'"
+    $v = $v -replace '[\u201C\u201D\u2033]', '"'
+    $v = $v -replace '[\u2013\u2014]', '-'
+    $v = $v -replace '\u00A0', ' '
+    $v = $v -replace '[^\x09\x0A\x0D\x20-\x7E]', ''
+
+    return $v.Trim()
+}
+
+function Format-EucStructuredAiAnalysis {
+    param(
+        [Parameter(Mandatory)][object]$Fields,
+        [string]$RawResponse = ''
+    )
+
+    $issue = ([string]$Fields.Issue).Trim()
+    if ([string]::IsNullOrWhiteSpace($issue)) { $issue = ([string]$Fields.Subsymptom).Trim() }
+    if ([string]::IsNullOrWhiteSpace($issue)) { $issue = 'Not documented in work notes.' }
+    $issue = Convert-EucToAscii -Text $issue
+
+    $rootCause = ([string]$Fields.RootCauseNarrative).Trim()
+    if ([string]::IsNullOrWhiteSpace($rootCause)) { $rootCause = ([string]$Fields.PossibleRootCause).Trim() }
+    if ([string]::IsNullOrWhiteSpace($rootCause)) { $rootCause = 'Not documented in work notes.' }
+    $rootCause = Convert-EucToAscii -Text $rootCause
+
+    $resolution = ([string]$Fields.Resolution).Trim()
+    if ([string]::IsNullOrWhiteSpace($resolution)) { $resolution = 'Not documented in work notes.' }
+    $resolution = Convert-EucToAscii -Text $resolution
+
+    $evidence = ([string]$Fields.Evidence).Trim()
+    if ([string]::IsNullOrWhiteSpace($evidence)) { $evidence = 'Not documented in work notes.' }
+    $evidence = Convert-EucToAscii -Text $evidence
+
+    $analysis = ([string]$Fields.AIAnalysis).Trim()
+    if ([string]::IsNullOrWhiteSpace($analysis)) { $analysis = ([string]$RawResponse).Trim() }
+    if ([string]::IsNullOrWhiteSpace($analysis)) { $analysis = 'Not documented in work notes.' }
+    $analysis = Convert-EucToAscii -Text $analysis
+
+    $confidence = Get-EucNormalizedConfidence -Raw ([string]$Fields.ConfidenceLevel)
+
+    return @(
+        'Problem:',
+        "Issue: $issue",
+        "Root Cause: $rootCause",
+        "Resolution: $resolution",
+        "Evidence: $evidence",
+        "AI Analysis ($confidence Confidence): $analysis"
+    ) -join "`n"
+}
+
 function Get-EucAnalysisFields {
     param([string]$Text)
 
@@ -259,22 +440,59 @@ function Get-EucAnalysisFields {
         Subsymptom = ''
         PossibleRootCause = ''
         ConfidenceLevel = ''
+        Issue = ''
+        RootCauseNarrative = ''
+        Resolution = ''
+        Evidence = ''
         AIAnalysis = ''
     }
 
-    foreach ($line in ($Text -split "`r?`n")) {
-        if ($line -match '^(Primary Category|Sub-symptom|Possible Root Cause|Confidence Level|AI Analysis):\s*(.*)$') {
-            $key = $matches[1]
-            $value = $matches[2].Trim()
-            switch ($key) {
-                'Primary Category' { $result.PrimaryCategory = $value }
-                'Sub-symptom' { $result.Subsymptom = $value }
-                'Possible Root Cause' { $result.PossibleRootCause = $value }
-                'Confidence Level' { $result.ConfidenceLevel = $value }
-                'AI Analysis' { $result.AIAnalysis = $value }
-            }
+    $labels = @(
+        'Primary Category',
+        'Sub-symptom',
+        'Possible Root Cause',
+        'Confidence Level',
+        'Issue',
+        'Root Cause',
+        'Root Cause Narrative',
+        'Resolution',
+        'Evidence',
+        'AI Analysis',
+        'Reasoning',
+        'Key Evidence',
+        'Resolution Summary'
+    )
+
+    $result.PrimaryCategory = Get-EucSectionValue -Text $Text -Label 'Primary Category' -AllLabels $labels
+    $result.Subsymptom = Get-EucSectionValue -Text $Text -Label 'Sub-symptom' -AllLabels $labels
+    $result.PossibleRootCause = Get-EucSectionValue -Text $Text -Label 'Possible Root Cause' -AllLabels $labels
+    $result.ConfidenceLevel = Get-EucSectionValue -Text $Text -Label 'Confidence Level' -AllLabels $labels
+    $result.Issue = Get-EucSectionValue -Text $Text -Label 'Issue' -AllLabels $labels
+    $result.RootCauseNarrative = Get-EucSectionValue -Text $Text -Label 'Root Cause' -AllLabels $labels
+    if ([string]::IsNullOrWhiteSpace($result.RootCauseNarrative)) {
+        $result.RootCauseNarrative = Get-EucSectionValue -Text $Text -Label 'Root Cause Narrative' -AllLabels $labels
+    }
+    $result.Resolution = Get-EucSectionValue -Text $Text -Label 'Resolution' -AllLabels $labels
+    if ([string]::IsNullOrWhiteSpace($result.Resolution)) {
+        $result.Resolution = Get-EucSectionValue -Text $Text -Label 'Resolution Summary' -AllLabels $labels
+    }
+    $result.Evidence = Get-EucSectionValue -Text $Text -Label 'Evidence' -AllLabels $labels
+    if ([string]::IsNullOrWhiteSpace($result.Evidence)) {
+        $result.Evidence = Get-EucSectionValue -Text $Text -Label 'Key Evidence' -AllLabels $labels
+    }
+    $result.AIAnalysis = Get-EucSectionValue -Text $Text -Label 'AI Analysis' -AllLabels $labels
+    if ([string]::IsNullOrWhiteSpace($result.AIAnalysis)) {
+        $result.AIAnalysis = Get-EucSectionValue -Text $Text -Label 'Reasoning' -AllLabels $labels
+    }
+
+    if ([string]::IsNullOrWhiteSpace($result.ConfidenceLevel)) {
+        $confidenceFromAi = [regex]::Match([string]$Text, '(?is)AI\s*Analysis\s*\((?<conf>[^)]*?)\s*confidence\)')
+        if ($confidenceFromAi.Success) {
+            $result.ConfidenceLevel = $confidenceFromAi.Groups['conf'].Value.Trim()
         }
     }
+
+    $result.ConfidenceLevel = Get-EucNormalizedConfidence -Raw ([string]$result.ConfidenceLevel)
 
     return [pscustomobject]$result
 }
@@ -332,6 +550,7 @@ function Invoke-EucRunbookReal {
 
         $analysisText = Invoke-EucAnalysis -Context $context -IncidentJson $incidentJson -TemplateContent $templateContent
         $parsed = Get-EucAnalysisFields -Text $analysisText
+        $structuredAi = Format-EucStructuredAiAnalysis -Fields $parsed -RawResponse $analysisText
         [pscustomobject]@{
             IncidentNumber     = $incident.number
             ShortDescription   = $incident.short_description
@@ -340,7 +559,7 @@ function Invoke-EucRunbookReal {
             Subsymptom         = $parsed.Subsymptom
             PossibleRootCause  = $parsed.PossibleRootCause
             ConfidenceLevel    = $parsed.ConfidenceLevel
-            AIAnalysis         = $parsed.AIAnalysis
+            AIAnalysis         = $structuredAi
             RawResponse        = $analysisText
         }
     }

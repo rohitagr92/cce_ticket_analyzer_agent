@@ -103,9 +103,14 @@ Primary Category: <exact service offering name>
 Sub-symptom: <exact user-observable symptom label>
 Possible Root Cause: <exact technical/system-level root cause label>
 Confidence Level: <High|Medium|Low>
-AI Analysis: <3-5 sentences summarizing the issue, the technical cause, the actions taken, and the outcome>
+Issue: <1-2 sentences describing the user-observable problem in plain language>
+Root Cause: <2-4 sentences describing the most likely technical cause grounded in work notes>
+Resolution: <1-3 sentences describing the final action, fix, or closure disposition from notes>
+Evidence: <Quote-style evidence snippets from work notes separated by " / ">
+AI Analysis: <2-4 sentences executive summary aligned to the fields above>
 
 **CRITICAL OUTPUT RULES:**
 - For Category, output ONLY the exact category name without formatting.
 - For Sub-symptom and Possible Root Cause, output only the exact label text.
 - Do NOT include bold formatting or headers in the final output.
+- All fields above are mandatory. If a field is not explicitly present in notes, write: "Not documented in work notes." (do not invent facts).

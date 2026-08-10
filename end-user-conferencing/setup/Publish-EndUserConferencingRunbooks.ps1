@@ -50,6 +50,7 @@ foreach ($offering in $serviceOfferings) {
         } else {
             $publishArgs.ScheduleName = $runbook.ScheduleName
             $publishArgs.RunHourUTC   = [int]$runbook.RunHourUTC
+            $publishArgs.RunMinuteUTC = [int]$runbook.RunMinuteUTC
         }
         & $publishHelper @publishArgs
     }

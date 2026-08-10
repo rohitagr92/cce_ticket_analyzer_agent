@@ -19,6 +19,10 @@ param(
     [int]$RunHourUTC = 2,
 
     [Parameter()]
+    [ValidateRange(0, 59)]
+    [int]$RunMinuteUTC = 0,
+
+    [Parameter()]
     [switch]$SkipSchedule
 
 )
@@ -132,7 +136,7 @@ try {
                                                     -Name $ScheduleName -ErrorAction SilentlyContinue
 
         if (-not $existingSchedule) {
-            $startUtc = [DateTime]::UtcNow.Date.AddHours($RunHourUTC)
+            $startUtc = [DateTime]::UtcNow.Date.AddHours($RunHourUTC).AddMinutes($RunMinuteUTC)
             if ($startUtc -lt [DateTime]::UtcNow.AddMinutes(10)) { $startUtc = $startUtc.AddDays(1) }
             Write-Host "Creating schedule '$ScheduleName' starting $($startUtc.ToString('yyyy-MM-dd HH:mm')) UTC..." -ForegroundColor Yellow
             New-AzAutomationSchedule -ResourceGroupName $ResourceGroupName `

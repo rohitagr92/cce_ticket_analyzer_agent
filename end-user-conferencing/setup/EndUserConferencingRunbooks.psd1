@@ -16,6 +16,7 @@
                     PublishedName = 'incident-trend-backfill-rb-euc-messaging'
                     ScheduleName  = 'IncidentTrendBackfill-EUC-Messaging-Daily-0330UTC'
                     RunHourUTC    = 3
+                    RunMinuteUTC  = 30
                     SkipSchedule  = $false
                 },
                 @{
@@ -24,6 +25,7 @@
                     PublishedName = 'incident-analyzer-rb-euc-messaging'
                     ScheduleName  = 'IncidentAnalyzer-EUC-Messaging-Daily-0630UTC'
                     RunHourUTC    = 6
+                    RunMinuteUTC  = 30
                     SkipSchedule  = $false
                 }
             )
@@ -38,6 +40,7 @@
                     PublishedName = 'incident-trend-backfill-rb-euc-rooms'
                     ScheduleName  = 'IncidentTrendBackfill-EUC-Rooms-Daily-0330UTC'
                     RunHourUTC    = 3
+                    RunMinuteUTC  = 30
                     SkipSchedule  = $false
                 },
                 @{
@@ -46,6 +49,7 @@
                     PublishedName = 'incident-analyzer-rb-euc-rooms'
                     ScheduleName  = 'IncidentAnalyzer-EUC-Rooms-Daily-0630UTC'
                     RunHourUTC    = 6
+                    RunMinuteUTC  = 30
                     SkipSchedule  = $false
                 }
             )

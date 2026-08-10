@@ -997,13 +997,7 @@ function Save-RunProcessingArtifact {
         $timestamp = Get-Date -Format "yyyy-MM-dd_HH-mm-ss"
         $fileName = "run_artifact_$timestamp.json"
 
-        $artifactWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-            (Get-Date),
-            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-            [System.DayOfWeek]::Monday
-        )
-        $artifactYear = (Get-Date).Year
-        $artifactYearWeek = "{0:D4}-W{1:D2}" -f $artifactYear, $artifactWeekNumber
+        $artifactYearWeek = (Get-IntelYearWeekFromDate -Date (Get-Date)).YearWeek
 
         $artifact = [PSCustomObject]@{
             RunGeneratedAtUtc = (Get-Date).ToUniversalTime().ToString("o")
@@ -1046,13 +1040,7 @@ function Get-MergedWeeklyRunData {
     param([int]$LookbackDays = 7)
 
     try {
-        $currentWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-            (Get-Date),
-            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-            [System.DayOfWeek]::Monday
-        )
-        $currentYear = (Get-Date).Year
-        $currentYearWeek = "{0:D4}-W{1:D2}" -f $currentYear, $currentWeekNumber
+        $currentYearWeek = (Get-IntelYearWeekFromDate -Date (Get-Date)).YearWeek
         Write-ScriptLog "Merging artifacts for current week: $currentYearWeek" -Level Info
 
         $cutoffUtc = (Get-Date).ToUniversalTime().AddDays(-1 * $LookbackDays)
@@ -1073,12 +1061,7 @@ function Get-MergedWeeklyRunData {
                     $artifactYearWeek = $artifact.YearWeek
                     if (-not $artifactYearWeek -and $artifact.RunGeneratedAtUtc) {
                         $artifactDate = [DateTime]::Parse($artifact.RunGeneratedAtUtc)
-                        $artifactWeekNum = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-                            $artifactDate,
-                            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-                            [System.DayOfWeek]::Monday
-                        )
-                        $artifactYearWeek = "{0:D4}-W{1:D2}" -f $artifactDate.Year, $artifactWeekNum
+                        $artifactYearWeek = (Get-IntelYearWeekFromDate -Date $artifactDate).YearWeek
                     }
                     
                     if ($artifactYearWeek -and $artifactYearWeek -ne $currentYearWeek) {
@@ -1101,12 +1084,7 @@ function Get-MergedWeeklyRunData {
                     $artifactYearWeek = $artifact.YearWeek
                     if (-not $artifactYearWeek -and $artifact.RunGeneratedAtUtc) {
                         $artifactDate = [DateTime]::Parse($artifact.RunGeneratedAtUtc)
-                        $artifactWeekNum = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-                            $artifactDate,
-                            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-                            [System.DayOfWeek]::Monday
-                        )
-                        $artifactYearWeek = "{0:D4}-W{1:D2}" -f $artifactDate.Year, $artifactWeekNum
+                        $artifactYearWeek = (Get-IntelYearWeekFromDate -Date $artifactDate).YearWeek
                     }
                     
                     if ($artifactYearWeek -and $artifactYearWeek -ne $currentYearWeek) {
@@ -1506,13 +1484,10 @@ function Save-CategoryStatisticsToTable {
         if (-not $cloudTable) { return }
         
         $fallbackDateString = $ReportDate.ToString("yyyy-MM-dd")
-        $fallbackYear = $ReportDate.Year
-        $fallbackWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-            $ReportDate, 
-            [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, 
-            [System.DayOfWeek]::Monday
-        )
-        $fallbackYearWeek = "{0:D4}-W{1:D2}" -f $fallbackYear, $fallbackWeekNumber
+        $fallbackYearWeekInfo = Get-IntelYearWeekFromDate -Date $ReportDate
+        $fallbackYear = $fallbackYearWeekInfo.Year
+        $fallbackWeekNumber = $fallbackYearWeekInfo.WeekNumber
+        $fallbackYearWeek = $fallbackYearWeekInfo.YearWeek
         
         $savedCount = 0
         $errorCount = 0
@@ -1535,14 +1510,11 @@ function Save-CategoryStatisticsToTable {
                     $weekNumber     = $fallbackWeekNumber
                     $yearWeekString = $fallbackYearWeek
                 } else {
-                    $dateString     = $resolvedDt.ToString("yyyy-MM-dd")
-                    $year           = $resolvedDt.Year
-                    $weekNumber     = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear(
-                        $resolvedDt,
-                        [System.Globalization.CalendarWeekRule]::FirstFourDayWeek,
-                        [System.DayOfWeek]::Monday
-                    )
-                    $yearWeekString = "{0:D4}-W{1:D2}" -f $year, $weekNumber
+                    $dateString = $resolvedDt.ToString("yyyy-MM-dd")
+                    $yearWeekInfo = Get-IntelYearWeekFromDate -Date $resolvedDt
+                    $year = $yearWeekInfo.Year
+                    $weekNumber = $yearWeekInfo.WeekNumber
+                    $yearWeekString = $yearWeekInfo.YearWeek
                 }
                 
                 $entityProperties = @{
@@ -2387,14 +2359,102 @@ function Test-ExistingAiAnalysisUsable {
     if ($clean -notmatch '(?im)^\s*Evidence\s*:') { return $false }
     if ($clean -notmatch '(?im)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:') { return $false }
 
-    $problem = ([regex]::Match($clean, '(?ims)^\s*Problem\s*:\s*(.*?)\s*(?=\n\s*Root\s*Cause\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
-    $analysis = ([regex]::Match($clean, '(?ims)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:\s*(.*?)\s*$').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    function Get-SectionValue {
+        param([string]$Source, [string[]]$Labels, [string[]]$Stops)
+        $lhs = ($Labels | ForEach-Object { [regex]::Escape($_) }) -join '|'
+        $rhs = ($Stops | ForEach-Object { [regex]::Escape($_) }) -join '|'
+        $m = [regex]::Match($Source, "(?ims)^\s*(?:$lhs)\s*:\s*(.*?)\s*(?=\n\s*(?:$rhs)\s*:|\z)")
+        if (-not $m.Success) { return '' }
+        return ($m.Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    }
 
-    if ([string]::IsNullOrWhiteSpace($problem)) { return $false }
-    if ([string]::IsNullOrWhiteSpace($analysis)) { return $false }
-    if ($problem -match '^(not documented|unknown|n/?a)$') { return $false }
-    if ($analysis.Length -lt 60) { return $false }
+    function Is-PlaceholderSectionText {
+        param([string]$Value)
+        if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
+        $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
+        if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
+        if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+        if ($v -match '^user reported a service issue that requires triage\.?$') { return $true }
+        if ($v -match '^incident related to .+ in .+\.?$') { return $true }
+        if ($v -match 'ai categorization did not complete successfully') { return $true }
+        if ($v -match 'manual review recommended for proper categorization') { return $true }
+        if ($v -match 'safe fallback categorization') { return $true }
+        if ($v -match 'runbook could not complete the normal ai categorization flow') { return $true }
+        return $false
+    }
+
+    $problem    = Get-SectionValue -Source $clean -Labels @('Problem') -Stops @('Root Cause','Resolution','Evidence','AI Analysis')
+    $rootCause  = Get-SectionValue -Source $clean -Labels @('Root Cause') -Stops @('Resolution','Evidence','AI Analysis')
+    $resolution = Get-SectionValue -Source $clean -Labels @('Resolution') -Stops @('Evidence','AI Analysis')
+    $evidence   = Get-SectionValue -Source $clean -Labels @('Evidence') -Stops @('AI Analysis')
+    $analysis   = ([regex]::Match($clean, '(?ims)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:\s*(.*?)\s*$').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+
+    if (Is-PlaceholderSectionText -Value $problem) { return $false }
+    if ([string]::IsNullOrWhiteSpace($rootCause)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($resolution)) { return $false }
+    if ([string]::IsNullOrWhiteSpace($evidence)) { return $false }
+    if (Is-PlaceholderSectionText -Value $analysis) { return $false }
+    if ($analysis.Length -lt 80) { return $false }
     return $true
+}
+
+function Get-IntelYearWeekFromDate {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][DateTime]$Date)
+
+    $localDate = $Date.Date
+    $yearStart = [DateTime]::new($localDate.Year, 1, 1)
+    $week1Start = $yearStart.AddDays(-[int]$yearStart.DayOfWeek)
+    $weekNumber = [int][Math]::Floor(($localDate - $week1Start).TotalDays / 7) + 1
+
+    return [PSCustomObject]@{
+        Year = $localDate.Year
+        WeekNumber = $weekNumber
+        YearWeek = ('{0:D4}-W{1:D2}' -f $localDate.Year, $weekNumber)
+        WeekStart = $localDate.AddDays(-[int]$localDate.DayOfWeek)
+    }
+}
+
+function Get-IntelYearWeekAnchorDate {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][string]$YearWeek)
+
+    if ($YearWeek -notmatch '^(?<y>\d{4})-W(?<w>\d{1,2})$') {
+        throw "Invalid YearWeek: $YearWeek"
+    }
+
+    $year = [int]$Matches.y
+    $week = [int]$Matches.w
+    $yearStart = [DateTime]::new($year, 1, 1)
+    $week1Start = $yearStart.AddDays(-[int]$yearStart.DayOfWeek)
+    return $week1Start.AddDays((($week - 1) * 7) + 3)
+}
+
+function Convert-StatisticsRowToTicketAnalysis {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Row)
+
+    $ticket = [TicketAnalysis]::new([string]$Row.RowKey)
+    $ticket.Category = [string]$Row.Category
+    $ticket.SubSymptom = [string]$Row.Subcategory
+    $ticket.Subcategory = [string]$Row.Subcategory
+    $ticket.PossibleRootCause = [string]$Row.PossibleRootCause
+    $ticket.DetailedRootCause = [string]$Row.DetailedRootCause
+    $ticket.Service = if ([string]::IsNullOrWhiteSpace([string]$Row.Service)) { 'Productivity Tools' } else { [string]$Row.Service }
+    $ticket.Misrouted = [bool]$Row.Misrouted
+    $ticket.Confidence = [string]$Row.Confidence
+    $ticket.AnalysisStatus = [string]$Row.AnalysisStatus
+    $ticket.ResolvedAt = [string]$Row.Date
+
+    $clean = ([string]$Row.AIAnalysis) -replace '\*\*', ''
+    $ticket.Issue = ([regex]::Match($clean, '(?ims)^\s*Problem\s*:\s*(.*?)\s*(?=\n\s*Root\s*Cause\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    $ticket.RootCauseNarrative = ([regex]::Match($clean, '(?ims)^\s*Root\s*Cause\s*:\s*(.*?)\s*(?=\n\s*Resolution\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    $ticket.Resolution = ([regex]::Match($clean, '(?ims)^\s*Resolution\s*:\s*(.*?)\s*(?=\n\s*Evidence\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    $ticket.Evidence = ([regex]::Match($clean, '(?ims)^\s*Evidence\s*:\s*(.*?)\s*(?=\n\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+    $ticket.Reasoning = ([regex]::Match($clean, '(?ims)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:\s*(.*?)\s*$').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
+
+    $null = Ensure-TicketAiFields -Ticket $ticket
+    return $ticket
 }
 
 function Normalize-CanonicalText {
@@ -2737,15 +2797,14 @@ try {
         if ($dedupTable -and $incident.number) {
             $rdt = [DateTime]::MinValue
             if ([DateTime]::TryParse([string]$incident.resolved_at, [ref]$rdt)) {
-                $wn = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear($rdt, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
-                $wk = '{0:D4}-W{1:D2}' -f $rdt.Year, $wn
+                $wk = (Get-IntelYearWeekFromDate -Date $rdt).YearWeek
                 if (-not $existingRowsByWeek.ContainsKey($wk)) {
                     $map = @{}
                     try {
                         $rows = Get-AzTableRow -Table $dedupTable -PartitionKey $wk -ErrorAction Stop
                         foreach ($r in @($rows)) {
                             if ($r.RowKey) {
-                                $map[[string]$r.RowKey] = [string]$r.AIAnalysis
+                                $map[[string]$r.RowKey] = $r
                             }
                         }
                     } catch {
@@ -2756,8 +2815,17 @@ try {
 
                 $incidentKey = [string]$incident.number
                 if ($existingRowsByWeek[$wk].ContainsKey($incidentKey)) {
-                    $existingAi = [string]$existingRowsByWeek[$wk][$incidentKey]
+                    $existingRow = $existingRowsByWeek[$wk][$incidentKey]
+                    $existingAi = [string]$existingRow.AIAnalysis
                     if (Test-ExistingAiAnalysisUsable -Text $existingAi) {
+                        $existingTicket = Convert-StatisticsRowToTicketAnalysis -Row $existingRow
+                        if ($existingTicket) {
+                            $Script:ProcessedTickets.Add($existingTicket)
+                            $allsummarisednotes.Add([PSCustomObject]@{
+                                IncidentNumber  = [string]$existingTicket.Number
+                                SummarisedNotes = if ([string]::IsNullOrWhiteSpace($existingAi)) { Format-StructuredAiAnalysis -Ticket $existingTicket } else { $existingAi }
+                            })
+                        }
                         $skippedAlreadyStored++
                         continue
                     }
@@ -2852,9 +2920,7 @@ try {
     if ($mergedData.YearWeek) {
         $reportYearWeek = $mergedData.YearWeek
     } else {
-        $reportYear = (Get-Date).Year
-        $reportWeekNumber = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear((Get-Date), [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
-        $reportYearWeek = "{0:D4}-W{1:D2}" -f $reportYear, $reportWeekNumber
+        $reportYearWeek = (Get-IntelYearWeekFromDate -Date (Get-Date)).YearWeek
     }
     
     $reportBlobName = "EUC_Weekly_Report_$reportYearWeek.html"
@@ -2862,13 +2928,9 @@ try {
     Write-ScriptLog "=== SAVING STATISTICS TO AZURE TABLE ===" -Level Info
     $reportDateForTable = Get-Date
     if ($reportYearWeek -match '^(\d{4})-W(\d{2})$') {
-        $ywYear = [int]$Matches[1]
-        $ywWeek = [int]$Matches[2]
-        $currentWeekNum = [System.Globalization.CultureInfo]::CurrentCulture.Calendar.GetWeekOfYear((Get-Date), [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
-        if ($ywWeek -ne $currentWeekNum -or $ywYear -ne (Get-Date).Year) {
-            $jan4 = [DateTime]::new($ywYear, 1, 4)
-            $jan4Monday = $jan4.AddDays(-([int]$jan4.DayOfWeek + 6) % 7)
-            $reportDateForTable = $jan4Monday.AddDays(($ywWeek - 1) * 7 + 3)
+        $currentYearWeek = (Get-IntelYearWeekFromDate -Date (Get-Date)).YearWeek
+        if ($reportYearWeek -ne $currentYearWeek) {
+            $reportDateForTable = Get-IntelYearWeekAnchorDate -YearWeek $reportYearWeek
         }
     }
     Save-CategoryStatisticsToTable -CategoryData $CategoryData -ReportDate $reportDateForTable -ReportBlobName $reportBlobName

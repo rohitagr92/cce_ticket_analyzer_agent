@@ -369,18 +369,14 @@ function New-TicketDataAnalysisText {
 
 function Get-YearWeekFromDate {
     param([DateTime]$Date)
-    $cal = [System.Globalization.CultureInfo]::InvariantCulture.Calendar
-    $wn  = $cal.GetWeekOfYear($Date, [System.Globalization.CalendarWeekRule]::FirstFourDayWeek, [System.DayOfWeek]::Monday)
-    $isoYear = $Date.Year
-    if ($Date.Month -eq 1 -and $wn -ge 52) {
-        $isoYear--
-    } elseif ($Date.Month -eq 12 -and $wn -eq 1) {
-        $isoYear++
-    }
+    $localDate = $Date.Date
+    $yearStart = [DateTime]::new($localDate.Year, 1, 1)
+    $week1Start = $yearStart.AddDays(-[int]$yearStart.DayOfWeek)
+    $wn = [int][Math]::Floor(($localDate - $week1Start).TotalDays / 7) + 1
     return [PSCustomObject]@{
-        Year       = $isoYear
+        Year       = $localDate.Year
         WeekNumber = $wn
-        YearWeek   = ('{0:D4}-W{1:D2}' -f $isoYear, $wn)
+        YearWeek   = ('{0:D4}-W{1:D2}' -f $localDate.Year, $wn)
     }
 }
 
@@ -414,9 +410,15 @@ function Test-NeedsAiReprocess {
     function Is-PlaceholderText {
         param([string]$Value)
         if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
-        $v = $Value.Trim()
-        if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $true }
+        $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
+        if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
         if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+        if ($v -match '^user reported a service issue that requires triage\.?$') { return $true }
+        if ($v -match '^incident related to .+ in .+\.?$') { return $true }
+        if ($v -match 'ai categorization did not complete successfully') { return $true }
+        if ($v -match 'manual review recommended for proper categorization') { return $true }
+        if ($v -match 'safe fallback categorization') { return $true }
+        if ($v -match 'runbook could not complete the normal ai categorization flow') { return $true }
         return $false
     }
 
@@ -428,11 +430,11 @@ function Test-NeedsAiReprocess {
     $aiText      = if ($aiMatch.Success) { ($aiMatch.Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':') } else { '' }
 
     if (Is-PlaceholderText -Value $problemText) { return $true }
-    if (Is-PlaceholderText -Value $rootText) { return $true }
-    if (Is-PlaceholderText -Value $resText) { return $true }
-    if (Is-PlaceholderText -Value $evText) { return $true }
+    if ([string]::IsNullOrWhiteSpace($rootText)) { return $true }
+    if ([string]::IsNullOrWhiteSpace($resText)) { return $true }
+    if ([string]::IsNullOrWhiteSpace($evText)) { return $true }
     if (Is-PlaceholderText -Value $aiText) { return $true }
-    if ($aiText.Length -lt 60) { return $true }
+    if ($aiText.Length -lt 80) { return $true }
 
     return $false
 }

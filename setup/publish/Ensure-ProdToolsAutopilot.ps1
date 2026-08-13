@@ -19,8 +19,15 @@ param(
     [int]$AnalyzerRunHourUTC = 6,
     [string]$TrendScheduleName = 'IncidentTrendBackfill-Daily-0300UTC',
     [int]$TrendRunHourUTC = 3,
+    [string]$QualityGuardScheduleName = 'IncidentQualityGuard-Daily-0330UTC',
+    [int]$QualityGuardRunHourUTC = 3,
+    [int]$QualityGuardRunMinuteUTC = 30,
     [int]$DailyLookbackHours = 72,
     [int]$TrendLookbackDays = 7,
+    [int]$ReconcileWeeksToCheck = 2,
+    [int]$ReconcileDeltaThreshold = 0,
+    [bool]$EnableReconcileAutoHeal = $true,
+    [int]$ReconcileMaxHealPerWeekPerDay = 1,
     [switch]$RunCatchupNow,
     [int]$CatchupLookbackDays = 14
 )
@@ -28,11 +35,52 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $publishDir = $PSScriptRoot
-$repoRoot = Split-Path -Parent (Split-Path -Parent $publishDir)
 
 Write-Host "=== Productivity Tools Autopilot Hardening ===" -ForegroundColor Cyan
 Write-Host "Resource Group    : $ResourceGroupName" -ForegroundColor Gray
 Write-Host "Automation Account: $AutomationAccountName" -ForegroundColor Gray
+
+function Ensure-RunbookScheduleLink {
+    param(
+        [Parameter(Mandatory)][string]$RunbookName,
+        [Parameter(Mandatory)][string]$ScheduleName,
+        [Parameter(Mandatory)][int]$RunHourUTC,
+        [Parameter(Mandatory)][int]$RunMinuteUTC
+    )
+
+    $existingSchedule = Get-AzAutomationSchedule -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName `
+        -Name $ScheduleName -ErrorAction SilentlyContinue
+
+    if (-not $existingSchedule) {
+        $startUtc = [DateTime]::UtcNow.Date.AddHours($RunHourUTC).AddMinutes($RunMinuteUTC)
+        if ($startUtc -lt [DateTime]::UtcNow.AddMinutes(10)) { $startUtc = $startUtc.AddDays(1) }
+        Write-Host "Creating schedule '$ScheduleName' starting $($startUtc.ToString('yyyy-MM-dd HH:mm')) UTC..." -ForegroundColor Yellow
+        New-AzAutomationSchedule -ResourceGroupName $ResourceGroupName `
+            -AutomationAccountName $AutomationAccountName `
+            -Name $ScheduleName `
+            -StartTime $startUtc `
+            -DayInterval 1 `
+            -TimeZone 'UTC' | Out-Null
+    } else {
+        Write-Host "Schedule '$ScheduleName' already exists. Reusing." -ForegroundColor Gray
+    }
+
+    $linked = Get-AzAutomationScheduledRunbook -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName `
+        -RunbookName $RunbookName -ErrorAction SilentlyContinue |
+        Where-Object { $_.ScheduleName -eq $ScheduleName }
+
+    if (-not $linked) {
+        Register-AzAutomationScheduledRunbook -ResourceGroupName $ResourceGroupName `
+            -AutomationAccountName $AutomationAccountName `
+            -RunbookName $RunbookName `
+            -ScheduleName $ScheduleName | Out-Null
+        Write-Host "Linked schedule '$ScheduleName' to runbook '$RunbookName'." -ForegroundColor Green
+    } else {
+        Write-Host "Runbook '$RunbookName' is already linked to '$ScheduleName'." -ForegroundColor Gray
+    }
+}
 
 # 1) Ensure trend backfill runbook is published + scheduled daily.
 & (Join-Path $publishDir 'Publish-TrendBackfillRunbook.ps1') `
@@ -51,7 +99,21 @@ Write-Host "Automation Account: $AutomationAccountName" -ForegroundColor Gray
     -ScheduleName $AnalyzerScheduleName `
     -RunHourUTC $AnalyzerRunHourUTC
 
-# 3) Normalize variables used by daily runs.
+# 3) Ensure quality guard runbook is published and linked daily after trend backfill.
+& (Join-Path $publishDir 'Publish-runbook.ps1') `
+    -SourceFile '..\..\runbooks\incident-quality-guard-rb-prodtools.ps1' `
+    -RunbookName 'incident-quality-guard-rb-prodtools' `
+    -ResourceGroupName $ResourceGroupName `
+    -AutomationAccountName $AutomationAccountName `
+    -SkipSchedule
+
+Ensure-RunbookScheduleLink `
+    -RunbookName 'incident-quality-guard-rb-prodtools' `
+    -ScheduleName $QualityGuardScheduleName `
+    -RunHourUTC $QualityGuardRunHourUTC `
+    -RunMinuteUTC $QualityGuardRunMinuteUTC
+
+# 4) Normalize variables used by daily runs.
 Write-Host "=== Enforcing Automation variables ===" -ForegroundColor Cyan
 function Set-OrCreateAutomationVariable {
     param(
@@ -69,6 +131,17 @@ function Set-OrCreateAutomationVariable {
 
 Set-OrCreateAutomationVariable -Name 'DailyLookbackHours' -Value ([string]$DailyLookbackHours)
 Set-OrCreateAutomationVariable -Name 'PT_TrendLookbackDays' -Value ([string]$TrendLookbackDays)
+Set-OrCreateAutomationVariable -Name 'PT_ReconcileWeeksToCheck' -Value ([string]$ReconcileWeeksToCheck)
+Set-OrCreateAutomationVariable -Name 'PT_ReconcileDeltaThreshold' -Value ([string]$ReconcileDeltaThreshold)
+Set-OrCreateAutomationVariable -Name 'PT_ReconcileEnableAutoHeal' -Value ([string]$EnableReconcileAutoHeal)
+Set-OrCreateAutomationVariable -Name 'PT_ReconcileMaxHealPerWeekPerDay' -Value ([string]$ReconcileMaxHealPerWeekPerDay)
+
+$healStateDefault = '{"date":"","attempts":{}}'
+$healStateVar = Get-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name 'PT_ReconcileAutoHealState' -ErrorAction SilentlyContinue
+if (-not $healStateVar) {
+    New-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name 'PT_ReconcileAutoHealState' -Value $healStateDefault -Encrypted $false | Out-Null
+    Write-Host "Initialized PT_ReconcileAutoHealState." -ForegroundColor Green
+}
 
 # Clear stale backfill context so normal daily runs do not get pinned to an old week.
 $bfVar = Get-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name 'BackfillYearWeek' -ErrorAction SilentlyContinue

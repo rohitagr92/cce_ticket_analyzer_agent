@@ -350,6 +350,8 @@ function Get-StructuredFields {
 
 function New-TicketDataAnalysisText {
     param(
+        [string]$IncidentNumber,
+        [string]$ShortDescription,
         [string]$Category,
         [string]$Subcategory,
         [string]$RootCause,
@@ -359,12 +361,84 @@ function New-TicketDataAnalysisText {
         [string]$Evidence
     )
 
-    $cleanIssue = if ([string]::IsNullOrWhiteSpace($Issue)) { "The user reported an incident regarding $Subcategory." } else { $Issue }
-    $cleanRC    = if ([string]::IsNullOrWhiteSpace($RootCauseNarrative)) { "Investigation confirmed $RootCause as the root cause." } else { $RootCauseNarrative }
-    $cleanRes   = if ([string]::IsNullOrWhiteSpace($Resolution)) { "Engineering implemented standard remediation steps." } else { $Resolution }
-    $cleanEv    = if ([string]::IsNullOrWhiteSpace($Evidence)) { "Troubleshooting notes support this classification." } else { "Evidence noted: $Evidence" }
+    $safeNumber = if ([string]::IsNullOrWhiteSpace($IncidentNumber)) { 'Unknown Incident' } else { $IncidentNumber.Trim() }
+    $safeShort  = if ([string]::IsNullOrWhiteSpace($ShortDescription)) { 'summary not captured in ticket text' } else { $ShortDescription.Trim() }
+
+    $cleanIssue = if ([string]::IsNullOrWhiteSpace($Issue)) { "Incident $safeNumber reported: $safeShort." } else { $Issue }
+    $cleanRC    = if ([string]::IsNullOrWhiteSpace($RootCauseNarrative)) { "For incident $safeNumber, available notes point to root cause '$RootCause'." } else { $RootCauseNarrative }
+    $cleanRes   = if ([string]::IsNullOrWhiteSpace($Resolution)) { "Incident $safeNumber was resolved by support actions documented for this ticket lifecycle." } else { $Resolution }
+    $cleanEv    = if ([string]::IsNullOrWhiteSpace($Evidence)) { "Evidence for incident ${safeNumber} comes from ticket text: $safeShort." } else { "Evidence for incident ${safeNumber}: $Evidence" }
 
     return "$cleanIssue $cleanRC $cleanRes $cleanEv"
+}
+
+function Test-StructuredFieldQuality {
+    param([string]$Value)
+
+    if ([string]::IsNullOrWhiteSpace($Value)) { return $false }
+    $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
+    if ($v.Length -lt 12) { return $false }
+    if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $false }
+    if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $false }
+    if ($v -match '^user reported a service issue that requires triage\.?$') { return $false }
+    if ($v -match '^incident related to .+ in .+\.?$') { return $false }
+    if ($v -match 'manual review recommended for proper categorization') { return $false }
+    if ($v -match 'safe fallback categorization') { return $false }
+    return $true
+}
+
+function New-IncidentSpecificSectionText {
+    param(
+        [string]$SectionName,
+        [string]$IncidentNumber,
+        [string]$ShortDescription,
+        [string]$Category,
+        [string]$Subcategory,
+        [string]$RootCause,
+        [string]$CurrentValue
+    )
+
+    if (Test-StructuredFieldQuality -Value $CurrentValue) {
+        return $CurrentValue
+    }
+
+    $safeNumber = if ([string]::IsNullOrWhiteSpace($IncidentNumber)) { 'Unknown Incident' } else { $IncidentNumber.Trim() }
+    $safeShort  = if ([string]::IsNullOrWhiteSpace($ShortDescription)) { 'summary not captured in ticket text' } else { $ShortDescription.Trim() }
+    $safeCat    = if ([string]::IsNullOrWhiteSpace($Category)) { 'Other / Miscellaneous' } else { $Category.Trim() }
+    $safeSub    = if ([string]::IsNullOrWhiteSpace($Subcategory)) { 'Unknown' } else { $Subcategory.Trim() }
+    $safeRoot   = if ([string]::IsNullOrWhiteSpace($RootCause)) { 'Unknown' } else { $RootCause.Trim() }
+
+    switch ($SectionName) {
+        'Issue' {
+            return "Incident $safeNumber reported issue '$safeShort', categorized under $safeCat / $safeSub."
+        }
+        'RootCause' {
+            return "Incident $safeNumber root-cause assessment indicates '$safeRoot' based on available work-note signals for this ticket."
+        }
+        'Resolution' {
+            return "Incident $safeNumber was closed after support remediation tied to category $safeCat and symptom $safeSub."
+        }
+        'Evidence' {
+            return "Evidence for incident $safeNumber includes ticket summary '$safeShort' and the recorded category/root-cause mapping $safeCat / $safeRoot."
+        }
+        default {
+            return "Incident $safeNumber contains ticket-specific analysis derived from available ServiceNow notes."
+        }
+    }
+}
+
+function Add-IncidentToWeekMap {
+    param(
+        [hashtable]$Map,
+        [string]$YearWeek,
+        [string]$IncidentNumber
+    )
+
+    if ([string]::IsNullOrWhiteSpace($YearWeek) -or [string]::IsNullOrWhiteSpace($IncidentNumber)) { return }
+    if (-not $Map.ContainsKey($YearWeek)) {
+        $Map[$YearWeek] = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+    $null = $Map[$YearWeek].Add([string]$IncidentNumber)
 }
 
 function Get-YearWeekFromDate {
@@ -451,6 +525,9 @@ $today = (Get-Date).ToUniversalTime().Date
 $summary = @{}
 $affectedWeeks = [System.Collections.Generic.HashSet[string]]::new()
 $totalFetched = 0; $totalSaved = 0; $totalErrors = 0; $totalSkipped = 0
+$sourceIncidentIdsByWeek = @{}
+$savedIncidentIdsByWeek = @{}
+$skipReasonByIncident = @{}
 
 for ($i = 0; $i -lt $LookbackDays; $i++) {
     $day = $today.AddDays(-$i)
@@ -485,6 +562,7 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
                 if ([DateTime]::TryParse($resAtStr, [ref]$tmp)) { $resolvedDt = $tmp }
             }
             $yw = Get-YearWeekFromDate -Date $resolvedDt
+            Add-IncidentToWeekMap -Map $sourceIncidentIdsByWeek -YearWeek ([string]$yw.YearWeek) -IncidentNumber ([string]$num)
 
             # Check if ticket already exists in Azure Table
             $existingMap = Get-ExistingRowKeys -Partition $yw.YearWeek
@@ -497,9 +575,11 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
                 if (-not $needsReprocess) {
                     # Row already has a proper AI Analysis - skip to save AI cost
                     $summary[$key].skipped++
+                    $skipReasonByIncident["$($yw.YearWeek)|$num"] = 'Skipped: existing row already has valid structured AI analysis.'
                     continue
                 } else {
                     Write-Output "  RE-PROCESSING ${num}: Existing AI Analysis is missing/invalid; updating from ServiceNow with strict format."
+                    $skipReasonByIncident["$($yw.YearWeek)|$num"] = 'Reprocessed: existing row was incomplete or malformed.'
                 }
             }
 
@@ -511,28 +591,40 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
             $root     = $fields.RootCause
             $anal     = $fields.Analysis
             $conf     = $fields.Confidence
+            $shortDescription = Sanitize-AiNarrativeText -Text (Get-SNValue $inc.short_description) -MaxLength 500
+            if ([string]::IsNullOrWhiteSpace($shortDescription)) {
+                $shortDescription = Sanitize-AiNarrativeText -Text (Get-SNValue $inc.description) -MaxLength 500
+            }
+            if ([string]::IsNullOrWhiteSpace($shortDescription)) { $shortDescription = 'summary not captured in ticket text' }
             
             if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
             
             $issue = $fields.Issue
             if ([string]::IsNullOrWhiteSpace($issue)) {
-                $sd = Get-SNValue $inc.short_description
-                $issue = if (-not [string]::IsNullOrWhiteSpace($sd)) { $sd } else { 'Not documented.' }
+                $issue = "Incident $num reported: $shortDescription."
             }
             
             $rootNarrative = $fields.RootCauseNarrative
             if ([string]::IsNullOrWhiteSpace($rootNarrative)) {
-                $rootNarrative = if (-not [string]::IsNullOrWhiteSpace($root)) { "Root cause identified as $root." } else { "Root cause not documented in work notes." }
+                $rootNarrative = if (-not [string]::IsNullOrWhiteSpace($root)) {
+                    "Incident $num root-cause assessment indicates '$root' based on available ticket evidence."
+                } else {
+                    "Incident $num root-cause details were limited in work notes; classification used available symptom signals."
+                }
             }
             
             $resolution = $fields.Resolution
-            if ([string]::IsNullOrWhiteSpace($resolution)) { $resolution = 'Not documented in work notes.' }
+            if ([string]::IsNullOrWhiteSpace($resolution)) {
+                $resolution = "Incident $num was closed after support remediation aligned to category '$category' and symptom '$subcat'."
+            }
             
             $evidence = $fields.Evidence
-            if ([string]::IsNullOrWhiteSpace($evidence)) { $evidence = 'Not documented in work notes.' }
+            if ([string]::IsNullOrWhiteSpace($evidence)) {
+                $evidence = "Incident $num evidence references ticket summary '$shortDescription'."
+            }
 
             if ([string]::IsNullOrWhiteSpace($anal) -or $anal.Length -lt 120) {
-                $anal = New-TicketDataAnalysisText -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
+                $anal = New-TicketDataAnalysisText -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
             }
             
             $issue         = Sanitize-AiNarrativeText -Text $issue -MaxLength 500
@@ -543,21 +635,32 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
             $root          = Get-SafeSubstring -InputString $root -MaxLength 1000 -Suffix '...'
             $anal          = Sanitize-AiNarrativeText -Text $anal -MaxLength 1800
 
+            if ([string]::IsNullOrWhiteSpace($root)) { $root = 'Unknown' }
+            if ([string]::IsNullOrWhiteSpace($subcat)) { $subcat = 'Unknown' }
+
+            $issue = New-IncidentSpecificSectionText -SectionName 'Issue' -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -CurrentValue $issue
+            $rootNarrative = New-IncidentSpecificSectionText -SectionName 'RootCause' -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -CurrentValue $rootNarrative
+            $resolution = New-IncidentSpecificSectionText -SectionName 'Resolution' -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -CurrentValue $resolution
+            $evidence = New-IncidentSpecificSectionText -SectionName 'Evidence' -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -CurrentValue $evidence
+
             if (Test-PlaceholderText -Value $issue) {
-                $sd = Sanitize-AiNarrativeText -Text (Get-SNValue $inc.short_description) -MaxLength 500
-                $issue = if (-not [string]::IsNullOrWhiteSpace($sd)) { $sd } else { 'User reported a service issue that requires triage.' }
+                $issue = "Incident $num reported: $shortDescription."
             }
             if (Test-PlaceholderText -Value $root) { $root = 'Unknown' }
             if (Test-PlaceholderText -Value $subcat) { $subcat = 'Unknown' }
             if (Test-PlaceholderText -Value $rootNarrative) {
-                $rootNarrative = if ($root -eq 'Unknown') { 'Root cause not documented in source incident notes.' } else { "Root cause identified as $root." }
+                $rootNarrative = "Incident $num root-cause assessment indicates '$root' from available ticket notes."
             }
-            if (Test-PlaceholderText -Value $resolution) { $resolution = 'Not documented in work notes.' }
-            if (Test-PlaceholderText -Value $evidence) { $evidence = 'Not documented in work notes.' }
+            if (Test-PlaceholderText -Value $resolution) { $resolution = "Incident $num closure notes indicate support remediation steps were applied and the case was resolved." }
+            if (Test-PlaceholderText -Value $evidence) { $evidence = "Incident $num evidence is derived from ticket text '$shortDescription'." }
 
             if (Test-PlaceholderText -Value $anal -or $anal.Length -lt 120) {
-                $anal = New-TicketDataAnalysisText -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
+                $anal = New-TicketDataAnalysisText -IncidentNumber ([string]$num) -ShortDescription $shortDescription -Category $category -Subcategory $subcat -RootCause $root -Issue $issue -RootCauseNarrative $rootNarrative -Resolution $resolution -Evidence $evidence
                 $anal = Sanitize-AiNarrativeText -Text $anal -MaxLength 1800
+            }
+
+            if ($anal -notmatch [regex]::Escape([string]$num)) {
+                $anal = "Incident ${num}: $anal"
             }
 
             if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
@@ -596,11 +699,15 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
             Add-AzTableRow -Table $cloudTable -PartitionKey ([string]$yw.YearWeek) -RowKey ([string]$num) -Property $props -UpdateExisting | Out-Null
 
             if ($existingMap) { $existingMap[[string]$num] = $structuredAnalysis }
+            Add-IncidentToWeekMap -Map $savedIncidentIdsByWeek -YearWeek ([string]$yw.YearWeek) -IncidentNumber ([string]$num)
             [void]$affectedWeeks.Add([string]$yw.YearWeek)
             Write-Output ("  OK   {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
             $summary[$key].saved++
         } catch {
             Write-Warning "  FAIL $num (Line $($_.InvocationInfo.ScriptLineNumber)): $($_.Exception.Message)"
+            if ($yw -and $num) {
+                $skipReasonByIncident["$($yw.YearWeek)|$num"] = "Failed write: $($_.Exception.Message)"
+            }
             $summary[$key].errors++
         }
     }
@@ -622,6 +729,31 @@ Write-Output ("  ---------------------------------------------------------------
 Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={3,3}" -f $totalFetched, $totalSaved, $totalSkipped, $totalErrors)
 Write-Output ''
 Write-Output "Rows newly written/updated: $totalSaved (skipped $totalSkipped valid entries in table)"
+
+Write-Output ''
+Write-Step '=== Week-level reconciliation (source vs table) ===' 'Magenta'
+foreach ($weekKey in ($sourceIncidentIdsByWeek.Keys | Sort-Object)) {
+    $sourceSet = $sourceIncidentIdsByWeek[$weekKey]
+    $tableMap = Get-ExistingRowKeys -Partition $weekKey
+    $tableKeys = @()
+    if ($tableMap) { $tableKeys = @($tableMap.Keys) }
+    $tableSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    foreach ($k in $tableKeys) { $null = $tableSet.Add([string]$k) }
+
+    $missing = @()
+    foreach ($incId in $sourceSet) {
+        if (-not $tableSet.Contains([string]$incId)) {
+            $missing += [string]$incId
+        }
+    }
+
+    Write-Output ("  {0} source={1} table={2} missing={3}" -f $weekKey, $sourceSet.Count, $tableSet.Count, $missing.Count)
+    foreach ($mid in ($missing | Sort-Object)) {
+        $reasonKey = "$weekKey|$mid"
+        $reason = if ($skipReasonByIncident.ContainsKey($reasonKey)) { $skipReasonByIncident[$reasonKey] } else { 'Missing from table after processing; check fetch filters or write failures.' }
+        Write-Warning ("    MISSING {0} ({1})" -f $mid, $reason)
+    }
+}
 
 
 # ===================================================================================

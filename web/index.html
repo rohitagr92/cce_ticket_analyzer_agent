@@ -2985,7 +2985,7 @@
 
   function opxHasDisplayableRootCause(e) {
     const rc = (e.PossibleRootCause || e.RootCause || '').trim();
-    return !!rc && !/^unknown(?:\s*\/\s*unclear)?$/i.test(rc);
+    return !!rc;
   }
 
   function opxBaseFiltered() {
@@ -2995,7 +2995,6 @@
     const to      = $('opxWeekTo').value;
     return allEntities.filter(e => {
       if (!opxMatchesService(e)) return false;
-      if (!opxHasDisplayableRootCause(e)) return false;
       const w = e.PartitionKey || e.YearWeek;
       if (!w || w < from || w > to) return false;
       if (product && product !== 'All Products' && (e.Category || '') !== product) return false;
@@ -3101,15 +3100,15 @@
   // --- Briefing helpers ----------------------------------------------------
   function opxIsMisrouted(e)  { return e.Misrouted === true || e.Misrouted === 'true' || e.Misrouted === 'Yes'; }
   function opxConfLevel(e)    { return normalizedConfidenceValue(e).toLowerCase(); } // low | medium | high | unknown
-  function opxPatternKey(e)   { return (e.PossibleRootCause || e.RootCause || '').trim(); }
+  function opxPatternKey(e)   { return opxDisplayRootCause(e); }
   function opxDisplayRootCause(e) {
     const rc = opxCleanValue(e.PossibleRootCause || e.RootCause || '');
-    return rc;
+    return rc || 'Unknown';
   }
   function opxIsDisplayablePatternKey(key) {
     if (!key) return false;
     if (key === '—' || key === '-') return false;
-    return !/^unknown(?:\s*\/\s*unclear)?$/i.test(key);
+    return true;
   }
   function opxParseKey(k)     { return { product: '', subcategory: '', rootCause: k || '' }; }
 

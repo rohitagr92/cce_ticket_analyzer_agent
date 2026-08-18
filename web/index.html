@@ -3147,7 +3147,10 @@
   // WW > 2x avg of prior 4), repeat flag (>=4 of last 6 wks).
   function opxBuildPatternStats(filtered) {
     const weeksAll = weeksMatchingService($('opxService').value);
-    const last6    = weeksAll.slice(-6);
+    // Exclude current in-progress week from the last-6 calculation
+    const todayWWopx = (() => { const d = new Date(); const j4 = new Date(d.getFullYear(),0,4); const j4m = new Date(j4.getTime()-((j4.getDay()+6)%7)*86400000); const wn = Math.floor((d.getTime()-j4m.getTime())/(7*86400000))+1; return d.getFullYear()+'-W'+String(wn).padStart(2,'0'); })();
+    const weeksComplete = weeksAll[weeksAll.length-1] === todayWWopx ? weeksAll.slice(0,-1) : weeksAll;
+    const last6    = weeksComplete.slice(-6);
     const currentWW= weeksAll[weeksAll.length - 1] || '';
 
     // collect patterns (ROOT CAUSE only) present in filtered
@@ -5154,7 +5157,20 @@
   function smBuildHistorySeries(filtered, curWk, n) {
     const byWeek = smGroupByWeek(filtered);
     const weeksAll = Object.keys(byWeek).sort();
-    const upto = curWk ? weeksAll.filter(w => w <= curWk) : weeksAll;
+    // Exclude the current in-progress week: detect by comparing curWk to today's Intel WW.
+    // If curWk is the most recent week and today falls within it, skip it so the trend
+    // shows only completed weeks and doesn't create an artificial downward slope.
+    const todayWW = (() => {
+      const d = new Date();
+      const jan4 = new Date(d.getFullYear(), 0, 4);
+      const jan4Mon = new Date(jan4.getTime() - ((jan4.getDay() + 6) % 7) * 86400000);
+      const weekNum = Math.floor((d.getTime() - jan4Mon.getTime()) / (7 * 86400000)) + 1;
+      return d.getFullYear() + '-W' + String(weekNum).padStart(2, '0');
+    })();
+    const latestInData = weeksAll[weeksAll.length - 1];
+    const excludePartial = latestInData === todayWW;
+    const completedWeeks = excludePartial ? weeksAll.slice(0, -1) : weeksAll;
+    const upto = curWk ? completedWeeks.filter(w => w <= curWk) : completedWeeks;
     const window = upto.slice(-n);
     const total = [], cats = [], exPct = [], hiPct = [], cov = [];
     for (const w of window) {
@@ -6215,7 +6231,7 @@
         $('smContext').innerHTML = contextLabel;
 
         const metrics = smComputeMetrics(rangeEnts, priorRangeEnts, priorWeeks.length ? priorWeeks[priorWeeks.length - 1] : null);
-        const history = smBuildHistorySeries(filtered, curWk, 8);
+        const history = smBuildHistorySeries(filtered, curWk, 6);
         const topIssue = computeTopIssue(rangeEnts, weeksInRange);
         const topN = parseInt(sankeyTopNSel.value, 10) || 3;
         smRenderKpis(curWk, priorWk, metrics, history, topIssue, lensSel.value, rangeLbl);

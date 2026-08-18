@@ -34,6 +34,25 @@ $ErrorActionPreference = 'Stop'
 
 function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
 
+function Get-ReprocessRequiredMessage {
+  param([string]$FieldName = 'AI Analysis')
+  $field = if ([string]::IsNullOrWhiteSpace($FieldName)) { 'AI Analysis' } else { $FieldName.Trim() }
+  return "${field} missing in the stored row; reprocess this incident from ServiceNow to restore the ticket-specific summary."
+}
+
+function Is-GenericAiText {
+  param([string]$Text)
+  if ([string]::IsNullOrWhiteSpace($Text)) { return $true }
+  $v = ($Text -replace '\s+', ' ').Trim().ToLowerInvariant()
+  if ($v -match '^summary not captured in ticket text$') { return $true }
+  if ($v -match '^usage guidance \(how do i\)$') { return $true }
+  if ($v -match 'manual review recommended for proper categorization') { return $true }
+  if ($v -match 'safe fallback categorization') { return $true }
+  if ($v -match 'ai categorization did not complete successfully') { return $true }
+  if ($v -match 'runbook could not complete the normal ai categorization flow') { return $true }
+  return $false
+}
+
 function Get-DisplayAiAnalysis {
   param([object]$Row)
 
@@ -67,14 +86,14 @@ function Get-DisplayAiAnalysis {
   $evidence = Get-Field -Text $clean -Labels @('Evidence')
   $analysis = Get-Field -Text $clean -Labels @('AI Analysis')
 
+  if ((Is-GenericAiText -Text $problem) -or (Is-GenericAiText -Text $rootCause) -or (Is-GenericAiText -Text $analysis)) {
+    $problem = Get-ReprocessRequiredMessage -FieldName 'Problem'
+    $rootCause = Get-ReprocessRequiredMessage -FieldName 'Root Cause'
+    $analysis = Get-ReprocessRequiredMessage -FieldName 'AI Analysis'
+  }
+
   if ([string]::IsNullOrWhiteSpace($problem)) {
-    $problem = if (-not [string]::IsNullOrWhiteSpace([string]$Row.Subcategory)) {
-      "Incident related to $([string]$Row.Subcategory) in $([string]$Row.Category)."
-    } elseif (-not [string]::IsNullOrWhiteSpace($clean)) {
-      ($clean -split '(?<=[.!?])\s+' | Select-Object -First 1)
-    } else {
-      'Not documented in work notes.'
-    }
+    $problem = Get-ReprocessRequiredMessage -FieldName 'Problem'
   }
 
   if ([string]::IsNullOrWhiteSpace($rootCause)) {
@@ -85,23 +104,19 @@ function Get-DisplayAiAnalysis {
     } elseif (-not [string]::IsNullOrWhiteSpace([string]$Row.RootCause)) {
       $rootCause = [string]$Row.RootCause
     } else {
-      $rootCause = 'Not documented in work notes.'
+      $rootCause = Get-ReprocessRequiredMessage -FieldName 'Root Cause'
     }
   }
 
   if ([string]::IsNullOrWhiteSpace($resolution)) {
-    $resolution = 'Not documented in work notes.'
+    $resolution = Get-ReprocessRequiredMessage -FieldName 'Resolution'
   }
   if ([string]::IsNullOrWhiteSpace($evidence)) {
-    $evidence = 'Not documented in work notes.'
+    $evidence = Get-ReprocessRequiredMessage -FieldName 'Evidence'
   }
 
   if ([string]::IsNullOrWhiteSpace($analysis)) {
-    if (-not [string]::IsNullOrWhiteSpace($clean)) {
-      $analysis = $clean
-    } else {
-      $analysis = 'Analysis not available.'
-    }
+    $analysis = Get-ReprocessRequiredMessage -FieldName 'AI Analysis'
   }
 
   $toSingleLine = {

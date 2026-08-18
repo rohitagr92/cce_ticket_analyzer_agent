@@ -1793,9 +1793,29 @@
     return 'Unknown';
   }
 
+  function isPlaceholderAiText(raw) {
+    const v = ((raw == null ? '' : String(raw)).replace(/\s+/g, ' ').trim().toLowerCase());
+    if (!v) return true;
+    const patterns = [
+      /^summary not captured in ticket text$/,
+      /^usage guidance \(how do i\)$/,
+      /manual review recommended for proper categorization/i,
+      /safe fallback categorization/i,
+      /ai categorization did not complete successfully/i,
+      /runbook could not complete the normal ai categorization flow/i,
+      /^not documented(?: in work notes)?$/,
+      /^unknown$/,
+      /^n\/?a$/,
+      /^user reported a service issue that requires triage\.?$/,
+      /^incident related to .+ in .+\.?$/
+    ];
+    return patterns.some(p => p.test(v));
+  }
+
   function hasUsableAiAnalysis(e) {
     const ai = ((e && e.AIAnalysis) || '').toString().trim();
-    return ai.length > 0;
+    if (!ai || isPlaceholderAiText(ai)) return false;
+    return ai.length > 80;
   }
 
   // Parses the structured "Problem: / AI Analysis (Confidence): ..." text written by the
@@ -1811,6 +1831,10 @@
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
       .trim();
+
+    if (isPlaceholderAiText(normalized) || normalized.length < 80) {
+      return null;
+    }
 
     if (!/(^|\n)\s*(Problem|Issue|Root Cause|Resolution|Evidence|AI Analysis)\s*:?/i.test(normalized)) {
       return null;
@@ -3429,7 +3453,7 @@
     // AIAnalysis is the rich free-form reasoning narrative used by the incident detail view.
     // DetailedRootCause remains an optional canonical label shown separately in metadata.
     const drcRaw = opxCleanValue(inc.DetailedRootCause || '');
-    const aiRaw  = (inc.AIAnalysis || '').trim();
+    const aiRaw  = isPlaceholderAiText(inc.AIAnalysis) ? '' : ((inc.AIAnalysis || '').trim());
     const sourceIssue = opxCleanValue(inc.Subcategory || '') ||
                         opxCleanValue(inc.OriginalDescription || '') ||
                         opxCleanValue(inc.Category || '') ||
@@ -3461,7 +3485,7 @@
         ['Evidence', opxCleanValue(structured.evidence)]
       ].filter(([, val]) => val);
       if (problemRows.length === 0) {
-        problemRows.push(['Issue', sourceIssue]);
+        problemRows.push(['Issue', 'Stored row is missing a ticket-specific problem summary; reprocess this incident from ServiceNow to restore the real work-note narrative.']);
       }
       const problemRowsHtml = problemRows.map(([label, val]) =>
         '<div style="margin-top:8px;">' +
@@ -3469,7 +3493,7 @@
           '<div style="margin-top:2px;">' + esc(val) + '</div>' +
         '</div>'
       ).join('');
-      const reasoningDisplay = structured.reasoning ? esc(structured.reasoning) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      const reasoningDisplay = structured.reasoning ? esc(structured.reasoning) : '<em style="color:var(--muted);">AI analysis missing from the stored row; reprocess this incident from ServiceNow.</em>';
       const statusBadge = analysisStatus ? '<div style="margin-top:8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</div>' : '';
       analysisHtml =
         '<div style="margin-bottom:12px;">' +
@@ -3482,11 +3506,11 @@
           '<div style="margin-top:6px;padding:10px;background:#f8f9fa;border:1px solid var(--border);border-left:4px solid ' + confColor + ';border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + reasoningDisplay + '</div>' +
         '</div>';
     } else {
-      const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">No AI analysis stored.</em>';
+      const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">AI analysis missing from the stored row; reprocess this incident from ServiceNow.</em>';
       const inferredRows = [
-        ['Issue', sourceIssue],
-        ['Root Cause', sourceRootCause],
-        ['Detailed Root Cause', sourceDetailedRoot]
+        ['Issue', sourceIssue || 'Stored row is missing a ticket-specific problem summary; reprocess this incident from ServiceNow.'],
+        ['Root Cause', sourceRootCause || 'Stored row is missing a ticket-specific root cause; reprocess this incident from ServiceNow.'],
+        ['Detailed Root Cause', sourceDetailedRoot || 'Stored row is missing a ticket-specific detailed root cause; reprocess this incident from ServiceNow.']
       ];
       const inferredRowsHtml = inferredRows.map(([label, val]) =>
         '<div style="margin-top:8px;">' +

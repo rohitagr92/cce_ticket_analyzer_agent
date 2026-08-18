@@ -8,6 +8,14 @@
 > ```
 > If no label in the chosen product's table fits, use the category-specific fallback label from that same table.
 
+> ## ❌ BANNED LABEL — NEVER USE AS PRC OR DRC
+> **`Usage Guidance (How Do I)` is permanently banned as a Possible Root Cause and Detailed Root Cause.**
+> It has been removed from all product tables below. For any guidance / How-Do-I ticket:
+> 1. Pick the **most specific technical root cause label** that describes the underlying product area the user was asking about (e.g. `Sync Stall`, `Copilot SKU Not Provisioned`, `Office Feature Not Working`).
+> 2. Output `HDI: Yes` in your response — this is the flag that marks it as a guidance request.
+> 3. The Subcategory **may** remain `Usage Queries` — that is correct.
+> Never set PRC or DRC to `Usage Guidance (How Do I)`. If nothing else fits, use `Unknown`.
+
 ---
 
 
@@ -28,11 +36,16 @@
 | 1.9 | **Prior OneDrive Site Expired** | Previous OneDrive site was not retained within the 30-day post-separation window and is permanently deleted. |
 | 1.10 | **Former Employee Data Request** | File is in a separated employee's OneDrive; access requires a formal IT request within the 30-day retention window. |
 | 1.11 | **Prior OneDrive Site Inaccessible** | Previous OneDrive site is no longer accessible after rejoin or separation; the site was retained but permissions tied to old identity need to be restored or re-shared. |
-| 1.12 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an Microsoft OneDrive app. |
+| 1.12 | ~~Usage Guidance (How Do I)~~ | ❌ **BANNED** — do not use as PRC or DRC. Pick the specific label that matches what the user needed help with and set HDI: Yes. |
 | 1.13 | **Missing Files After PC Refresh** | Files not re-synced to the new device after PC refresh because OneDrive client was not signed in or Known Folder Move was not re-enabled. |
 | 1.14 | **OneDrive Sign-In / Connectivity Failure** | OneDrive client cannot authenticate or reach service endpoints; blocks login on user device. |
 | 1.15 | **Known Folder Backup Failure** | OneDrive Known Folder Move (Desktop / Documents / Pictures backup) is paused, errored, or never completed. |
 | 1.16 | **Permission issue on the synced file or shortcut** | A synced file or SharePoint shortcut fails due to permission mismatch on the target item, even when OneDrive sync client is otherwise healthy. |
+| 1.17 | **OneDrive Configuration Request** | User needed help configuring OneDrive settings (selective sync, known folders, folder redirection, sharing); no product fault — guidance only. |
+| 1.18 | **Policy / Retention Clarification** | User needed clarification on OneDrive data retention, compliance, legal hold, or organisational data governance policies; no product fault. |
+| 1.19 | **OneDrive Data Awareness Gap** | User lacked awareness of OneDrive storage quotas, licensing caps, or how OneDrive handles versioning / deletion; guidance-only incident. |
+| 1.20 | **Content Organization Request** | User needed guidance on organising, moving, renaming, or restructuring files/folders in OneDrive or SharePoint; no product fault. |
+| 1.21 | **Accidental File Deletion** | User accidentally deleted files or folders from OneDrive and needs assistance recovering from the recycle bin or version history. |
 
 
 ---
@@ -48,7 +61,8 @@
 | 2.5 | **Company Portal Install Stuck** | M365 Apps installer hung in Company Portal; stalled process must be cleared before retry. |
 | 2.6 | **Office Feature Not Working** | A specific Office app feature (AutoSave, Dictation, co-authoring, accessibility checker, etc.) is non-functional despite a valid license and healthy app install; requires feature-level repair or settings reset. |
 | 2.7 | **License Not Assigned After Rejoin** | Office suite license not provisioned to the rejoined user's new identity. |
-| 2.8 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance, how-to instructions, or feature usage information for an M365 app. |
+| 2.8 | ~~Usage Guidance (How Do I)~~ | ❌ **BANNED** — do not use as PRC or DRC. Pick the specific label that matches what the user needed help with and set HDI: Yes. |
+| 2.13 | **M365 License Request** | User is inquiring about or formally requesting an additional Microsoft 365 application license (e.g. Visio, Project, Copilot) through the IT service catalog; no existing license fault. |
 | 2.9 | **Office App Crash** | Office desktop app crashes on launch or during use; commonly resolved by Quick/Online Repair or profile reset. |
 | 2.10 | **Office Compatibility Issue** | Document or feature fails due to version, OS, or third-party software compatibility mismatch. |
 | 2.11 | **Sign-in / Login Failure** | User cannot sign in to the Office app despite a valid account; cached credential, MFA, or tenant trust failure. |
@@ -65,7 +79,7 @@
 | 3.3 | **License Propagation Delay** | Copilot license assigned but not yet propagated to M365 tenant (resolves in 30–60 minutes). |
 | 3.4 | **ChunkLoadError / Stale Cache** | Stale or corrupted Teams client/web cache caused the Copilot component to fail loading. |
 | 3.5 | **Phased Rollout Gate** | Copilot feature gated behind a rollout ring the tenant has not yet reached. |
-| 3.6 | **Usage Guidance (How Do I)** | No technical fault; user needs documentation or training on Copilot capabilities. |
+| 3.6 | ~~Usage Guidance (How Do I)~~ | ❌ **BANNED** — do not use as PRC or DRC. Pick the specific Copilot label that matches what the user needed help with and set HDI: Yes. |
 | 3.7 | **License Not Assigned After Rejoin** | Copilot license not provisioned to the rejoined user's new identity. |
 | 3.8 | **Feature Inconsistency Across Apps** | Copilot works in some host apps (e.g., Word) but not others (e.g., Excel) for the same user due to per-app entitlement or rollout state mismatch. |
 | 3.9 | **Copilot Transient Service Issue** | Copilot fails across multiple surfaces/apps (Desktop, Web, Teams) due to a temporary, often Microsoft-acknowledged service-side issue; self-resolves without any license, entitlement, or environment change. NOT a license problem. |
@@ -135,6 +149,7 @@
 | 6.5 | **File Deleted from Shared Drive** | File/folder deleted from the mapped drive; recovery requires NetApp snapshot/backup restore. |
 | 6.6 | **Share Access Not Reapplied After Rejoin** | Rejoined user's mapped share drive access not restored to the new identity. |
 | 6.7 | **Share Quota / Storage Exhausted** | Shared drive volume reached its storage quota; new writes fail until quota is increased or files are archived. |
+| 6.8 | **Shared Drive Server / Infrastructure Failure** | Network share server (e.g. VMSPFSFSPG, NFS host) is inaccessible or experiencing a service outage; the share path is unreachable and restoration requires server-side or network team intervention. **Pick when:** the share path contains VMSPFSFS, VMSPFSFSPG, or an NFS hostname; or work notes state the server / host is down, inaccessible, or experiencing cross-site data access failure. |
 
 ---
 
@@ -159,7 +174,7 @@
 | 8.5 | **Hung Word Process** | Word stuck in a bad process state; ending WINWORD.EXE in Task Manager allows the document to open. |
 | 8.6 | **Word Performance Degradation** | Persistent Word slowness/hang on user device; large documents, heavy formatting, or add-in interference. |
 | 8.7 | **Word Formatting / Layout Issue** | Formatting, styles, layout, or page-structure misbehavior in the document (template, style set, or rendering issue). |
-| 8.8 | **Usage Guidance (How Do I)** | No technical fault; user requested guidance or how-to instructions for a Word feature. |
+| 8.8 | ~~Usage Guidance (How Do I)~~ | ❌ **BANNED** — do not use as PRC or DRC. Pick the specific Word label that matches what the user needed help with and set HDI: Yes. |
 | 8.9 | **Document lock or stuck Word process** | Document open failure caused by active file lock or hung WINWORD process state until process reset or lock release. |
 
 ---
@@ -272,9 +287,9 @@ Use these labels when Category = `Excluded` — the ticket is not a Productivity
 |---|---|---|
 | 17.1 | **Out-of-scope Service Offering** | Generic catch-all: ticket is a service request, access request, or non-PT product issue. Owned by another queue (e.g. SharePoint Online, Exchange, Cellular, Identity), SPO site/library access, permissions, or sharing — owned by the SharePoint Online team, not PT, Mailbox provisioning, shared mailbox access, calendar permissions — owned by Exchange/Messaging, not PT, Mobile carrier, SIM activation, cellular data plan — owned by Mobility, not PT, AGS group membership — owned by Identity, not PT, Corporate VPN, proxy, DNS, or network connectivity — owned by Network team, not PT, Laptop, peripheral, BIOS, or imaging problem — owned by Endpoint/Depot, not PT , Visual Studio, Github|
 | 17.1a | **SharePoint Online Access Request** | Ticket is a SharePoint Online site/library access or permission request that belongs to SharePoint Online queue, not Productivity Tools. |
-| 17.2 | **Workflow / How-To Guidance** | Pure user-education or workflow question with no underlying product; should be redirected to self-service docs or training. |
+| 17.2 | ~~Workflow / How-To Guidance~~ | ❌ **DEPRECATED** — merge into 17.1 `Out-of-scope Service Offering`. Use DRC `Workflow or how-to guidance (no PT product fault)` to record the specific reason. |
 | 17.3 | **Duplicate / Cancelled Ticket** | Ticket withdrawn, cancelled, duplicate of another INC, or closed without action by the requester. |
-| 17.4 | **Third-Party SaaS Issue** | Non-Microsoft, non-Google SaaS app outside the PT catalog (e.g. vendor portals, custom internal apps). |
+| 17.4 | ~~Third-Party SaaS Issue~~ | ❌ **DEPRECATED** — merge into 17.1 `Out-of-scope Service Offering`. Use DRC `Third-party SaaS tool outside PT catalog` to record the specific reason. |
 
 ---
 

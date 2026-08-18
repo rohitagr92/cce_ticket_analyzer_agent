@@ -23,6 +23,33 @@ function Get-OptVar {
     }
 }
 
+function Invoke-AzureRetryableAction {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [string]$ContextName = 'Azure operation',
+        [int]$MaxAttempts = 5,
+        [int]$DelaySeconds = 10
+    )
+
+    $attempt = 0
+    while ($true) {
+        try {
+            return & $Action
+        }
+        catch {
+            $attempt++
+            $message = $_.Exception.Message
+            $isTransient = $message -match 'timed out|timeout|temporar|The request was canceled|Connection to .* timed out|Unable to connect to the remote server|503|429|504'
+            if ($attempt -ge $MaxAttempts -or -not $isTransient) {
+                throw
+            }
+            Write-Step "$ContextName failed ($message). Retrying in ${DelaySeconds}s (attempt $attempt/$MaxAttempts)." 'WARNING'
+            Start-Sleep -Seconds $DelaySeconds
+            $DelaySeconds = [Math]::Min(30, $DelaySeconds * 2)
+        }
+    }
+}
+
 function Get-BooleanValue {
     param($Value, [bool]$Default = $false)
     if ($null -eq $Value) { return $Default }
@@ -168,10 +195,14 @@ function Test-BadQualityText {
     if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
     $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
     if ($v.Length -lt 12) { return $true }
-    if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $true }
+    if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
     if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+    if ($v -match '^summary not captured in ticket text$') { return $true }
+    if ($v -match '^usage guidance \(how do i\)$') { return $true }
     if ($v -match 'manual review recommended for proper categorization') { return $true }
     if ($v -match 'safe fallback categorization') { return $true }
+    if ($v -match 'ai categorization did not complete successfully') { return $true }
+    if ($v -match 'runbook could not complete the normal ai categorization flow') { return $true }
     return $false
 }
 
@@ -350,6 +381,14 @@ foreach ($week in $targetWeeks) {
         if (-not $tableIds.Contains([string]$sid)) { $missing += [string]$sid }
     }
 
+    # Compute excess: rows in table but not in ServiceNow source for this week
+    $excess = @()
+    foreach ($tid in @($tableIds)) {
+        $srcSet = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+        foreach ($s in $sourceIds) { $null = $srcSet.Add([string]$s) }
+        if (-not $srcSet.Contains([string]$tid)) { $excess += [string]$tid }
+    }
+
     $sourceMinusTable = $sourceIds.Count - $tableIds.Count
     $deltaAbs = [Math]::Abs($sourceMinusTable)
     $sourceShortfall = [Math]::Max(0, $sourceMinusTable)
@@ -357,6 +396,9 @@ foreach ($week in $targetWeeks) {
     $badRows = Get-BadQualityRowIds -Rows $rows
 
     Write-Step ("Week {0}: source={1} table={2} deltaAbs={3} shortfall={4} tableExcess={5} missing={6} badQuality={7}" -f $week, $sourceIds.Count, $tableIds.Count, $deltaAbs, $sourceShortfall, $tableExcess, $missing.Count, $badRows.Count)
+    if ($excess.Count -gt 0) {
+        Write-Step ("Excess IDs for {0}: {1}" -f $week, ($excess -join ',')) 'WARN'
+    }
 
     # Fail only when the source has incidents that are missing from table output,
     # or when mandatory structured analysis quality is violated.

@@ -45,6 +45,23 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+function Ensure-AzContext {
+    param([string]$SubscriptionId)
+
+    $ctx = Get-AzContext -ErrorAction SilentlyContinue
+    if (-not $ctx) {
+        Write-Host 'No active Azure context found. Run az login --use-device-code and then retry.' -ForegroundColor Yellow
+        Connect-AzAccount -Subscription $SubscriptionId | Out-Null
+        return
+    }
+
+    if ($ctx.Subscription.Id -ne $SubscriptionId) {
+        Set-AzContext -Subscription $SubscriptionId -ErrorAction Stop | Out-Null
+    }
+}
+
+Ensure-AzContext -SubscriptionId '1c6d384e-bc83-4b02-859c-76eeb87f7676'
+
 Write-Host "Guardrail: Backfill-WeekData only supports incident-analyzer-rb-prodtools to preserve strict template + detailed AIAnalysis behavior." -ForegroundColor DarkCyan
 
 $setupRoot = Split-Path -Parent $PSScriptRoot

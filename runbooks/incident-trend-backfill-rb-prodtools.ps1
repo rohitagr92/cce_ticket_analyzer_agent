@@ -74,9 +74,17 @@ function Sanitize-AiNarrativeText {
 function Test-PlaceholderText {
     param([string]$Value)
     if ([string]::IsNullOrWhiteSpace($Value)) { return $true }
-    $v = $Value.Trim()
-    if ($v -match '^(not documented|unknown|n/?a|nil|null|none|na)$') { return $true }
+    $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
+    if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
     if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+    if ($v -match '^summary not captured in ticket text$') { return $true }
+    if ($v -match '^usage guidance \(how do i\)$') { return $true }
+    if ($v -match 'manual review recommended for proper categorization') { return $true }
+    if ($v -match 'safe fallback categorization') { return $true }
+    if ($v -match 'ai categorization did not complete successfully') { return $true }
+    if ($v -match 'runbook could not complete the normal ai categorization flow') { return $true }
+    if ($v -match '^user reported a service issue that requires triage\.?$') { return $true }
+    if ($v -match '^incident related to .+ in .+\.?$') { return $true }
     return $false
 }
 
@@ -93,6 +101,33 @@ function Get-SNValue {
         if ($Prop.PSObject.Properties['result'] -and $Prop.result) { return Get-SNValue $Prop.result }
     }
     return [string]$Prop
+}
+
+function Invoke-AzureRetryableAction {
+    param(
+        [Parameter(Mandatory)][scriptblock]$Action,
+        [string]$ContextName = 'Azure operation',
+        [int]$MaxAttempts = 5,
+        [int]$DelaySeconds = 10
+    )
+
+    $attempt = 0
+    while ($true) {
+        try {
+            return & $Action
+        }
+        catch {
+            $attempt++
+            $message = $_.Exception.Message
+            $isTransient = $message -match 'timed out|timeout|temporar|The request was canceled|Connection to .* timed out|Unable to connect to the remote server|503|429|504'
+            if ($attempt -ge $MaxAttempts -or -not $isTransient) {
+                throw
+            }
+            Write-Step "$ContextName failed ($message). Retrying in ${DelaySeconds}s (attempt $attempt/$MaxAttempts)." 'Warning'
+            Start-Sleep -Seconds $DelaySeconds
+            $DelaySeconds = [Math]::Min(30, $DelaySeconds * 2)
+        }
+    }
 }
 
 
@@ -137,10 +172,12 @@ Write-Output "Subscription   : $($cfg.SubscriptionId)"
 
 Write-Step 'Connecting to Azure with managed identity...' 'Yellow'
 Disable-AzContextAutosave -Scope Process | Out-Null
-$null = Connect-AzAccount -Identity -ErrorAction Stop
-$null = Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop
+$null = Invoke-AzureRetryableAction -ContextName 'Connect-AzAccount' -Action { Connect-AzAccount -Identity -ErrorAction Stop }
+$null = Invoke-AzureRetryableAction -ContextName 'Set-AzContext' -Action { Set-AzContext -Subscription $cfg.SubscriptionId -ErrorAction Stop }
 
-$storageKey = (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value
+$storageKey = (Invoke-AzureRetryableAction -ContextName 'Get-AzStorageAccountKey' -Action {
+    (Get-AzStorageAccountKey -ResourceGroupName $cfg.ResourceGroupName -Name $cfg.StorageAccountName)[0].Value
+})
 $saCtx      = New-AzStorageContext -StorageAccountName $cfg.StorageAccountName -StorageAccountKey $storageKey
 
 if (-not (Get-Module -ListAvailable -Name AzTable)) {
@@ -487,6 +524,8 @@ function Test-NeedsAiReprocess {
         $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
         if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
         if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+        if ($v -match '^summary not captured in ticket text$') { return $true }
+        if ($v -match '^usage guidance \(how do i\)$') { return $true }
         if ($v -match '^user reported a service issue that requires triage\.?$') { return $true }
         if ($v -match '^incident related to .+ in .+\.?$') { return $true }
         if ($v -match 'ai categorization did not complete successfully') { return $true }
@@ -679,6 +718,12 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
                 
             $structuredAnalysis = Get-SafeSubstring -InputString $structuredAnalysis -MaxLength 4000 -Suffix '...'
 
+            # DRC: free-form max 9 words derived from root narrative (matches analyzer runbook behavior)
+            $drcWords = (($rootNarrative -replace '[\r\n]+', ' ' -replace '\s+', ' ').Trim() -split ' ') | Where-Object { $_ -ne '' }
+            $shortDrc = if ($drcWords.Count -gt 9) { ($drcWords | Select-Object -First 9) -join ' ' } else { $rootNarrative.Trim() }
+            if ([string]::IsNullOrWhiteSpace($shortDrc) -or $shortDrc -imatch '^unknown') { $shortDrc = $root }
+            # HDI: true when subcategory is Usage Queries (how-do-i guidance ticket)
+            $isHdi = ($subcat -imatch 'Usage Quer')
             $reportBlobName = "EUC_Weekly_Report_$($yw.YearWeek).html"
 
             $props = @{
@@ -686,7 +731,8 @@ for ($i = 0; $i -lt $LookbackDays; $i++) {
                 'Subcategory'       = [string]$subcat
                 'RootCause'         = [string]$root
                 'PossibleRootCause' = [string]$root
-                'DetailedRootCause' = [string](Get-SafeSubstring -InputString $rootNarrative -MaxLength 1000 -Suffix '...')
+                'DetailedRootCause' = [string]$shortDrc
+                'HDI'               = [bool]$isHdi
                 'AIAnalysis'        = [string]$structuredAnalysis
                 'Confidence'        = [string]$conf
                 'Date'              = [string]$resolvedDt.ToString('yyyy-MM-dd')

@@ -30,24 +30,38 @@ if (-not (Test-Path $scriptPath)) { throw "Runbook source not found: $scriptPath
 
 Import-Module Az.Automation -Force
 
-# -------- Check AzTable module in Automation Account (PowerShell 7.2 runtime) --------
+# -------- Check AzTable module in Automation Account --------
 Write-Host "=== Checking AzTable module in Automation Account ===" -ForegroundColor Cyan
 $azTablePresent = $false
+
 try {
-    # PS 7.2 modules live in the "Powershell72Modules" collection. Use REST since the
-    # classic Get-AzAutomationModule cmdlet targets PS 5.1 modules only.
-    $sub = (Get-AzContext).Subscription.Id
-    $uri = "https://management.azure.com/subscriptions/$sub/resourceGroups/$ResourceGroupName/providers/Microsoft.Automation/automationAccounts/$AutomationAccountName/powershell72Modules/AzTable?api-version=2023-11-01"
-    $token = (Get-AzAccessToken).Token
-    $r = Invoke-RestMethod -Method Get -Uri $uri -Headers @{ Authorization = "Bearer $token" } -ErrorAction Stop
-    if ($r.properties.provisioningState -eq 'Succeeded') {
-        Write-Host "  AzTable module present (PowerShell 7.2 runtime)." -ForegroundColor Green
+    $classic = Get-AzAutomationModule -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name 'AzTable' -ErrorAction Stop
+    if ($classic -and $classic.ProvisioningState -eq 'Succeeded') {
+        Write-Host "  AzTable module is present and succeeded in the Automation Account." -ForegroundColor Green
         $azTablePresent = $true
-    } else {
-        Write-Host "  AzTable module exists but state: $($r.properties.provisioningState)" -ForegroundColor Yellow
+    } elseif ($classic) {
+        Write-Host "  AzTable module exists in Automation Account but is in state: $($classic.ProvisioningState)" -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "  AzTable module NOT installed in Powershell72Modules." -ForegroundColor Yellow
+    Write-Host "  Classic AzTable module lookup did not return a result; falling back to runtime-specific check." -ForegroundColor Gray
+}
+
+if (-not $azTablePresent) {
+    try {
+        # PS 7.2 modules live in the "Powershell72Modules" collection. Use REST as a secondary check.
+        $sub = (Get-AzContext).Subscription.Id
+        $uri = "https://management.azure.com/subscriptions/$sub/resourceGroups/$ResourceGroupName/providers/Microsoft.Automation/automationAccounts/$AutomationAccountName/powershell72Modules/AzTable?api-version=2023-11-01"
+        $token = (Get-AzAccessToken).Token
+        $r = Invoke-RestMethod -Method Get -Uri $uri -Headers @{ Authorization = "Bearer $token" } -ErrorAction Stop
+        if ($r.properties.provisioningState -eq 'Succeeded') {
+            Write-Host "  AzTable module present (PowerShell 7.2 runtime)." -ForegroundColor Green
+            $azTablePresent = $true
+        } else {
+            Write-Host "  AzTable module exists but state: $($r.properties.provisioningState)" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Host "  PowerShell 7.2 runtime lookup did not confirm AzTable. This may be a token/permission issue, but the Automation Account module list should be treated as authoritative when it shows the module as succeeded." -ForegroundColor Yellow
+    }
 }
 
 if (-not $azTablePresent) {
@@ -66,7 +80,7 @@ if (-not $azTablePresent) {
                 $r = Invoke-RestMethod -Method Get -Uri $uri -Headers @{ Authorization = "Bearer $token" } -ErrorAction Stop
                 Write-Host "    state=$($r.properties.provisioningState)" -ForegroundColor Gray
                 if ($r.properties.provisioningState -eq 'Succeeded') { $azTablePresent = $true; break }
-                if ($r.properties.provisioningState -eq 'Failed')    { break }
+                if ($r.properties.provisioningState -eq 'Failed') { break }
             } catch {}
         }
         if ($azTablePresent) { Write-Host "  AzTable installed successfully." -ForegroundColor Green }

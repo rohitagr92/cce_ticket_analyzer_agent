@@ -66,6 +66,20 @@ function Ensure-RunbookScheduleLink {
         Write-Host "Schedule '$ScheduleName' already exists. Reusing." -ForegroundColor Gray
     }
 
+    $existingLinks = @(Get-AzAutomationScheduledRunbook -ResourceGroupName $ResourceGroupName `
+        -AutomationAccountName $AutomationAccountName `
+        -RunbookName $RunbookName -ErrorAction SilentlyContinue)
+
+    foreach ($link in $existingLinks) {
+        if ($link.ScheduleName -ne $ScheduleName) {
+            Write-Host "Removing stale schedule link '$($link.ScheduleName)' from runbook '$RunbookName'." -ForegroundColor Yellow
+            Unregister-AzAutomationScheduledRunbook -ResourceGroupName $ResourceGroupName `
+                -AutomationAccountName $AutomationAccountName `
+                -RunbookName $RunbookName `
+                -ScheduleName $link.ScheduleName -Force | Out-Null
+        }
+    }
+
     $linked = Get-AzAutomationScheduledRunbook -ResourceGroupName $ResourceGroupName `
         -AutomationAccountName $AutomationAccountName `
         -RunbookName $RunbookName -ErrorAction SilentlyContinue |
@@ -81,6 +95,24 @@ function Ensure-RunbookScheduleLink {
         Write-Host "Runbook '$RunbookName' is already linked to '$ScheduleName'." -ForegroundColor Gray
     }
 }
+
+function Remove-StaleProdToolsSchedules {
+    $allowed = @($AnalyzerScheduleName, $TrendScheduleName, $QualityGuardScheduleName)
+    $allSchedules = @(Get-AzAutomationSchedule -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName)
+
+    foreach ($schedule in $allSchedules) {
+        $name = [string]$schedule.Name
+        $isExpected = $allowed -contains $name
+        $looksLikePt = $name -match 'Incident.*ProdTools|ProdTools|Daily.*(Analyzer|Backfill|Quality)|IncidentAnalyzer|IncidentTrendBackfill|IncidentQualityGuard'
+
+        if (-not $isExpected -and $looksLikePt) {
+            Write-Host "Removing stale Productivity Tools schedule '$name'." -ForegroundColor Yellow
+            Remove-AzAutomationSchedule -ResourceGroupName $ResourceGroupName -AutomationAccountName $AutomationAccountName -Name $name -Force | Out-Null
+        }
+    }
+}
+
+Remove-StaleProdToolsSchedules
 
 # 1) Ensure trend backfill runbook is published + scheduled daily.
 & (Join-Path $publishDir 'Publish-TrendBackfillRunbook.ps1') `

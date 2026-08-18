@@ -391,6 +391,8 @@ Your task is to classify each incident into a **sub-category** that captures the
     - "Access denied" on a shared file resolved by owner re-share → "Access & Permission Issues" as a subcategory under Microsoft OneDrive (or the equivalent under Rejoin if the user rejoined).
 - **OneNote on a new laptop.** Default to a "Missing Data Issues" or "Usage Queries" as a subcategory unless the work notes specifically attribute the failure to the OneDrive client.
 - **Mapped network drive not connecting** is a "Access & Permission Issues" as a subCategory where server name contains "SFS"  — never OneDrive.
+- **VMSPFSFS or NFS share server inaccessible.** If the ticket mentions `\\VMSPFSFS`, `VMSPFSFSPG`, or an NFS hostname being unreachable, classify as **"Shared File Service (Share Drives) Issues"** sub-category "Mapped Drive Issues" — NOT as OneDrive or network monitoring.
+- **Usage Queries sub-category → HDI rule.** Any ticket classified under "Usage Queries" is a How-Do-I guidance request. When this is the sub-category, the TicketCategorisation output MUST include `HDI: Yes`. The Possible Root Cause MUST be a specific product-area label (e.g., `Sync Stall`, `Copilot SKU Not Provisioned`, `Office Feature Not Working`) — **NOT** `Usage Guidance (How Do I)`, which is permanently banned as a PRC/DRC label.
 
 ### Output Format
 

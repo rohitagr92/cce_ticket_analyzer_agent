@@ -1261,16 +1261,48 @@ function Invoke-TicketProcessing {
             $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
         }
 
-        $drcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.DetailedRootCauses -Product $canonicalCategory
-        $rawDrc = Get-CanonicalAlias -Field 'DetailedRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.detailed_root_cause)
-        $ticket.DetailedRootCause = Get-CanonicalLabel -Raw $rawDrc -Allowlist $drcAllowlist -Fallback ''
-        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause)) {
-            $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
+        $drcAllowlist = @()  # DRC is now free-form: no canonical list enforced
+        $rawDrc = ([string]$categoryInfo.detailed_root_cause).Trim() -replace '\*+', ''
+        # Cap at 9 words; keep factual and specific
+        $drcWords = ($rawDrc -split '\s+') | Where-Object { $_ -ne '' }
+        $ticket.DetailedRootCause = if ($drcWords.Count -gt 0) {
+            if ($drcWords.Count -gt 9) { ($drcWords | Select-Object -First 9) -join ' ' } else { $rawDrc }
+        } else { '' }
+
+        # Programmatic evidence gate: override Copilot License Blackout if work notes contain negative validators.
+        if ($canonicalCategory -eq 'Microsoft 365 Copilot Issues' -and
+            $ticket.PossibleRootCause -ieq 'Copilot License Blackout') {
+            $gateText = "$cleanedNotes $summary $([string]$categoryInfo.reasoning)"
+            $licActive   = $gateText -imatch 'license (is |was |has been )?(verified|active|assigned|valid)|assigned and active|entitlement (is |was )?(active|valid|confirmed)|license shown active'
+            $worksOther  = $gateText -imatch 'copilot (is |was )?(working|present|works) in (other|another)|works in (teams|word|outlook|powerpoint|onenote)|other (office |microsoft )?(apps?|applications?)'
+            $selfResolved= $gateText -imatch 'self.resolv|resolved without (license|entitlement)|service.side (issue|outage|degradation)|microsoft.acknowledged'
+            if ($licActive -or $worksOther -or $selfResolved) {
+                $overridePRC = if ($selfResolved -or $worksOther) { 'Copilot Transient Service Issue' }
+                               elseif ($licActive)                { 'Feature Inconsistency Across Apps' }
+                               else                               { 'Copilot Access / Environment Configuration Issue' }
+                $overrideDRC = switch ($overridePRC) {
+                    'Copilot Transient Service Issue'                  { 'Copilot transient service issue (self-resolving outage)' }
+                    'Feature Inconsistency Across Apps'                { 'Copilot feature inconsistency across apps' }
+                    'Copilot Access / Environment Configuration Issue'  { 'Copilot access / environment configuration issue' }
+                }
+                $coercedPRC = Get-CanonicalLabel -Raw $overridePRC -Allowlist $prcAllowlist -Fallback ''
+                if (-not [string]::IsNullOrWhiteSpace($coercedPRC)) {
+                    Write-ScriptLog "Evidence gate override: $($Incident.number) PRC '$($ticket.PossibleRootCause)' -> '$coercedPRC' (licActive=$licActive worksOther=$worksOther selfResolved=$selfResolved)" -Level Warning -Category 'EvidenceGate'
+                    $ticket.PossibleRootCause = $coercedPRC
+                    # DRC is free-form: derive from the override context
+                    $ticket.DetailedRootCause = switch ($overridePRC) {
+                        'Copilot Transient Service Issue'                 { 'Copilot service-side issue, self-resolved' }
+                        'Feature Inconsistency Across Apps'               { 'Copilot works in other apps, not this one' }
+                        'Copilot Access / Environment Configuration Issue' { 'Missing access role or network prerequisite' }
+                        default { $ticket.DetailedRootCause }
+                    }
+                }
+            }
         }
 
         $needPrcRescue = ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause) -and $prcAllowlist -and $prcAllowlist.Count -gt 0)
-        $needDrcRescue = ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause) -and $drcAllowlist -and $drcAllowlist.Count -gt 0)
-        if ($Script:Config.Rescue.Enabled -and ($needPrcRescue -or $needDrcRescue)) {
+        $needDrcRescue = $false  # DRC is free-form; rescue only applies to PRC
+        if ($Script:Config.Rescue.Enabled -and $needPrcRescue) {
             $rescue = Resolve-RootCauseRescue `
                 -Category          $canonicalCategory `
                 -Subcategory       $ticket.Subcategory `
@@ -1278,9 +1310,9 @@ function Invoke-TicketProcessing {
                 -ShortDescription  ([string]$Incident.short_description) `
                 -WorkNotes         ([string]$cleanedNotes) `
                 -PrcAllowlist      $prcAllowlist `
-                -DrcAllowlist      $drcAllowlist `
+                -DrcAllowlist      @() `
                 -NeedPrc           $needPrcRescue `
-                -NeedDrc           $needDrcRescue
+                -NeedDrc           $false
             
             if ($needPrcRescue -and $rescue.PossibleRootCause) {
                 $coerced = Get-CanonicalLabel -Raw $rescue.PossibleRootCause -Allowlist $prcAllowlist -Fallback ''
@@ -1290,21 +1322,14 @@ function Invoke-TicketProcessing {
                     $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
                 }
             }
-            if ($needDrcRescue -and $rescue.DetailedRootCause) {
-                $coerced = Get-CanonicalLabel -Raw $rescue.DetailedRootCause -Allowlist $drcAllowlist -Fallback ''
-                if (-not [string]::IsNullOrWhiteSpace($coerced)) {
-                    $ticket.DetailedRootCause = $coerced
-                } else {
-                    $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
-                }
-            }
         }
 
         if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
             $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
         }
-        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause)) {
-            $ticket.DetailedRootCause = Get-CanonicalFallbackLabel -Field DetailedRootCause -Product $canonicalCategory -Allowlist $drcAllowlist
+        # DRC fallback: derive from PRC when AI didn't provide one
+        if ([string]::IsNullOrWhiteSpace($ticket.DetailedRootCause) -and -not [string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
+            $ticket.DetailedRootCause = $ticket.PossibleRootCause
         }
 
         $ticket.Service   = 'Productivity Tools'
@@ -1350,6 +1375,10 @@ function Invoke-TicketProcessing {
         $ticket.Evidence            = $categoryInfo.key_evidence
         $ticket.Resolution          = $categoryInfo.resolution_summary
         $ticket.Type                = $categoryInfo.how_do_i_or_error
+        # HDI=True when AI says How Do I, OR when subcategory is Usage Queries, OR when PRC was Usage Guidance (legacy catch)
+        $ticket.HDI                 = ([string]$categoryInfo.how_do_i_or_error -imatch '^How Do I' -or
+                                       [string]$ticket.Subcategory -imatch 'Usage Quer' -or
+                                       [string]$ticket.SubSymptom  -imatch 'Usage Quer')
         $ticket.KnowledgeBase       = $categoryInfo.kb_provided
         $ticket.OriginalDescription = $Incident.short_description
         $ticket.ResolvedAt          = [string]$Incident.resolved_at
@@ -1382,12 +1411,13 @@ function New-FallbackTicketAnalysis {
     $ticket.Category          = 'Other / Miscellaneous'
     $ticket.SubSymptom         = 'Unclassified'
     $ticket.Subcategory        = 'Unclassified'
-    $ticket.PossibleRootCause  = 'Usage Guidance (How Do I)'
+    $ticket.PossibleRootCause  = 'Unknown'
     $ticket.DetailedRootCause  = 'Automated fallback classification'
     $ticket.Service            = 'Productivity Tools'
     $ticket.Misrouted          = $false
     $ticket.ExclusionReason    = ''
     $ticket.Confidence         = 'Low'
+    $ticket.HDI                = $false
 
     $short = ([string]$Incident.short_description).Trim()
     if ([string]::IsNullOrWhiteSpace($short)) { $short = ([string]$Incident.description).Trim() }
@@ -1395,10 +1425,12 @@ function New-FallbackTicketAnalysis {
 
     $failureNote = if ([string]::IsNullOrWhiteSpace($FailureReason)) { 'the AI categorization call did not return a usable response' } else { $FailureReason }
     
-    $ticket.Reasoning = "The user reached out because '$short'. During analysis, the runbook could not complete the normal AI categorization flow because $failureNote. The engineer-side automation therefore applied a safe fallback categorization so reporting could continue without dropping this incident from weekly trends. Available notes do not provide enough verified evidence to describe a precise root-cause chain for this ticket. User-response confirmation is not explicitly captured in the fallback path, so a manual follow-up review is recommended before relying on this entry for deep root-cause conclusions."
-    $ticket.Evidence = 'AI categorization did not complete successfully'
-    $ticket.Resolution = 'Manual review recommended for proper categorization'
-    $ticket.Type = 'Not Determined'
+    $ticket.Issue = "Incident $([string]$Incident.number) needs reprocessing from ServiceNow because the stored work notes do not contain a verified ticket-specific summary."
+    $ticket.RootCauseNarrative = "The available row for incident $([string]$Incident.number) is incomplete; reprocess the ticket from ServiceNow to restore the actual work-note root cause."
+    $ticket.Reasoning = "The ticket cannot be published with a meaningful incident-specific summary until the original ServiceNow work notes are reloaded. The current failure mode was: $failureNote. Reprocess this record from ServiceNow to restore the real issue, root cause, resolution, and evidence before final reporting."
+    $ticket.Evidence = "Stored AI output for incident $([string]$Incident.number) is unusable because the live work notes were not successfully captured. Reprocessing from ServiceNow is required to restore the real evidence chain."
+    $ticket.Resolution = 'Reprocess this incident from ServiceNow and regenerate the final AI summary before publishing.'
+    $ticket.Type = 'Reprocess Required'
     $ticket.KnowledgeBase = ''
     $ticket.OriginalDescription = [string]$Incident.short_description
     $ticket.ResolvedAt = [string]$Incident.resolved_at
@@ -1406,6 +1438,27 @@ function New-FallbackTicketAnalysis {
     $null = Ensure-TicketAiFields -Ticket $ticket
     
     return $ticket
+}
+
+function Test-TicketPublishReady {
+    [CmdletBinding()]
+    param([Parameter(Mandatory)][object]$Ticket)
+
+    if ($null -eq $Ticket) { return $false }
+    $analysisStatus = [string]$Ticket.AnalysisStatus
+    if ($analysisStatus -match 'Insufficient notes|Reprocess Required|Fallback|Unclassified') { return $false }
+
+    $structured = [string](Format-StructuredAiAnalysis -Ticket $Ticket)
+    if ([string]::IsNullOrWhiteSpace($structured)) { return $false }
+    if ($structured -notmatch '(?im)^\s*Problem\s*:') { return $false }
+    if ($structured -notmatch '(?im)^\s*Root\s*Cause\s*:') { return $false }
+    if ($structured -notmatch '(?im)^\s*Resolution\s*:') { return $false }
+    if ($structured -notmatch '(?im)^\s*Evidence\s*:') { return $false }
+    if ($structured -notmatch '(?im)^\s*AI\s*Analysis\s*(?:\([^)]*\))?\s*:') { return $false }
+    if ($structured -match '(?is)manual review recommended for proper categorization|safe fallback categorization|fallback analysis generated during data repair|ticket-specific details are missing; reprocess this incident from ServiceNow|reprocess this incident from ServiceNow and regenerate the final AI summary') { return $false }
+    if ($structured.Length -lt 250) { return $false }
+
+    return $true
 }
 
 function Get-CategoryStatistics {
@@ -1478,6 +1531,14 @@ function Save-CategoryStatisticsToTable {
         Write-ScriptLog "No processed tickets to save to table" -Level Warning
         return
     }
+
+    $invalidTickets = @($Script:ProcessedTickets | Where-Object { -not (Test-TicketPublishReady -Ticket $_) })
+    if ($invalidTickets.Count -gt 0) {
+        $invalidNumbers = ($invalidTickets | Select-Object -ExpandProperty Number) -join ', '
+        $msg = "Refusing to publish week data: $($invalidTickets.Count) ticket(s) failed publish validation and must be reprocessed from ServiceNow before saving. Invalid records: $invalidNumbers"
+        Write-ScriptLog $msg -Level Error
+        throw $msg
+    }
     
     try {
         $cloudTable = Initialize-StatisticsTable
@@ -1537,6 +1598,8 @@ function Save-CategoryStatisticsToTable {
                         if ($structuredAnalysis.Length -gt 4000) { $structuredAnalysis.Substring(0, 4000) + '...' } else { $structuredAnalysis }
                     )
                     "Confidence"        = [string]$ticket.Confidence
+                    "HDI"               = [bool]$ticket.HDI
+                    "TicketType"        = [string]$ticket.Type
                 }
                 
                 Add-AzTableRow -Table $cloudTable `
@@ -1735,7 +1798,8 @@ function New-DetailsTableHtml {
         if ($category -eq 'Excluded' -and $ticketRecord -and $ticketRecord.ExclusionReason) {
             $category = "Excluded<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>$($ticketRecord.ExclusionReason)</span>"
         } elseif ($ticketRecord -and $ticketRecord.SubSymptom) {
-            $category = "$category<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>Sub-symptom: $($ticketRecord.SubSymptom)</span>"
+            $hdiTag = if ($ticketRecord.HDI) { " <span style='display:inline-block;background:#0071c5;color:#fff;font-size:10px;font-weight:700;padding:1px 6px;border-radius:10px;vertical-align:middle;letter-spacing:0.5px;'>HDI</span>" } else { '' }
+            $category = "$category$hdiTag<br><span style='font-weight:normal;font-size:11px;color:#6c757d;'>Sub-symptom: $($ticketRecord.SubSymptom)</span>"
         }
         
         $formattedSummary = $summary.SummarisedNotes -replace "`r`n|`n|`r", "<br>"
@@ -2127,7 +2191,7 @@ function Get-InsufficientNotesReasoning {
     $detailRootCause = ([string]$Ticket.DetailedRootCause).Trim()
     if ([string]::IsNullOrWhiteSpace($detailRootCause)) { $detailRootCause = 'Unknown' }
 
-    $analysis = "Insufficient notes: the available work notes do not support a confident narrative without inventing details. The ticket remains categorized as '$category' / '$subcategory' with root cause '$possibleRootCause' and detailed root cause '$detailRootCause'."
+    $analysis = "The stored row for incident $([string]$Ticket.Number) is incomplete, so no ticket-specific summary can be published without reprocessing the original ServiceNow work notes. The current category remains '$category' / '$subcategory' with root cause '$possibleRootCause' and detailed root cause '$detailRootCause'."
 
     $resolution = ([string]$CategoryInfo.resolution_summary).Trim()
     if (-not [string]::IsNullOrWhiteSpace($resolution)) {
@@ -2138,6 +2202,8 @@ function Get-InsufficientNotesReasoning {
     if (-not [string]::IsNullOrWhiteSpace($evidence)) {
         $analysis += " Key evidence: $evidence."
     }
+
+    $analysis += ' Reprocess the ticket from ServiceNow to restore the true issue, root cause, resolution, and evidence before publishing final report text.'
 
     return $analysis.Trim()
 }
@@ -2273,12 +2339,14 @@ function Format-StructuredAiAnalysis {
     [CmdletBinding()]
     param([Parameter(Mandatory)][object]$Ticket)
 
-    $issue      = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) { 'Not documented.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Issue) -MaxLength 600 }
-    $rootCause  = if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) { 'Not documented.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.RootCauseNarrative) -MaxLength 900 }
-    $resolution = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Resolution)) { 'Not documented in work notes.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Resolution) -MaxLength 900 }
-    $evidence   = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Evidence)) { 'Not documented in work notes.' } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Evidence) -MaxLength 900 }
+    $reprocessMsg = 'Ticket-specific details are missing; reprocess this incident from ServiceNow to restore the real work-note summary.'
+    $issue      = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) { $reprocessMsg } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Issue) -MaxLength 600 }
+    $rootCause  = if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) { $reprocessMsg } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.RootCauseNarrative) -MaxLength 900 }
+    $resolution = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Resolution)) { $reprocessMsg } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Resolution) -MaxLength 900 }
+    $evidence   = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Evidence)) { $reprocessMsg } else { Sanitize-AiNarrativeText -Text ([string]$Ticket.Evidence) -MaxLength 900 }
     $confidence = if ([string]::IsNullOrWhiteSpace([string]$Ticket.Confidence)) { 'Unknown' } else { [string]$Ticket.Confidence }
     $reasoning  = Sanitize-AiNarrativeText -Text ([string]$Ticket.Reasoning) -MaxLength 2200
+    if ([string]::IsNullOrWhiteSpace($reasoning)) { $reasoning = $reprocessMsg }
 
     return (
         "Problem: $issue`n" +
@@ -2312,13 +2380,13 @@ function Ensure-TicketAiFields {
     $Ticket.Confidence = Get-NormalizedConfidence -Raw ([string]$Ticket.Confidence) -RootCausesKnown $rootCausesKnown
 
     if ([string]::IsNullOrWhiteSpace([string]$Ticket.Issue)) {
-        $Ticket.Issue = if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.OriginalDescription)) { [string]$Ticket.OriginalDescription } else { 'Not documented.' }
+        $Ticket.Issue = if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.OriginalDescription)) { [string]$Ticket.OriginalDescription } else { 'Ticket-specific issue summary missing; reprocess this incident from ServiceNow to restore the real work-note narrative.' }
     }
     if ([string]::IsNullOrWhiteSpace([string]$Ticket.RootCauseNarrative)) {
         $Ticket.RootCauseNarrative = if (-not [string]::IsNullOrWhiteSpace([string]$Ticket.PossibleRootCause)) {
-            "Root cause not documented beyond the catalog classification of $($Ticket.PossibleRootCause)."
+            "Root cause details are incomplete in the stored row; reprocess this incident from ServiceNow so the actual work-note cause is restored."
         } else {
-            'Root cause not documented in the available work notes.'
+            'Root cause details are missing from the stored row; reprocess this incident from ServiceNow to restore the actual work-note cause.'
         }
     }
 
@@ -2374,6 +2442,8 @@ function Test-ExistingAiAnalysisUsable {
         $v = ($Value -replace '\s+', ' ').Trim().ToLowerInvariant()
         if ($v -match '^(not documented|not documented in work notes|unknown|n/?a|nil|null|none|na)$') { return $true }
         if ($v -match '^(issue|root cause|resolution|evidence|ai analysis)\s*:?$') { return $true }
+        if ($v -match '^summary not captured in ticket text$') { return $true }
+        if ($v -match '^usage guidance \(how do i\)$') { return $true }
         if ($v -match '^user reported a service issue that requires triage\.?$') { return $true }
         if ($v -match '^incident related to .+ in .+\.?$') { return $true }
         if ($v -match 'ai categorization did not complete successfully') { return $true }
@@ -2445,6 +2515,7 @@ function Convert-StatisticsRowToTicketAnalysis {
     $ticket.Confidence = [string]$Row.Confidence
     $ticket.AnalysisStatus = [string]$Row.AnalysisStatus
     $ticket.ResolvedAt = [string]$Row.Date
+    $ticket.HDI = [bool]$Row.HDI
 
     $clean = ([string]$Row.AIAnalysis) -replace '\*\*', ''
     $ticket.Issue = ([regex]::Match($clean, '(?ims)^\s*Problem\s*:\s*(.*?)\s*(?=\n\s*Root\s*Cause\s*:|\z)').Groups[1].Value -replace '\s+', ' ').Trim(' ', '.', ',', ';', ':')
@@ -2699,6 +2770,7 @@ class TicketAnalysis {
     [string]$OriginalDescription
     [string]$ResolvedAt
     [string]$AnalysisStatus
+    [bool]$HDI = $false
     [datetime]$Processed = (Get-Date)
     
     TicketAnalysis([string]$ticketNumber) {
@@ -2859,7 +2931,7 @@ try {
                     $Script:ProcessedTickets.Add($fallbackTicket)
                     $allsummarisednotes.Add([PSCustomObject]@{
                         IncidentNumber  = $incident.number
-                        SummarisedNotes = "Fallback summary generated because AI categorization failed after retries."
+                        SummarisedNotes = "Reprocess required: the original ServiceNow work notes for this incident were not captured successfully, so the final summary must be regenerated from the source ticket."
                     })
                     $processedIncidentCount++
                     $success = $true

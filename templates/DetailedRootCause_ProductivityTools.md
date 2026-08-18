@@ -100,6 +100,31 @@ The rejoined user lost OneDrive access to prior content because permissions on t
 After a PC refresh the OneDrive client was not signed in or Known Folder Move was not re-enabled, so files did not re-sync down to the new device.
 **Pick when:** files missing on a refreshed PC; resolved by signing into OneDrive and re-enabling Known Folder Move.
 
+### OneDrive settings configuration or setup guidance
+**Top Root Cause:** OneDrive Configuration Request
+User needed help configuring OneDrive settings (selective sync, known folder backup, sharing defaults, folder redirection). There is no product fault — this is a guidance/how-to request. Set HDI: Yes.
+**Pick when:** user asked how to configure a specific OneDrive setting; no error or service fault present.
+
+### Data retention or compliance policy clarification
+**Top Root Cause:** Policy / Retention Clarification
+User sought clarification on OneDrive data retention periods, legal hold, compliance archiving, or organisational data governance policies. No product fault — guidance only. Set HDI: Yes.
+**Pick when:** user asked about how long files are kept, legal hold rules, or data governance policy.
+
+### OneDrive storage or licensing awareness gap
+**Top Root Cause:** OneDrive Data Awareness Gap
+User lacked awareness of OneDrive storage quota limits, licensing caps, or how OneDrive handles versioning and deletion. Guidance-only incident. Set HDI: Yes.
+**Pick when:** user asked how much storage they have, what happens to deleted files, or how versioning works.
+
+### Content organization or migration guidance in OneDrive / SharePoint
+**Top Root Cause:** Content Organization Request
+User needed guidance on how to organise, move, rename, or restructure files and folders in OneDrive or SharePoint. No product fault. Set HDI: Yes.
+**Pick when:** user asked how to reorganise their files or migrate content between folders or sites.
+
+### Accidentally deleted file or folder in OneDrive
+**Top Root Cause:** Accidental File Deletion
+User accidentally deleted files or folders from OneDrive and needs assistance recovering them from the OneDrive recycle bin or version history.
+**Pick when:** user deleted files by mistake and recovery from recycle bin or version restore is the resolution path.
+
 ### OneDrive sign-in / connectivity failure
 **Top Root Cause:** Network / Infrastructure
 The OneDrive desktop client cannot authenticate or reach service endpoints; sign-in fails or repeats and sync never starts.
@@ -160,9 +185,15 @@ The Office suite license was not provisioned to the rejoined user's new identity
 **Pick when:** user rejoined and Office desktop apps show unlicensed / activation prompt.
 
 ### Office usage / how-to question
-**Top Root Cause:** User Education / How-Do-I
-No technical fault; user requested guidance, how-to instructions, or feature usage information for an M365 app (Word, Excel, Outlook, etc.).
-**Pick when:** the ticket is a question about how to use a feature, not a fix request.
+**Top Root Cause:** Office Feature Not Working (HDI)
+> ⚠️ This DRC is valid ONLY when used with `Office Feature Not Working` PRC + HDI=Yes. Do NOT use with `Usage Guidance (How Do I)` PRC — that label is banned.
+No technical fault; the user needed guidance or how-to instructions for an M365 app feature. Set HDI: Yes in your output.
+**Pick when:** question is about how to use a feature, not a break/fix request.
+
+### Additional Microsoft 365 application license request
+**Top Root Cause:** M365 License Request
+User is requesting a new Microsoft 365 application license (e.g., Visio, Project, Copilot, Power BI Pro) through the IT service catalog. No existing license fault. Set HDI: Yes.
+**Pick when:** user asked how to obtain a license for an additional app, not reporting an existing license failure.
 
 ### Office app crash
 **Top Root Cause:** App-Specific Performance / Crash
@@ -365,6 +396,11 @@ The rejoined user's mapped share drive access was not restored to the new identi
 **Top Root Cause:** Data Recovery / Retention Window
 The shared drive volume has reached its storage quota; new writes fail until quota is increased or files are archived.
 **Pick when:** writes to a share fail with quota / out-of-space error.
+
+### VMSPFSFS or NFS share server inaccessibility
+**Top Root Cause:** Shared Drive Server / Infrastructure Failure
+The network file share server (VMSPFSFSPG, NFS host, or equivalent) is inaccessible or experiencing a service outage. The UNC path is unreachable and resolution requires server-side or network infrastructure team intervention.
+**Pick when:** the share path contains VMSPFSFS, VMSPFSFSPG, or an NFS hostname; or work notes state the server is down, unreachable, or experiencing cross-site data access failure.
 
 ---
 
@@ -679,6 +715,56 @@ The user is not a member of the correct Canva team or brand folder; brand templa
 **Top Root Cause:** Out-of-scope Service Offering
 Ticket belongs to a non-Productivity Tools queue (for example SharePoint Online access, Exchange mailbox, mobility, endpoint hardware, or network support).
 **Pick when:** the service offering and resolution ownership are clearly outside Productivity Tools scope.
+
+### Developer tooling (VS Code, GitHub Copilot, Visual Studio)
+**Top Root Cause:** Out-of-scope Service Offering
+The issue involves developer tooling such as VS Code, GitHub Copilot (IDE extension), Visual Studio, or GitHub Enterprise — none of which are in the Productivity Tools catalog.
+**Pick when:** ticket mentions VS Code Copilot, GitHub Copilot for developers, Visual Studio IDE, or GitHub Enterprise.
+
+### Altera or cross-tenant account access policy
+**Top Root Cause:** Out-of-scope Service Offering
+The user is trying to access an Altera (or other cross-tenant) email, Teams, or OneDrive account on an Intel-managed device. A corporate policy or guest-access change blocks this and resolution ownership belongs to the Identity / Altera team.
+**Pick when:** work notes reference Altera accounts, cross-tenant sign-in blocked, or a policy update affecting Altera desktop app sign-in.
+
+### Exchange Online or mailbox licensing (Messaging scope)
+**Top Root Cause:** Out-of-scope Service Offering
+The ticket is about Exchange Online mailbox provisioning, shared mailbox licensing, calendar permissions, or Outlook web/desktop licensing — owned by the Messaging team, not Productivity Tools.
+**Pick when:** issue is Exchange Online mailbox, shared mailbox, Outlook licensing request, or email service not provisioned.
+
+### Teams calling or meetings feature (not PT scope)
+**Top Root Cause:** Out-of-scope Service Offering
+The issue involves a Microsoft Teams calling, meetings, or meeting-role behavior (e.g. poll visibility, meeting recording greyed out due to role) that is not related to a PT product fault. Teams Calling and Meetings are out of PT scope.
+**Pick when:** ticket is about Teams poll, recording, meeting join, or call/voicemail behavior.
+
+### Third-party SaaS tool outside PT catalog
+**Top Root Cause:** Out-of-scope Service Offering
+The issue is with a third-party or non-catalog SaaS tool (claude.ai, Power BI, Google Cloud billing, vendor portals, custom internal apps) that is not in the Productivity Tools product catalog.
+**Pick when:** the application is not in the PT in-scope product list; includes Power BI, Claude, Google Cloud, custom portals.
+
+### HR or identity profile update
+**Top Root Cause:** Out-of-scope Service Offering
+The user wants to update a profile field (phone number, display name, desk location, legal name) in a Microsoft 365 surface. This is an HR/Identity record update, not a PT product fault.
+**Pick when:** user wants to change personal profile information shown in Teams, Outlook, or M365 apps.
+
+### Device or OS rebuild issue (Endpoint scope)
+**Top Root Cause:** Out-of-scope Service Offering
+The issue involves a device rebuild, OS reinstall, hardware failure, or post-refresh application instability that is owned by the Endpoint or Depot team, not Productivity Tools.
+**Pick when:** ticket is about laptop rebuild, Windows reinstall, hardware fault, or multi-app instability after a device refresh.
+
+### Former-employee data or account access
+**Top Root Cause:** Out-of-scope Service Offering
+The request involves accessing data, recordings, or resources that belonged to a former employee or separated team member. Resolution path goes through IT lifecycle/offboarding procedures.
+**Pick when:** user needs access to a former employee's Teams recording, OneDrive data, or shared resources after that person left.
+
+### Workflow or how-to guidance (no PT product fault)
+**Top Root Cause:** Out-of-scope Service Offering
+No supported PT product failure is present; the user asked for guidance on a workflow, process, or how to transfer/handle data using a method or tool not in the PT catalog.
+**Pick when:** ticket is a pure guidance or information request with no underlying product fault in any in-scope PT application.
+
+### Network infrastructure or latency monitoring (non-PT)
+**Top Root Cause:** Out-of-scope Service Offering
+The issue is a network-level performance monitoring alert or infrastructure report (e.g. latency from monitoring agents, NFS path degradation, corporate network routing) that is owned by Network team.
+**Pick when:** ticket references monitoring agents, network latency dashboards, cross-site routing, or infrastructure health — not a user-impacting PT client fault.
 
 ### SharePoint Online access request
 **Top Root Cause:** SharePoint Online Access Request

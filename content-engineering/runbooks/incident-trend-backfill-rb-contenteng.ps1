@@ -344,19 +344,33 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
             if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
 
+            # Derive a short, free-form Detailed Root Cause (DRC) from the AI Analysis.
+            # Requirement: free-text chosen by AI, capped to at most 9 words for display.
+            $drcSource = if (-not [string]::IsNullOrWhiteSpace($fields.Analysis)) { $fields.Analysis } elseif (-not [string]::IsNullOrWhiteSpace($fields.RootCause)) { $fields.RootCause } else { $anal }
+            $firstSentence = ($drcSource -split '[\.\r\n]')[0]
+            $firstSentence = $firstSentence -replace '\s+', ' ' -replace '^["\']+|["\']+$',''
+            $words = ($firstSentence -split '\s+') | Where-Object { $_ -ne '' }
+            if ($words.Length -gt 9) { $shortDrc = ($words[0..8] -join ' ') } else { $shortDrc = ($words -join ' ') }
+            $shortDrc = $shortDrc.Trim()
+            if ($shortDrc.Length -gt 200) { $shortDrc = $shortDrc.Substring(0,200) }
+
             $props = @{
-                'Category'       = [string]$category
-                'Subcategory'    = [string]$subcat
-                'RootCause'      = [string]$root
-                'AIAnalysis'     = [string]$anal
-                'Confidence'     = [string]$conf
-                'Date'           = [string]$resolvedDt.ToString('yyyy-MM-dd')
-                'YearWeek'       = [string]$yw.YearWeek
-                'Year'           = [int]$yw.Year
-                'WeekNumber'     = [int]$yw.WeekNumber
-                'Service'        = 'Content Engineering'
-                'OriginalDescription' = [string]$inc.short_description
-                'ReportBlobName' = 'incremental-runbook'
+                'Category'           = [string]$category
+                'Subcategory'        = [string]$subcat
+                # Preserve canonical PossibleRootCause for downstream canonical lookups
+                'PossibleRootCause'  = [string]$root
+                # Free-form short DetailedRootCause for display (<=9 words)
+                'DetailedRootCause'  = [string]$shortDrc
+                'RootCause'          = [string]$root
+                'AIAnalysis'         = [string]$anal
+                'Confidence'         = [string]$conf
+                'Date'               = [string]$resolvedDt.ToString('yyyy-MM-dd')
+                'YearWeek'           = [string]$yw.YearWeek
+                'Year'               = [int]$yw.Year
+                'WeekNumber'         = [int]$yw.WeekNumber
+                'Service'            = 'Content Engineering'
+                'OriginalDescription'= [string]$inc.short_description
+                'ReportBlobName'     = 'incremental-runbook'
             }
             Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
 

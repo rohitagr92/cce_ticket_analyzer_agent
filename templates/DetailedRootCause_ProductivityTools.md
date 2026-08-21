@@ -219,11 +219,16 @@ Office app shows "unlicensed product" or activation error despite an assigned li
 
 ## Microsoft 365 Copilot Issues
 
+### Copilot license missing
+**Top Root Cause:** License / Entitlement Missing
+The user does not have the Copilot entitlement, or the notes say they were directed to submit an AGS request for MSOL License – Copilot for M365 / M365 admin to assign it. This is an entitlement issue, not a blackout or a client-side environment failure.
+**Pick when:** work notes mention a missing license, AGS request for Copilot, MSOL License – Copilot for M365 pending or absent, or the user has to be granted the entitlement before Copilot can work. This also applies to Teams Facilitator tickets when the real issue is that the user lacks the required Copilot entitlement.
+
 ### Copilot licence blackout (pool depleted)
 **Top Root Cause:** License / Entitlement Missing
 The Copilot license pool is depleted and the entitlement is hidden in AGS during a blackout window, so it cannot be assigned to new users.
 **Pick when:** AGS shows no Copilot SKU available, support cites blackout, request is queued, AND the work notes explicitly confirm depleted license inventory (e.g. "license pool exhausted", "no Copilot licenses available", "license assignment/provisioning failure", "subscription capacity exhausted", or an admin/AGS confirmation of depleted inventory).
-**Do NOT pick when (negative evidence - eliminates this entry):** license is verified/active/assigned successfully, Copilot works in another host app or workload (e.g. Teams) for the same user, the issue reproduces across clients/browsers with no license finding, or Microsoft acknowledged a general service issue / the issue self-resolved with no license change. In those cases use "Copilot transient service issue" or "Copilot access/environment configuration issue" below instead, or `Unknown` if truly unconfirmed.
+**Do NOT pick when (negative evidence - eliminates this entry):** the work notes say the user was told to request the license, the entitlement is missing or pending, the license is verified/active/assigned successfully, Copilot works in another host app or workload (e.g. Teams) for the same user, the issue reproduces across clients/browsers with no license finding, or Microsoft acknowledged a general service issue / the issue self-resolved with no license change. In those cases use "Copilot license missing", "Copilot transient service issue", or "Copilot access/environment configuration issue" instead, or `Unknown` if truly unconfirmed.
 
 ### Copilot transient service issue (self-resolving outage)
 **Top Root Cause:** Service-Side / Platform Issue
@@ -232,8 +237,8 @@ Copilot fails across multiple surfaces (Desktop, Web, Teams) due to a temporary,
 
 ### Copilot access / environment configuration issue
 **Top Root Cause:** Access / Network / Environment Configuration
-Copilot fails only in a specific app or network context because the user lacks a required access/network role or environment prerequisite (e.g. "PRC Optimized Internet Role"), not because of a license or blackout problem.
-**Pick when:** Copilot works in one host app/workload but fails in another for the same user, and the difference is traced to a missing access/network role or environment setting rather than licensing.
+Copilot fails only in a specific app or network context because the user lacks a required access/network role or environment prerequisite (e.g. "PRC Optimized Internet Role"), or because the app or browser is blocked by a local environment condition — and the entitlement is already valid.
+**Pick when:** Copilot works in one host app/workload but fails in another for the same user, and the difference is traced to a missing access/network role, browser, policy, or environment setting rather than licensing. Do not use this when the notes say the user needs the Copilot entitlement or was instructed to request it through AGS.
 
 ### Copilot SKU not provisioned for region / BU
 **Top Root Cause:** License / Entitlement Missing

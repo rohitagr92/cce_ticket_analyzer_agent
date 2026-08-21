@@ -25,7 +25,7 @@ Defines the allowed root cause labels for AI analysis. The AI must output only t
 
 ---
 
-### SharePoint On-Premises (SSE)
+### SharePoint Subscription Edition (SSE)
 
 | Bold Label | Description |
 |---|---|
@@ -58,7 +58,7 @@ Defines the allowed root cause labels for AI analysis. The AI must output only t
 
 ---
 
-### Yammer
+### Viva Engage (Yammer)
 
 | Bold Label | Description |
 |---|---|
@@ -74,16 +74,17 @@ Defines the allowed root cause labels for AI analysis. The AI must output only t
 
 ---
 
-### Guest Onboarding Tool | 
-Bold Label | Description | 
-|---|---| 
-| **Guest User Already Exists** | Guest account already exists in the environment. | 
-| **Guest Identity Validation Failure** | Guest email, domain, or identity validation failed. | 
-| **Guest Provisioning Failure** | Guest onboarding or synchronization process failed. | 
-| **Guest Management Request** | User requested add, modify, or delete actions for guest accounts. | 
-| **Tool Configuration Issue** | Guest Onboarding Tool configuration issue prevented successful operation. | 
-| **Browser or Client Issue** | Browser cache, cookies, or client-side issue impacted functionality. | 
-| **Product Usage Knowledge Gap** | User requires guidance on Guest Onboarding Tool functionality or process. | 
+### Guest Onboarding Tool
+
+| Bold Label | Description |
+|---|---|
+| **Guest User Already Exists** | Guest account already exists in the environment. |
+| **Guest Identity Validation Failure** | Guest email, domain, or identity validation failed. |
+| **Guest Provisioning Failure** | Guest onboarding or synchronization process failed. |
+| **Guest Management Request** | User requested add, modify, or delete actions for guest accounts. |
+| **Tool Configuration Issue** | Guest Onboarding Tool configuration issue prevented successful operation. |
+| **Browser or Client Issue** | Browser cache, cookies, or client-side issue impacted functionality. |
+| **Product Usage Knowledge Gap** | User requires guidance on Guest Onboarding Tool functionality or process. |
 | **Insufficient Diagnostic Information** | Additional information is required to determine root cause. |
 
 

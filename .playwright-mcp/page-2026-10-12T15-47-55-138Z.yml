@@ -1,0 +1,238 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e12] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e13] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e14]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e15]:
+        - tab "📊 Summary" [ref=e16] [cursor=pointer]:
+          - generic [ref=e17]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e18] [cursor=pointer]:
+          - generic [ref=e19]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e22]:
+    - generic [ref=e477]:
+      - generic [ref=e478]:
+        - strong [ref=e559]: Productivity Tools
+        - text: ·
+        - generic [ref=e560]: 26-WW42 → 26-WW42 (1 WW)
+        - generic [ref=e561]:
+          - strong [ref=e562]: "1"
+          - generic [ref=e563]: incidents
+        - generic [ref=e564]:
+          - strong [ref=e565]: "1"
+          - generic [ref=e566]: root causes
+        - generic [ref=e567]:
+          - strong [ref=e568]: "1"
+          - generic [ref=e569]: medium-conf
+      - generic [ref=e490]:
+        - heading "🔍 Filters" [level=3] [ref=e491]
+        - generic [ref=e492]:
+          - generic [ref=e493]:
+            - generic [ref=e494]: Service
+            - combobox [ref=e495]:
+              - option "All services" [selected]
+              - option "End User Collaboration"
+              - option "End User Conferencing"
+            - generic [ref=e496]: Service Offering
+            - combobox [ref=e497]:
+              - option "All offerings"
+              - option "Productivity Tools" [selected]
+              - option "Email and Calendaring"
+              - option "Content Engineering"
+              - option "Messaging - Teams Chat and Audio"
+              - option "Meetings - Rooms and Hardware"
+          - generic [ref=e498]: Product
+          - combobox [ref=e499]:
+            - option "All Products" [selected]
+            - option "Excluded"
+            - option "Google Workspace Issues"
+            - option "Microsoft 365 Apps for Enterprise Issues"
+            - option "Microsoft 365 Copilot Issues"
+            - option "Microsoft 365 Planner / To Do Issues"
+            - option "Microsoft Excel Issues"
+            - option "Microsoft Forms Issues"
+            - option "Microsoft Loop Issues"
+            - option "Microsoft OneDrive Issues"
+            - option "Microsoft OneNote Issues"
+            - option "Microsoft PowerPoint Issues"
+            - option "Microsoft Project Issues"
+            - option "Microsoft Visio Issues"
+            - option "Microsoft Word Issues"
+            - option "Shared File Service (Share Drives) Issues"
+            - option "Smartsheet Issues"
+            - option "Unknown"
+          - generic [ref=e500]: Subcategory (Symptom)
+          - combobox [ref=e501]:
+            - option "All Subcategories" [selected]
+            - option "Access & Permission Issues (1)"
+          - generic [ref=e502]: Root Cause
+          - combobox [ref=e503]:
+            - option "All Root Causes" [selected]
+            - option "Unknown (1)"
+          - generic [ref=e504]: Search
+          - 'searchbox "Search incident #, product, symptom, root cause…" [ref=e505]'
+        - generic [ref=e506]:
+          - generic [ref=e507]: From WW
+          - combobox [ref=e508]:
+            - option "26-WW01"
+            - option "26-WW02"
+            - option "26-WW03"
+            - option "26-WW04"
+            - option "26-WW05"
+            - option "26-WW06"
+            - option "26-WW07"
+            - option "26-WW08"
+            - option "26-WW09"
+            - option "26-WW10"
+            - option "26-WW11"
+            - option "26-WW12"
+            - option "26-WW13"
+            - option "26-WW14"
+            - option "26-WW15"
+            - option "26-WW16"
+            - option "26-WW17"
+            - option "26-WW18"
+            - option "26-WW19"
+            - option "26-WW20"
+            - option "26-WW21"
+            - option "26-WW22"
+            - option "26-WW23"
+            - option "26-WW24"
+            - option "26-WW25"
+            - option "26-WW26"
+            - option "26-WW27"
+            - option "26-WW28"
+            - option "26-WW29"
+            - option "26-WW30"
+            - option "26-WW31"
+            - option "26-WW32"
+            - option "26-WW33"
+            - option "26-WW34"
+            - option "26-WW35"
+            - option "26-WW36"
+            - option "26-WW37"
+            - option "26-WW38"
+            - option "26-WW39"
+            - option "26-WW40"
+            - option "26-WW41"
+            - option "26-WW42" [selected]
+          - generic [ref=e509]: To WW
+          - combobox [ref=e510]:
+            - option "26-WW01"
+            - option "26-WW02"
+            - option "26-WW03"
+            - option "26-WW04"
+            - option "26-WW05"
+            - option "26-WW06"
+            - option "26-WW07"
+            - option "26-WW08"
+            - option "26-WW09"
+            - option "26-WW10"
+            - option "26-WW11"
+            - option "26-WW12"
+            - option "26-WW13"
+            - option "26-WW14"
+            - option "26-WW15"
+            - option "26-WW16"
+            - option "26-WW17"
+            - option "26-WW18"
+            - option "26-WW19"
+            - option "26-WW20"
+            - option "26-WW21"
+            - option "26-WW22"
+            - option "26-WW23"
+            - option "26-WW24"
+            - option "26-WW25"
+            - option "26-WW26"
+            - option "26-WW27"
+            - option "26-WW28"
+            - option "26-WW29"
+            - option "26-WW30"
+            - option "26-WW31"
+            - option "26-WW32"
+            - option "26-WW33"
+            - option "26-WW34"
+            - option "26-WW35"
+            - option "26-WW36"
+            - option "26-WW37"
+            - option "26-WW38"
+            - option "26-WW39"
+            - option "26-WW40"
+            - option "26-WW41"
+            - option "26-WW42" [selected]
+          - generic [ref=e511]: View
+          - tablist [ref=e512]:
+            - button "Patterns" [ref=e513] [cursor=pointer]
+            - button "Incidents" [active] [ref=e514] [cursor=pointer]
+          - button "Reset" [ref=e515] [cursor=pointer]
+          - button "⬇ CSV" [ref=e516] [cursor=pointer]
+          - generic [ref=e517]: 1 incidents · 1 patterns
+      - generic [ref=e518]:
+        - generic [ref=e570]: Flags
+        - button "All" [ref=e571] [cursor=pointer]
+        - button "🆕 NEW 0" [disabled] [ref=e572]:
+          - text: 🆕 NEW
+          - generic [ref=e573]: "0"
+        - button "🔥 SPIKE 0" [disabled] [ref=e574]:
+          - text: 🔥 SPIKE
+          - generic [ref=e575]: "0"
+        - button "♻ REPEAT 0" [disabled] [ref=e576]:
+          - text: ♻ REPEAT
+          - generic [ref=e577]: "0"
+        - button "⚠ MISROUTED 0" [disabled] [ref=e578]:
+          - text: ⚠ MISROUTED
+          - generic [ref=e579]: "0"
+        - button "⚑ MEDIUM-CONF 1" [ref=e580] [cursor=pointer]:
+          - text: ⚑ MEDIUM-CONF
+          - generic [ref=e581]: "1"
+        - button "🤖 LOW-CONF 0" [disabled] [ref=e582]:
+          - text: 🤖 LOW-CONF
+          - generic [ref=e583]: "0"
+        - button "❓ UNKNOWN-CONF 0" [disabled] [ref=e584]:
+          - text: ❓ UNKNOWN-CONF
+          - generic [ref=e585]: "0"
+      - generic [ref=e535]:
+        - heading "🛡 Incidents · click a row to see AI analysis" [level=3] [ref=e586]
+        - table [ref=e588]:
+          - rowgroup [ref=e589]:
+            - row [ref=e590]:
+              - columnheader "Incident" [ref=e591]
+              - columnheader "Flags" [ref=e592]
+              - columnheader "Resolved ▼" [ref=e593] [cursor=pointer]
+              - columnheader "WW ⇵" [ref=e594] [cursor=pointer]
+              - columnheader "Product ⇵" [ref=e595] [cursor=pointer]
+              - columnheader "Subcategory (Symptom) ⇵" [ref=e596] [cursor=pointer]
+              - columnheader "Possible Root Cause ⇵" [ref=e597] [cursor=pointer]
+              - columnheader "Similar ⇵" [ref=e598] [cursor=pointer]
+              - columnheader "6-Wk" [ref=e599]
+          - rowgroup [ref=e600]:
+            - row [ref=e601] [cursor=pointer]:
+              - cell "▸ INC15831930" [ref=e602]:
+                - generic [ref=e603]: ▸
+                - link "INC15831930" [ref=e604]:
+                  - /url: https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=INC15831930
+              - cell "⚑ MEDIUM-CONF" [ref=e605]
+              - cell "2026-10-11" [ref=e606]
+              - cell "26-WW42" [ref=e607]
+              - cell "Shared File Service (Share Drives) Issues" [ref=e608]
+              - cell "Access & Permission Issues" [ref=e609]
+              - cell "Unknown" [ref=e610]
+              - cell "× 1" [ref=e611]
+              - cell [ref=e612]
+  - contentinfo [ref=e25]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

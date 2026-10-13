@@ -78,6 +78,10 @@ $dow  = [int]$jan1.DayOfWeek                       # Sun=0..Sat=6
 $week1Sun  = $jan1.AddDays(-1 * $dow)
 $weekStart = $week1Sun.AddDays(($wk - 1) * 7)      # IST Sun 00:00
 $weekEnd   = $weekStart.AddDays(7).AddSeconds(-1)  # IST Sat 23:59:59
+if ($wk -eq 1 -and $weekStart -lt $jan1) {
+    # Do not include prior-year dates that the analyzer partitions under the prior year.
+    $weekStart = $jan1
+}
 $istOffset = New-TimeSpan -Hours 5 -Minutes 30
 $startUtc  = ($weekStart - $istOffset).ToString('yyyy-MM-dd HH:mm:ss')
 $endUtc    = ($weekEnd   - $istOffset).ToString('yyyy-MM-dd HH:mm:ss')

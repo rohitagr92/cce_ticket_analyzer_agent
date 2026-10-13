@@ -2,7 +2,7 @@
 
 You are analyzing IT service desk tickets for the **Productivity Tools** service offering. Your goal is to determine the correct category **based on the root cause of the issue**, *not* merely the initial symptoms or resolution steps. All classification decisions should be driven by what ultimately **caused** the incident.
 
-Productivity Tools tickets are about the following in-scope products only: **Microsoft 365 Apps for Enterprise** (Word, Excel, PowerPoint, Outlook client install/profile, OneNote, Access, Publisher), **Microsoft 365 Copilot**, **Microsoft OneDrive for Business**, **Microsoft SharePoint Online**, **Microsoft OneNote**, **Microsoft Loop**, **Microsoft Forms**, **Microsoft Visio Professional Client**, **Microsoft Project (Desktop / Project for the web)**, **Microsoft 365 Groups / Planner / To Do**, **Google Workspace** (Docs, Sheets, Slides, Drive, Gemini), **Smartsheet**, **Shared File Service (Share Drives)**, and **Canva**. They are **not** about device hardware, OS rebuilds, network/VPN, PC deployment, Outlook/Exchange mail-flow, Teams calling/meetings, or GitHub/developer-tool licensing - those belong to other service offerings.
+Productivity Tools tickets are about the following in-scope products only: **Microsoft 365 Apps for Enterprise** (Word, Excel, PowerPoint, Outlook client install/profile, OneNote, Access, Publisher), **Microsoft 365 Copilot**, **Microsoft OneDrive for Business**, **Microsoft SharePoint Online**, **Microsoft OneNote**, **Microsoft Loop**, **Microsoft Forms**, **Microsoft Visio Professional Client**, **Microsoft Project (Desktop / Project for the web)**, **Microsoft 365 Groups / Planner / To Do**, **Google Workspace** (Docs, Sheets, Slides, Drive, Gemini), **Smartsheet**, **Shared File Service (Share Drives)**, and **Canva**. They are **not** about device hardware, OS rebuilds, network/VPN, PC deployment, Outlook/Exchange mail-flow, general Teams calling or meeting-service faults, or GitHub/developer-tool licensing. Copilot-driven Teams Facilitator entitlement/configuration issues remain in scope under Microsoft 365 Copilot; F3-tier restrictions remain in scope under Microsoft 365 Apps for Enterprise.
 
 ***
 
@@ -43,7 +43,7 @@ Every ticket must be described along **three separate axes**. Do not confuse the
     - *Canva* - Canva access, license, sharing, template issues.
     - **Never assign a category that doesn't fit one of the in-scope products.**
     - *Example*: "Notebook missing after new PC" -> Microsoft OneNote Issues, not Microsoft OneDrive Issues, unless the root cause is the OneDrive client.
-- **Check Service Offering field:** Should be "Productivity Tools". If clearly outside that scope (cellular, printer supplies, PC hardware, OS rebuild, mailbox, Teams calling, GitHub/developer tools, Visual Studio, Outlook Feature issue), use **Excluded**.
+- **Check Service Offering field:** Should be "Productivity Tools". If clearly outside that scope (cellular, printer supplies, PC hardware, OS rebuild, Exchange mailbox/mail flow, general Teams calling or meeting-service faults, GitHub/developer tools, Visual Studio), use **Excluded**. Do not exclude Outlook desktop launch/profile/data-file or F3-tier client issues, or Copilot-driven Teams Facilitator entitlement/configuration issues; apply their specific in-scope product rules.
 
 ***
 
@@ -73,11 +73,11 @@ Apply the three-axis model in this order:
 - App-specific license/activation issue (e.g., Visio license expired) → that app's category.
 
 **Microsoft 365 Copilot — Always Use the Copilot Category**
-- All Copilot scenarios (license missing, blackout / entitlement hidden in AGS, Copilot not visible in Excel/Word/PowerPoint, Copilot partially enabled, ChunkLoadError) → **Microsoft 365 Copilot**.
+- All Copilot scenarios (license missing, blackout / entitlement hidden in AGS, Copilot not visible in Excel/Word/PowerPoint, Copilot partially enabled, Teams Facilitator unavailable because of Copilot entitlement or feature configuration, ChunkLoadError) → **Microsoft 365 Copilot**.
 - Do NOT split into "Excel Issues" or "Teams Issues" if the root cause is Copilot — Copilot wins.
 
 **Microsoft 365 F3 vs E3 License Restrictions**
-- F3 license blocking desktop Office apps or Teams Facilitator → **Microsoft 365 Apps for Enterprise** (sub-symptom: license activation issue).
+- F3 license blocking desktop Office apps, including Outlook desktop actions or Teams Facilitator → **Microsoft 365 Apps for Enterprise** (sub-symptom: license activation issue). A missing Copilot SKU or Copilot-specific configuration issue affecting Facilitator is **Microsoft 365 Copilot Issues** instead.
 - Resolution is typically guidance to request **"MSOL License - F3 License Exception"** via AGS with manager approval.
 
 **Office Activation / Sign-in Loop**
@@ -106,11 +106,14 @@ The **Excluded** category is for tickets that fall outside the scope of Producti
 - **Cellular / Mobile device service** — SIM, PUK, cellular plan issues.
 - **Imaging Vendor Managed HW** — printer paper, toner, cartridges.
 - **PC Hardware / OS rebuild / Network-VPN** — desktop/laptop support, not Productivity Tools.
-- **Outlook / Exchange mailbox issues** — Messaging service offering (unless the issue is specifically a Productivity Tools add-in inside Outlook).
+- **Outlook / Exchange mailbox, provisioning, and mail-flow issues** — Messaging service offering (unless the issue is specifically a Productivity Tools add-in inside Outlook). Outlook desktop launch, profile, data-file, and F3-tier client restrictions belong to Microsoft 365 Apps for Enterprise.
 - **Github** 
 - **Microsoft Visual Studio issue**
-- **Teams Facilitator issue**  
-- **Sharepoint Online issue** 
+- **General Teams calling or meeting-service faults** — do not apply this exclusion to Copilot-driven Facilitator entitlement or feature-availability issues.
+- **SharePoint Online site/admin requests** — site membership, request-list access, application or service-principal access, ownership transfers, migrations, and external-sharing-policy workflows are Excluded when they are administrative requests rather than a specific user's in-scope file-level fault.
+- **Specific shared-file exception:** Access denied on a shared OneDrive/SharePoint file or shortcut, where the evidence points to owner re-share or item-permission repair, belongs under **Microsoft OneDrive Issues → Access & Permission Issues**.
+- **Former-employee OneDrive exception:** Rejoined-user or former-employee OneDrive content requests follow the Microsoft OneDrive rules and the matching rejoin/retention root-cause label.
+- **Former-employee Teams recording exception:** Teams meeting recording retrieval routed through MDR/Business Continuity remains **Excluded**, unless the notes identify a separate in-scope file-level permission failure.
 
 **CRITICAL — DO NOT use Excluded for these scenarios:**
 - ❌ Copilot licensing/access requests → **Microsoft 365 Copilot**
@@ -319,7 +322,7 @@ Each category lists the **sub-symptoms** (the recurring failure modes seen in ti
 
 **Excluded**
 
-- *Definition:* Service offering / request type clearly outside Productivity Tools (cellular, printer supplies, PC hardware/OS rebuild, network/VPN, Outlook mailbox/Exchange mail-flow, Teams calling/meetings, GitHub Enterprise, Microsoft Visual Studio, GitHub Copilot, any developer-tooling licensing).
+- *Definition:* Service offering / request type clearly outside Productivity Tools (cellular, printer supplies, PC hardware/OS rebuild, network/VPN, Outlook mailbox/Exchange mail-flow, general Teams calling or meeting-service faults, GitHub Enterprise, Microsoft Visual Studio, GitHub Copilot, any developer-tooling licensing). Copilot-driven Teams Facilitator entitlement/configuration and Outlook desktop client/profile/data-file issues are not excluded.
 - *Critical rule:* If the ticket has a documented Productivity Tools resolution, it must be categorized - do not exclude.
 
 ***
@@ -356,8 +359,8 @@ Each category lists the **sub-symptoms** (the recurring failure modes seen in ti
 **THEN: Categorize**
 
 2. **Copilot involved as root cause (license, blackout, icon missing, ChunkLoadError, Facilitator)?** -> Microsoft 365 Copilot Issues.
-3. **Rejoined user or former employee's OneDrive/SharePoint data?** -> Microsoft OneDrive Issues.
-4. **Shared SharePoint/OneDrive file permission error (owner re-share fixes it)?** -> Microsoft OneDrive Issues.
+3. **Rejoined user's OneDrive/SharePoint content or former employee's OneDrive files/data?** -> Microsoft OneDrive Issues. Use the matching rejoin/retention label. Former-employee Teams meeting recording retrieval through MDR/Business Continuity -> **Excluded**.
+4. **Access denied on a specific shared SharePoint/OneDrive file or shortcut, with owner re-share/item-permission repair as the fix?** -> Microsoft OneDrive Issues. Site/list membership, app access, ownership-transfer, migration, and external-sharing administration remain **Excluded**.
 5. **Mapped network drive / SMB / shared drive path issue? OR ticket/work notes mention VMSPFSFS, VMSPFSFSPG, NFS host, or a \\\\server share path that is inaccessible?** -> Shared File Service (Share Drives) Issues. Use PRC `Shared Drive Server / Infrastructure Failure` when the server itself is down or unreachable.
 6. **OneDrive client sync / upload / file availability issue?** -> Microsoft OneDrive Issues.
 7. **OneNote-specific (notebook sync, missing notes, device change)?** -> Microsoft OneNote Issues.

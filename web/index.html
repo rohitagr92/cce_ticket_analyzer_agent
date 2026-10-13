@@ -1224,7 +1224,7 @@
   // "Content Engineering" is the config/table name used for the "Content Sharing" offering.
   // ------------------------------------------------------------------
   const SERVICE_WW_CUTOFF = {
-    'Productivity Tools':    '2026-W19',
+    'Productivity Tools':    '2026-W01',
     'Content Engineering':   '2026-W26'
   };
   function isWeekAllowedForService(week, svcName) {
@@ -3474,6 +3474,14 @@
     else if (confKey === 'medium')  { confColor = '#d97706'; }
     else if (confKey === 'low')     { confColor = 'var(--danger)'; }
     const confBadge = '<span style="display:inline-block;margin-left:8px;padding:2px 8px;border-radius:10px;background:' + confColor + ';color:#fff;font-size:0.72rem;font-weight:600;letter-spacing:0.3px;">' + esc(confLabel) + ' confidence</span>';
+    const statusBadge = analysisStatus ? '<span style="display:inline-block;margin-left:8px;padding:3px 8px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</span>' : '';
+    const renderAiAnalysisDisclosure = (content, background) =>
+      '<details style="border:1px solid var(--border);border-radius:6px;background:' + background + ';overflow:hidden;">' +
+        '<summary style="cursor:pointer;padding:9px 12px;color:var(--intel-classic);font-size:0.95rem;list-style-position:inside;">' +
+          '<strong>AI Analysis</strong>' + confBadge + statusBadge +
+        '</summary>' +
+        '<div style="padding:10px;border-top:1px solid var(--border);border-left:4px solid ' + confColor + ';white-space:pre-wrap;line-height:1.5;">' + content + '</div>' +
+      '</details>';
 
     // New structured format ("Problem: - Issue / Root Cause / Resolution / Evidence" +
     // separate "AI Analysis (Confidence): ..." rationale) renders as two labeled panels.
@@ -3497,17 +3505,12 @@
         '</div>'
       ).join('');
       const reasoningDisplay = structured.reasoning ? esc(structured.reasoning) : '<em style="color:var(--muted);">AI analysis missing from the stored row; reprocess this incident from ServiceNow.</em>';
-      const statusBadge = analysisStatus ? '<div style="margin-top:8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</div>' : '';
       analysisHtml =
         '<div style="margin-bottom:12px;">' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
           '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;line-height:1.5;">' + (problemRowsHtml || '<em style="color:var(--muted);">Not documented.</em>') + '</div>' +
         '</div>' +
-        '<div>' +
-          '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
-          statusBadge +
-          '<div style="margin-top:6px;padding:10px;background:#f8f9fa;border:1px solid var(--border);border-left:4px solid ' + confColor + ';border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + reasoningDisplay + '</div>' +
-        '</div>';
+        renderAiAnalysisDisclosure(reasoningDisplay, '#f8f9fa');
     } else {
       const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">AI analysis missing from the stored row; reprocess this incident from ServiceNow.</em>';
       const inferredRows = [
@@ -3521,17 +3524,12 @@
           '<div style="margin-top:2px;">' + esc(val) + '</div>' +
         '</div>'
       ).join('');
-      const statusBadge = analysisStatus ? '<div style="margin-top:8px;padding:8px 10px;background:#fff7ed;border:1px solid #fdba74;border-radius:6px;color:#9a3412;font-size:0.8rem;font-weight:700;text-transform:uppercase;letter-spacing:0.4px;">' + esc(analysisStatus) + '</div>' : '';
       analysisHtml =
         '<div style="margin-bottom:12px;">' +
           '<strong style="color:var(--intel-classic);font-size:0.95rem;">Problem</strong>' +
           '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;line-height:1.5;">' + (inferredRowsHtml || '<em style="color:var(--muted);">Not documented.</em>') + '</div>' +
         '</div>' +
-        '<div>' +
-          '<strong style="color:var(--intel-classic);font-size:0.95rem;">AI Analysis</strong>' + confBadge +
-          statusBadge +
-          '<div style="margin-top:6px;padding:10px;background:#fff;border:1px solid var(--border);border-radius:6px;white-space:pre-wrap;line-height:1.5;">' + aiDisplay + '</div>' +
-        '</div>';
+        renderAiAnalysisDisclosure(aiDisplay, '#fff');
     }
 
     const reportBlob = (inc.ReportBlobName || '').trim();

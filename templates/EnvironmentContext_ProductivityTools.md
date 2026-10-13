@@ -24,11 +24,11 @@ The **Productivity Tools** service offering covers cloud-first collaboration, co
 
 ### Out of scope (handled by other service offerings)
 
-- Outlook **mail delivery / Exchange Online routing** issues (handled by Messaging service offering — Productivity Tools handles Outlook *client* install/profile issues only when they overlap with M365 Apps).
-- Microsoft Teams calling/meeting/voice issues (handled by Collaboration / Teams service offering — Productivity Tools handles Teams files-and-Copilot integration only).
+- Outlook **mail delivery / Exchange Online routing, mailbox provisioning, and mailbox-capacity** issues (handled by Messaging — Outlook desktop launch, profile, data-file, and F3-tier client restrictions that map to M365 Apps remain in Productivity Tools).
+- Microsoft Teams calling/voice and general meeting-service faults (handled by Collaboration / Teams — Copilot entitlement or Facilitator feature-availability/configuration issues remain under Microsoft 365 Copilot in Productivity Tools).
 - Endpoint provisioning, Intune enrollment, BitLocker, hardware repairs (handled by PC service offering).
 - Visual Studio Issue
-- Outlook or Teams Feature related Issue
+- Exchange/mailbox feature or general Teams calling/meeting-service issue (Copilot-driven Facilitator is covered by the specific in-scope Copilot rule above)
 - Github Related issue
 
 ***

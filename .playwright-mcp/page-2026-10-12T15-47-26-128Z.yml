@@ -1,0 +1,207 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e12] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e13] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e14]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e15]:
+        - tab "📊 Summary" [ref=e16] [cursor=pointer]:
+          - generic [ref=e17]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e18] [cursor=pointer]:
+          - generic [ref=e19]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e20] [cursor=pointer]:
+          - generic [ref=e21]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e22]:
+    - generic [ref=e26]:
+      - generic [ref=e27]:
+        - generic [ref=e28]: Lens View
+        - combobox [ref=e29]:
+          - option "PO/OPS - Default" [selected]
+          - option "Engineer View"
+        - generic [ref=e30]:
+          - generic [ref=e31]: Service
+          - combobox [ref=e32]:
+            - option "All services" [selected]
+            - option "End User Collaboration"
+            - option "End User Conferencing"
+          - generic [ref=e33]: Service Offering
+          - combobox [ref=e34]:
+            - option "All offerings"
+            - option "Productivity Tools" [selected]
+            - option "Email and Calendaring"
+            - option "Content Engineering"
+            - option "Messaging - Teams Chat and Audio"
+            - option "Meetings - Rooms and Hardware"
+        - generic [ref=e35]: From WW
+        - combobox [ref=e36]:
+          - option "26-WW42" [selected]
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39"
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+          - option "26-WW25"
+          - option "26-WW24"
+          - option "26-WW23"
+          - option "26-WW22"
+          - option "26-WW21"
+          - option "26-WW20"
+          - option "26-WW19"
+          - option "26-WW18"
+          - option "26-WW17"
+          - option "26-WW16"
+          - option "26-WW15"
+          - option "26-WW14"
+          - option "26-WW13"
+          - option "26-WW12"
+          - option "26-WW11"
+          - option "26-WW10"
+          - option "26-WW09"
+          - option "26-WW08"
+          - option "26-WW07"
+          - option "26-WW06"
+          - option "26-WW05"
+          - option "26-WW04"
+          - option "26-WW03"
+          - option "26-WW02"
+          - option "26-WW01"
+        - generic [ref=e37]: To WW
+        - combobox [ref=e38]:
+          - option "26-WW42" [selected]
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39"
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+          - option "26-WW25"
+          - option "26-WW24"
+          - option "26-WW23"
+          - option "26-WW22"
+          - option "26-WW21"
+          - option "26-WW20"
+          - option "26-WW19"
+          - option "26-WW18"
+          - option "26-WW17"
+          - option "26-WW16"
+          - option "26-WW15"
+          - option "26-WW14"
+          - option "26-WW13"
+          - option "26-WW12"
+          - option "26-WW11"
+          - option "26-WW10"
+          - option "26-WW09"
+          - option "26-WW08"
+          - option "26-WW07"
+          - option "26-WW06"
+          - option "26-WW05"
+          - option "26-WW04"
+          - option "26-WW03"
+          - option "26-WW02"
+          - option "26-WW01"
+        - button "Reset to latest 4 WWs" [ref=e39] [cursor=pointer]
+        - generic [ref=e40]:
+          - text: Productivity Tools · lens
+          - strong [ref=e420]: PO/OPS - Default
+          - text: · 1 tickets in selected range / 2315 tracked overall
+        - generic [ref=e42]:
+          - text: "📅 Data last updated:"
+          - strong [ref=e43]: Oct 12, 2026, 11:33 AM
+      - generic [ref=e44]:
+        - generic [ref=e423]:
+          - generic [ref=e424]:
+            - generic [ref=e425]: Total Tickets
+            - generic "Total Tickets in the selected Work Week and Service Offering filters." [ref=e426]: "?"
+          - generic [ref=e427]: "1"
+          - generic [ref=e429]: 1 Tickets in 26-WW42
+          - generic [ref=e430]: last 6 WWs
+        - generic [ref=e438]:
+          - generic [ref=e439]:
+            - generic [ref=e440]: Misrouted Tickets
+            - generic "Misrouted Tickets in the selected Work Week and Service Offering filters." [ref=e441]: "?"
+          - generic [ref=e442]: "0"
+          - generic [ref=e444]: 0.0% of selected Tickets
+          - generic [ref=e445]: last 6 WWs
+      - generic [ref=e75]:
+        - generic [ref=e76]:
+          - heading "🎯 Root Cause → Product flow" [level=3] [ref=e77]:
+            - generic [ref=e78]: 🎯
+            - text: Root Cause → Product flow
+          - generic [ref=e79]:
+            - generic [ref=e80]: Show top
+            - combobox [ref=e81]:
+              - option "2"
+              - option "3" [selected]
+              - option "4"
+              - option "5"
+            - generic [ref=e82]: root causes & products
+        - generic [ref=e83]:
+          - generic [ref=e451]: ⚛
+          - generic [ref=e452]:
+            - text: Top 1 root cause drive 100% of tickets in this window —
+            - strong [ref=e453]: Access & Permission Issues
+            - text: .
+        - generic [ref=e89]:
+          - generic [ref=e454]: 26-WW42 · 1 tickets · grouped by Subcategory · showing top 3 on each side
+          - img [ref=e455]:
+            - 'generic "Access & Permission Issues → Shared File Service (Share Drives) Issues: 1 Tickets" [ref=e456]'
+            - generic [ref=e457]:
+              - generic "Access & Permission Issues (1)" [ref=e459]: Access & Permission Issues
+              - generic [ref=e460]: 1 Tickets
+            - generic [ref=e461]:
+              - generic "Shared File Service (Share Drives) Issues (1)" [ref=e463]: Shared File Service (Share Drives) Issues
+              - generic [ref=e464]: 1 Tickets
+            - generic [ref=e465]: ROOT CAUSE
+            - generic [ref=e466]: PRODUCT
+      - generic [ref=e135]:
+        - heading "📈 Per-product weekly trend ( Total Incident Count)" [level=3] [ref=e136]:
+          - generic [ref=e137]: 📈
+          - text: Per-product weekly trend ( Total Incident Count)
+        - generic [ref=e138]:
+          - generic [ref=e139]:
+            - text: Showing
+            - strong [ref=e467]: "1"
+            - text: products across
+            - strong [ref=e468]: "1"
+            - text: week(s) · 1 Tickets · 26-WW42 → 26-WW42
+          - generic [ref=e469]:
+            - heading "Shared File Service (Share Drives) Issues" [level=4] [ref=e470]
+            - generic [ref=e471]:
+              - generic [ref=e472]: "Total: 1"
+              - generic [ref=e473]: ↑ 1
+  - contentinfo [ref=e25]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

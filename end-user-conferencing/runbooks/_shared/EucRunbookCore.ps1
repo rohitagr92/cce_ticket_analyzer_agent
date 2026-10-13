@@ -438,7 +438,10 @@ function Get-EucAnalysisFields {
     $result = [ordered]@{
         PrimaryCategory = ''
         Subsymptom = ''
+        RootCauseCategory = ''
+        RootCauseSubcategory = ''
         PossibleRootCause = ''
+        DetailedRootCause = ''
         ConfidenceLevel = ''
         Issue = ''
         RootCauseNarrative = ''
@@ -450,7 +453,11 @@ function Get-EucAnalysisFields {
     $labels = @(
         'Primary Category',
         'Sub-symptom',
+        'Root Cause Category',
+        'Root Cause Subcategory',
         'Possible Root Cause',
+        'Detailed Root Cause',
+        'Trend Subcategory',
         'Confidence Level',
         'Issue',
         'Root Cause',
@@ -465,7 +472,14 @@ function Get-EucAnalysisFields {
 
     $result.PrimaryCategory = Get-EucSectionValue -Text $Text -Label 'Primary Category' -AllLabels $labels
     $result.Subsymptom = Get-EucSectionValue -Text $Text -Label 'Sub-symptom' -AllLabels $labels
+    $result.RootCauseCategory = Get-EucSectionValue -Text $Text -Label 'Root Cause Category' -AllLabels $labels
+    $result.RootCauseSubcategory = Get-EucSectionValue -Text $Text -Label 'Root Cause Subcategory' -AllLabels $labels
     $result.PossibleRootCause = Get-EucSectionValue -Text $Text -Label 'Possible Root Cause' -AllLabels $labels
+    # Rooms output has no 'Possible Root Cause' line; use the Root Cause Subcategory (then Category) instead.
+    if ([string]::IsNullOrWhiteSpace($result.PossibleRootCause)) {
+        $result.PossibleRootCause = if (-not [string]::IsNullOrWhiteSpace($result.RootCauseSubcategory)) { $result.RootCauseSubcategory } else { $result.RootCauseCategory }
+    }
+    $result.DetailedRootCause = Get-EucSectionValue -Text $Text -Label 'Detailed Root Cause' -AllLabels $labels
     $result.ConfidenceLevel = Get-EucSectionValue -Text $Text -Label 'Confidence Level' -AllLabels $labels
     $result.Issue = Get-EucSectionValue -Text $Text -Label 'Issue' -AllLabels $labels
     $result.RootCauseNarrative = Get-EucSectionValue -Text $Text -Label 'Root Cause' -AllLabels $labels
@@ -521,7 +535,8 @@ function Invoke-EucRunbookReal {
                 'TicketCategorisation_EndUserConferencing_Rooms.md',
                 'EnvironmentContext_EndUserConferencing_Rooms.md',
                 'TrendSubCategorisation_EndUserConferencing_Rooms.md',
-                'PossibleRootCause_EndUserConferencing_Rooms.md'
+                'PossibleRootCause_EndUserConferencing_Rooms.md',
+                'DetailedRootCause_ProductivityTools.md'
             )
         }
         default { @() }
@@ -558,6 +573,7 @@ function Invoke-EucRunbookReal {
             PrimaryCategory    = $parsed.PrimaryCategory
             Subsymptom         = $parsed.Subsymptom
             PossibleRootCause  = $parsed.PossibleRootCause
+            DetailedRootCause  = $parsed.DetailedRootCause
             ConfidenceLevel    = $parsed.ConfidenceLevel
             AIAnalysis         = $structuredAi
             RawResponse        = $analysisText

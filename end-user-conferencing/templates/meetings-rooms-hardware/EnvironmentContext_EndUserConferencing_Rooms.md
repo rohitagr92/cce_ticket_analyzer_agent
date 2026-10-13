@@ -1,57 +1,63 @@
-# EnvironmentContext — End User Conferencing Rooms
+## EnvironmentContext — End User Conferencing Rooms
 
-## CRITICAL INSTRUCTIONS – READ FIRST
+### CRITICAL INSTRUCTIONS
+Use this file only to interpret and classify Meetings - Rooms & Hardware incidents. Do not copy this general context into individual ticket summaries.
 
-Use this file for AI analysis only. Do not repeat this context in ticket summaries. Use it to understand Rooms scope, common room hardware failure patterns, and what is outside the service offering.
+### SERVICE SCOPE
+In-scope areas:
+- Microsoft Teams Rooms and supported room systems
+- MTR PC and UC engine
+- Console, controller, and touch panel
+- Front-of-room display, monitor, and projector
+- HDMI ingest, EDID, adapters, hubs, extenders, and presentation path
+- Camera, microphone, speaker, DSP, and conferencing peripherals
+- Room application, meeting join, and room sign-in
+- Room mailbox, calendar sync, booking, and reservations
+- Power, PoE, Ethernet, network port, cabling, and room health
+- Hardware replacement, firmware, driver, BIOS, and configuration activity
 
-## PURPOSE
-Provide the AI with context about what the Meetings - Rooms and Hardware service covers and what is out of scope.
-
----
-
-## WHAT ROOMS COVERS
-
-Rooms is responsible for meeting room systems and conferencing hardware used for scheduled meetings.
-
-**In-scope areas:**
-- Room devices and conferencing appliances
-- Displays, content sharing, and presentation output
-- Cameras, microphones, speakers, and controllers
-- Room booking and reservation workflows
-- Room client or app issues tied to the room system
-- Touch panels, consoles, and front-of-room units
-- HDMI ingest and cable-related presentation paths
-- Room online/offline state and basic device health
-
-**Typical users:**
-- Employees using meeting rooms
-- Support staff troubleshooting room systems
-- Users reporting camera, microphone, display, or controller issues
-- Users asking about booking or joining a room meeting
-- Users reporting console freezes, unresponsive touch panels, or camera/speaker module issues
-
----
-
-## WHAT IS OUT OF SCOPE
-
-The following are not Rooms incidents:
-- Teams chat or calling issues on personal devices
-- Laptop or endpoint issues unrelated to the room system
+Out-of-scope areas:
+- Personal Teams chat or calling issues unrelated to a room
+- General laptop, mobile, desktop, VPN, or endpoint incidents
 - Non-conferencing applications
-- Generic infrastructure issues unless the room system is clearly impacted
-- Pure software issues outside the room system unless the room app itself is the reported failure
+- Infrastructure incidents with no demonstrated room impact
+- Work owned by another service offering
 
-If the issue is not clearly about room devices, displays, cameras, microphones, controllers, or reservations, use Unknown / Unclear.
+### ROOT-CAUSE INTERPRETATION MODEL
+Classify causes at two levels:
+1. Root Cause Category identifies the failure domain.
+2. Root Cause Subcategory identifies the exact component or technical condition.
 
-## CSV-BASED SIGNALS TO LOOK FOR
+Avoid the blanket label Hardware Component Failure when the evidence identifies the individual component. Examples:
+- Failed camera → Hardware Component Failure / Camera Hardware Failure
+- Failed microphone → Hardware Component Failure / Microphone Hardware Failure
+- Failed display → Hardware Component Failure / Display Hardware Failure
+- Faulty HDMI cable → Hardware Component Failure / HDMI Cable Failure
+- Loose HDMI cable → Power / Connectivity Failure / Loose Cable Connection
+- Wrong display input → Display & Content-Sharing Failure / Input Source Misconfiguration
 
-| Signal in short description or work notes | Likely symptom |
-|---|---|
-| "offline" | Room Device Offline |
-| "console", "touch panel", "unresponsive", "freezing" | Room Peripheral Failure or Room Client / App Failure |
-| "camera", "microphone", "speaker", "audio" | Room Audio / Video Issue or Room Peripheral Failure |
-| "display", "monitor", "front of room", "doesn't work" | Room Display / Sharing Issue |
-| "HDMI ingest", "can't present", "share" | Room Display / Sharing Issue |
-| "calendar sync" | Room Scheduling / Reservation Issue |
-| "sign in (Teams)", "meeting app" | Room Client / App Failure |
-| "unplug power" | Room Power / Connectivity Issue |
+### COMMON INTERPRETATION RISKS
+- A reboot is a remediation action, not proof of root cause.
+- A powered-off or unplugged working device is not automatically defective.
+- A missing USB device may be an enumeration or connection failure rather than a failed peripheral.
+- A replaced component provides stronger failure evidence than an early monitoring alert.
+- A room may appear healthy remotely while onsite evidence identifies a physical problem.
+- An alert that cleared automatically may be an operational event rather than a confirmed failure.
+- Recurring alerts should not automatically inherit the earlier cause without matching evidence.
+
+### EVIDENCE HIERARCHY
+1. Final resolution notes and final technical work note
+2. Confirmed onsite finding or replaced component
+3. Successful validation or test result
+4. Resolution category and resolution code
+5. Earlier diagnostics
+6. Monitoring alert and short description
+
+### CLASSIFICATION SAFEGUARDS
+- Use component-specific hardware labels only with confirmed failure or replacement evidence.
+- Use disconnection/connectivity labels for loose or disconnected working components.
+- Use configuration labels for incorrect input, selection, resolution, refresh rate, time zone, or settings.
+- Use firmware/driver labels only when notes document those conditions.
+- Use Physical Damage / Tampering only when explicitly supported.
+- Use Operational / Monitoring Event for auto-recovery, duplicates, no-fault-found, or unsupported-room outcomes.
+- Use Unknown / Unclear when evidence is insufficient or conflicting.

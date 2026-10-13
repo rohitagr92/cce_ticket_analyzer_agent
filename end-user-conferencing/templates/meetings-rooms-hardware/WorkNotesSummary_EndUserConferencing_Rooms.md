@@ -1,47 +1,34 @@
-# WorkNotesSummary — End User Conferencing Rooms
+## WorkNotesSummary — End User Conferencing Rooms
 
-## CRITICAL INSTRUCTIONS – READ FIRST
+### PURPOSE
+Create a concise outcome-focused summary of one incident from cleaned work notes.
 
-Guide the AI in producing a concise, structured summary of a **Meetings - Rooms & Hardware** incident from cleaned work notes. The summary should be readable in less than a minute and should focus on the outcome.
+### REQUIRED STRUCTURE
+**Problem:** Describe the reported or monitored room symptom and impact.
 
-## PURPOSE
-Guide the AI in producing a concise, structured summary of a Rooms incident from cleaned work notes.
+**Environment:** Identify the room/asset and exact affected component.
 
----
+**Actions Taken:** Summarize meaningful diagnostics and corrective actions in chronological order.
 
-## SUMMARY STRUCTURE
+**Resolution:** State the verified final outcome, including the exact component repaired, replaced, reconnected, reconfigured, updated, or validated.
 
-Produce a summary with these four sections. Each section should be 1-3 sentences. Use plain language; avoid jargon unless it is a product name.
+### WRITING RULES
+- Maximum 120 words.
+- Use past tense and plain language.
+- Do not include personal names, user IDs, or email addresses.
+- Retain incident, room, asset, KB, problem, change, request, and RMA identifiers when relevant.
+- Name the component precisely rather than saying only “hardware” or “device.”
+- Distinguish monitoring-generated alerts from user-reported incidents.
+- Distinguish suspected causes from confirmed causes.
+- Distinguish component failure from disconnection, configuration, firmware, driver, power, and account issues.
+- Do not claim that a reboot confirmed the root cause.
+- Do not say resolved unless the ticket evidence supports it.
 
-**Problem:**
-What the user reported. What was not working, and for whom.
+### MISSING INFORMATION
+- Unknown component: The affected room component was not documented.
+- Missing action: No meaningful troubleshooting action was documented.
+- Missing outcome: The final outcome was not documented.
 
-**Environment:**
-Which room system or conferencing hardware was affected, such as console, camera, microphone, speaker, display, HDMI ingest, or meeting app.
-
-**Actions Taken:**
-What was investigated, repaired, replaced, or tested during resolution.
-
-**Resolution:**
-How the issue was resolved, or if it is unresolved, what the current state is.
-
----
-
-## TONE AND LENGTH GUIDELINES
-
-- Write in past tense.
-- Keep the total summary under 120 words.
-- Do not include personal names or email addresses.
-- Do not speculate about root cause.
-
-## ROOMS SUMMARY EMPHASIS
-- Make the failing room component explicit in the summary.
-- If the room was offline, say that directly.
-- If the issue was display, camera, speaker, microphone, or HDMI ingest, name the affected component.
-- If the issue was calendar sync or sign-in, call that out instead of summarizing it as a generic room issue.
-
-## CRITICAL OUTPUT RULES
-
-- Keep the summary under 120 words.
-- Use past tense.
-- Do not include personal names or email addresses.
+### OUTPUT RULES
+- Use exactly the four required section labels.
+- Do not include confidence, trend, or root-cause taxonomy fields.

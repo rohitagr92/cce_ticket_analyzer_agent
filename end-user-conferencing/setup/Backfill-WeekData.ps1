@@ -4,11 +4,12 @@ param(
     [string]$YearWeek,
     [ValidateSet('Both','Messaging','Rooms')]
     [string]$Offering = 'Both',
-    [int]$LimitPerOffering = 10,
+    [int]$LimitPerOffering = 2000,
     [string]$SubscriptionId = '1c6d384e-bc83-4b02-859c-76eeb87f7676',
     [string]$ResourceGroupName = 'OPSW-Ticket-Analyzer',
     [string]$StorageAccountName = 'opswconferblob',
     [string]$TableName = 'IncidentsCategoryStats',
+    [string]$IncidentNumber,
     [switch]$DryRun
 )
 
@@ -27,6 +28,15 @@ if (-not (Test-Path $corePath)) { throw "Shared runbook core not found: $corePat
 
 $config = Import-PowerShellDataFile -Path $configPath
 $secrets = Import-PowerShellDataFile -Path $secretsPath
+
+# Prefer the live EUC Azure Automation deployment over the local config default.
+$eucDeployment = $config.AzureOpenAIDeployment
+try {
+    $eucVar = Get-AzAutomationVariable -ResourceGroupName $ResourceGroupName -AutomationAccountName 'opswconferautomation' -Name 'EUC_AzureOpenAIDeployment' -ErrorAction Stop
+    if (-not [string]::IsNullOrWhiteSpace([string]$eucVar.Value)) { $eucDeployment = [string]$eucVar.Value }
+} catch {
+    Write-Warning "Could not read EUC_AzureOpenAIDeployment from Automation; using local config value '$eucDeployment'."
+}
 
 function Write-Log {
     param(
@@ -235,10 +245,12 @@ function Invoke-LocalEucAnalysis {
 
     $headers = @{
         'api-key' = $secrets.AzureOpenAIApiKey
-        'Content-Type' = 'application/json'
     }
 
-    $response = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $body -TimeoutSec 180
+    # Decode the response as UTF-8 so catalog em-dashes do not become mojibake.
+    $raw = Invoke-WebRequest -Method Post -Uri $url -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8' -TimeoutSec 180 -UseBasicParsing
+    $decoded = [System.Text.Encoding]::UTF8.GetString($raw.RawContentStream.ToArray())
+    $response = $decoded | ConvertFrom-Json
     return [string]$response.choices[0].message.content
 }
 
@@ -265,14 +277,16 @@ function Get-WeekIncidentUrl {
         [Parameter(Mandatory)][string]$ServiceOfferingId,
         [Parameter(Mandatory)][datetime]$StartUtc,
         [Parameter(Mandatory)][datetime]$EndUtc,
+        [string]$IncidentNumber,
         [int]$Limit = 2000
     )
 
-    $query = 'business_service={0}^service_offering={1}^stateIN6,7^resolved_at>={2}^resolved_at<={3}' -f `
+    $query = 'business_service={0}^service_offering={1}^stateIN6,7^resolved_at>={2}^resolved_at<={3}^ORDERBYDESCresolved_at' -f `
         $BusinessServiceId,
         $ServiceOfferingId,
         $StartUtc.ToString('yyyy-MM-dd HH:mm:ss'),
         $EndUtc.ToString('yyyy-MM-dd HH:mm:ss')
+    if (-not [string]::IsNullOrWhiteSpace($IncidentNumber)) { $query += '^number=' + $IncidentNumber }
 
     'https://apis.intel.com/itsm/api/now/table/incident?sysparm_query=' + [uri]::EscapeDataString($query) + '&sysparm_display_value=true&sysparm_limit=' + [int]([math]::Max($Limit, 1))
 }
@@ -287,9 +301,15 @@ function Get-TableRowProperties {
     )
 
     $resolvedDate = [datetime]::Parse([string]$Incident.resolved_at)
-    $category = if ($Fields.PrimaryCategory) { $Fields.PrimaryCategory.Trim() } else { 'Unknown' }
-    $subcategory = if ($Fields.Subsymptom) { $Fields.Subsymptom.Trim() } else { '' }
-    $rootCause = if ($Fields.PossibleRootCause) { $Fields.PossibleRootCause.Trim() } else { '' }
+    $category = if ($Fields.PrimaryCategory) { Convert-EucToAscii -Text $Fields.PrimaryCategory } else { 'Unknown' }
+    $subcategory = if ($Fields.Subsymptom) { Convert-EucToAscii -Text $Fields.Subsymptom } else { '' }
+    $rootCause = if ($Fields.PossibleRootCause) { Convert-EucToAscii -Text $Fields.PossibleRootCause } else { '' }
+    $detailedRootCause = if ($OfferingName -in @('Meetings - Rooms and Hardware', 'Messaging - Teams Chat and Audio')) {
+        if ([string]::IsNullOrWhiteSpace([string]$Fields.DetailedRootCause)) { throw "Detailed Root Cause is required for $OfferingName incident $($Incident.number)." }
+        Convert-EucToAscii -Text $Fields.DetailedRootCause
+    } else {
+        $rootCause
+    }
     $analysis = Format-EucStructuredAiAnalysis -Fields $Fields -RawResponse $RawResponse
     $confidence = Get-EucNormalizedConfidence -Raw ([string]$Fields.ConfidenceLevel)
     $misrouted = $false
@@ -303,7 +323,7 @@ function Get-TableRowProperties {
         Subcategory       = $subcategory
         PossibleRootCause = $rootCause
         RootCause         = $rootCause
-        DetailedRootCause = $rootCause
+        DetailedRootCause = $detailedRootCause
         AIAnalysis        = $analysis
         Confidence        = $confidence
         Date              = $resolvedDate.ToString('yyyy-MM-dd')
@@ -380,7 +400,7 @@ foreach ($serviceDef in $serviceDefs) {
         MessagingServiceNowIncidentsUrl = ''
         RoomsServiceNowIncidentUrl = ''
         AzureOpenAIBaseUrl        = $config.AzureOpenAIBaseUrl
-        AzureOpenAIDeployment     = $config.AzureOpenAIDeployment
+        AzureOpenAIDeployment     = $eucDeployment
         AzureOpenAIApiVersion     = $config.AzureOpenAIApiVersion
         ServiceNowClientSecretName = $config.ServiceNowClientSecretName
         AzureOpenAIApiKeySecretName = $config.AzureOpenAIApiKeySecretName
@@ -388,16 +408,21 @@ foreach ($serviceDef in $serviceDefs) {
 
     $templateSuffix = if ($offeringName -like 'Messaging*') { 'Messaging' } else { 'Rooms' }
     $templates = @(
-        "TicketCategorisation_EndUserConferencing_${templateSuffix}.md",
-        "EnvironmentContext_EndUserConferencing_${templateSuffix}.md",
-        "TrendSubCategorisation_EndUserConferencing_${templateSuffix}.md",
-        "PossibleRootCause_EndUserConferencing_${templateSuffix}.md"
+        $(if ($templateSuffix -eq 'Messaging') { 'TicketCategorisation_Messaging_TeamsChatAudio.md' } else { 'TicketCategorisation_EndUserConferencing_Rooms.md' }),
+        $(if ($templateSuffix -eq 'Messaging') { 'EnvironmentContext_Messaging_TeamsChatAudio.md' } else { 'EnvironmentContext_EndUserConferencing_Rooms.md' }),
+        $(if ($templateSuffix -eq 'Messaging') { 'TrendSubCategorisation_Messaging_TeamsChatAudio.md' } else { 'TrendSubCategorisation_EndUserConferencing_Rooms.md' }),
+        $(if ($templateSuffix -eq 'Messaging') { 'PossibleRootCause_Messaging_TeamsChatAudio.md' } else { 'PossibleRootCause_EndUserConferencing_Rooms.md' })
     )
+    if ($templateSuffix -eq 'Rooms') {
+        $templates += 'DetailedRootCause_ProductivityTools.md'
+    } else {
+        $templates += 'DetailedRootCause_Messaging_TeamsChatAudio.md'
+    }
 
     $templateContent = ($templates | ForEach-Object { Get-EucTemplateContent -Context $context -FileName $_ }) -join "`n`n"
 
     Write-Log "Fetching incidents for $offeringName..." 'Yellow'
-    $incidentUrl = Get-WeekIncidentUrl -BusinessServiceId $config.BusinessServiceId -ServiceOfferingId $offeringId -StartUtc $weekWindow.UtcStart -EndUtc $weekWindow.UtcEnd -Limit $LimitPerOffering
+    $incidentUrl = Get-WeekIncidentUrl -BusinessServiceId $config.BusinessServiceId -ServiceOfferingId $offeringId -StartUtc $weekWindow.UtcStart -EndUtc $weekWindow.UtcEnd -IncidentNumber $IncidentNumber -Limit $LimitPerOffering
     $headers = @{ Authorization = "Bearer $token"; Accept = 'application/json' }
     $response = Invoke-RestMethod -Method Get -Uri $incidentUrl -Headers $headers -TimeoutSec 180
     $incidents = @($response.result)
@@ -436,7 +461,7 @@ foreach ($serviceDef in $serviceDefs) {
             $props.ReportBlobName = $reportBlobName
 
             if ($DryRun) {
-                Write-Host ("[DRY] {0} -> {1} | {2} / {3}" -f $incident.number, $weekWindow.YearWeek, $props.Category, $props.Subcategory) -ForegroundColor DarkGray
+                Write-Host ("[DRY] {0} -> {1} | {2} / {3} | DRC: {4}" -f $incident.number, $weekWindow.YearWeek, $props.Category, $props.Subcategory, $props.DetailedRootCause) -ForegroundColor DarkGray
                 $weeklySummary[$offeringName].skipped++
                 continue
             }

@@ -1041,6 +1041,14 @@
 
   const SERVICE_ALL = 'all';
   const OFFERING_ALL = 'all';
+  const OFFERING_PRODUCT_DEFAULTS = {
+    'Messaging - Teams Chat and Audio': 'Messaging - Teams Chat and Audio',
+    'Meetings - Rooms and Hardware': 'Meetings - Rooms & Hardware'
+  };
+  function preferredProductForOffering(offering, products) {
+    const preferred = OFFERING_PRODUCT_DEFAULTS[offering];
+    return preferred && products.includes(preferred) ? preferred : null;
+  }
   const SERVICE_HIERARCHY = {
     'End User Collaboration': ['Productivity Tools', 'Email and Calendaring', 'Content Engineering'],
     'End User Conferencing': ['Messaging - Teams Chat and Audio', 'Meetings - Rooms and Hardware']
@@ -1062,11 +1070,27 @@
     if (!serviceOfferingGroupMap.has(svc.name)) serviceOfferingGroupMap.set(svc.name, group);
   }
 
-  function matchesOffering(e, offering) {
-    if (!offering || offering === OFFERING_ALL) return true;
+  function matchesOffering(e, offering, serviceGroup) {
     const value = (e.ServiceOffering || e.Service || '').trim();
-    if (offering === 'Productivity Tools') return !value || value === 'Productivity Tools';
-    return value === offering;
+    if (offering && offering !== OFFERING_ALL) {
+      if (offering === 'Productivity Tools') {
+        if (value && value !== offering) return false;
+      } else if (value !== offering) {
+        return false;
+      }
+    }
+    if (!serviceGroup || serviceGroup === SERVICE_ALL) return true;
+    return serviceOfferingGroupMap.get(value || 'Productivity Tools') === serviceGroup;
+  }
+
+  function productsForServiceScope(offering, serviceGroup, allProducts) {
+    if (offering === 'Content Engineering') return CONTENT_ENGINEERING_PRODUCT_LIST;
+    if ((!offering || offering === OFFERING_ALL) && (!serviceGroup || serviceGroup === SERVICE_ALL)) return allProducts;
+    const categories = new Set();
+    for (const entity of allEntities || []) {
+      if (matchesOffering(entity, offering, serviceGroup)) categories.add((entity.Category || '').trim() || 'Unknown');
+    }
+    return ['All Products', ...[...categories].sort()];
   }
 
   function serviceOfferingsForGroup(group) {
@@ -1354,7 +1378,7 @@
     populateServiceOfferingDropdown('opxService', groupSel.value, SHARED_FILTER.serviceOffering);
     opxRebuildFirstSeen();
     populateOpxProducts();
-    populateOpxWeeks(weeksMatchingService(offeringSel.value));
+    populateOpxWeeks(weeksMatchingService(offeringSel.value, null, groupSel.value));
     applySharedFilterWeeksIfValid('opxWeekFrom', 'opxWeekTo');
     populateOpxSubcategories(false);
     populateOpxRootCauses(false);
@@ -1385,29 +1409,35 @@
   const chartInstances = {};
 
   async function fetchTableEntities() {
-    // Fetch all Service Offerings' tables CONCURRENTLY instead of one-at-a-time.
-    // With N service offerings this turns N sequential round-trip chains into one
-    // parallel wait, which is the single biggest lever on initial load time.
+    // Shared tables must be fetched once and retain their row-level service labels.
     const activeConfigs = serviceConfigs.filter(svc => svc.tableBaseUrl && svc.tableName && svc.tableSas);
-    const results = await Promise.all(activeConfigs.map(async (svc) => {
+    const tablesByIdentity = new Map();
+    for (const svc of activeConfigs) {
+      const identity = (svc.tableBaseUrl.replace(/\/+$/, '') + '/' + svc.tableName).toLowerCase();
+      if (!tablesByIdentity.has(identity)) tablesByIdentity.set(identity, []);
+      tablesByIdentity.get(identity).push(svc);
+    }
+
+    const results = await Promise.all([...tablesByIdentity.values()].map(async (tableConfigs) => {
+      const svc = tableConfigs[0];
+      const fallbackService = tableConfigs.length === 1 ? svc.name : '';
       try {
         const rows = await fetchOneTable(svc);
-        // Tag each row with its service (overrides whatever the row carried) so
-        // the Service dropdown filter works consistently across both tables.
         const normalizedRows = [];
         for (const r of rows) {
           const wk = normalizeYearWeek(r.PartitionKey || r.YearWeek);
           if (!wk) continue;
           r.PartitionKey = wk;
           r.YearWeek = wk;
-          r.Service = svc.name;
-          r.ServiceOffering = svc.name;
-          r.ServiceGroup = svc.serviceGroup || 'End User Collaboration';
+          const rowService = String(r.Service || r.ServiceOffering || r.OfferingName || fallbackService).trim() || 'Unclassified';
+          r.Service = rowService;
+          r.ServiceOffering = rowService;
+          r.ServiceGroup = serviceOfferingGroupMap.get(rowService) || (tableConfigs.length === 1 ? svc.serviceGroup || 'End User Collaboration' : '');
           normalizedRows.push(r);
         }
         return normalizedRows;
       } catch (e) {
-        console.warn('Failed to load service "' + svc.name + '":', e.message);
+        console.warn('Failed to load table for service "' + svc.name + '":', e.message);
         return [];
       }
     }));
@@ -1461,11 +1491,11 @@
   // Distinct sorted YearWeeks available for a given Service Offering. Used so every
   // tab's WW dropdown is scoped to that offering's own data (Requirement: "WW dropdown
   // must update when Service Offering changes"), instead of the merged/global week list.
-  function weeksMatchingService(svc, entities) {
+  function weeksMatchingService(svc, entities, serviceGroup) {
     const pool = entities || allEntities || [];
     const set = new Set();
     for (const e of pool) {
-      if (!matchesOffering(e, svc)) continue;
+      if (!matchesOffering(e, svc, serviceGroup)) continue;
       const w = normalizeYearWeek(e.PartitionKey || e.YearWeek);
       if (w) set.add(w);
     }
@@ -2975,22 +3005,18 @@
 
   function opxServiceProducts() {
     const svc = $('opxService').value;
-    // For PT, use known list; for other services, derive from data
-    if (svc === 'all' || svc === OFFERING_ALL) return PRODUCT_LIST;
-    if (svc === 'Content Engineering') return CONTENT_ENGINEERING_PRODUCT_LIST;
-    const cats = new Set();
-    for (const e of allEntities) {
-      if (matchesOffering(e, svc)) cats.add((e.Category || '').trim() || 'Unknown');
-    }
-    return ['All Products', ...[...cats].sort()];
+    return productsForServiceScope(svc, $('opxGroup').value, PRODUCT_LIST);
   }
 
   function populateOpxProducts() {
     const sel = $('opxProduct');
     const prev = sel.value;
-    sel.innerHTML = opxServiceProducts()
+    const products = opxServiceProducts();
+    sel.innerHTML = products
       .map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
-    if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
+    const preferred = preferredProductForOffering($('opxService').value, products);
+    if (preferred) sel.value = preferred;
+    else if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
   }
 
   function populateOpxWeeks(weeks) {
@@ -3004,7 +3030,7 @@
 
   function opxMatchesService(e) {
     const svc = $('opxService').value;
-    return matchesOffering(e, svc);
+    return matchesOffering(e, svc, $('opxGroup').value);
   }
 
   function opxHasDisplayableRootCause(e) {
@@ -3139,14 +3165,14 @@
   // Weeks (ascending) currently selected in the toolbar, scoped to the selected Service Offering.
   function opxWeeksInRange() {
     const from = $('opxWeekFrom').value, to = $('opxWeekTo').value;
-    return weeksMatchingService($('opxService').value).filter(w => w >= from && w <= to);
+    return weeksMatchingService($('opxService').value, null, $('opxGroup').value).filter(w => w >= from && w <= to);
   }
 
   // For each pattern in `filtered`, compute history-aware stats across the WHOLE
   // service (opxAllInService): per-week counts (last 6 wks), spike flag (current
   // WW > 2x avg of prior 4), repeat flag (>=4 of last 6 wks).
   function opxBuildPatternStats(filtered) {
-    const weeksAll = weeksMatchingService($('opxService').value);
+    const weeksAll = weeksMatchingService($('opxService').value, null, $('opxGroup').value);
     // Exclude current in-progress week from the last-6 calculation
     const todayWWopx = (() => { const d = new Date(); const j4 = new Date(d.getFullYear(),0,4); const j4m = new Date(j4.getTime()-((j4.getDay()+6)%7)*86400000); const wn = Math.floor((d.getTime()-j4m.getTime())/(7*86400000))+1; return d.getFullYear()+'-W'+String(wn).padStart(2,'0'); })();
     const weeksComplete = weeksAll[weeksAll.length-1] === todayWWopx ? weeksAll.slice(0,-1) : weeksAll;
@@ -3430,7 +3456,7 @@
 
   function opxBuildSparkline(rowKey, category, sub) {
     // Mini 6-week sparkline of (Category + Subcategory) occurrences across opxAllInService
-    const weeks = weeksMatchingService($('opxService').value).slice(-6);
+    const weeks = weeksMatchingService($('opxService').value, null, $('opxGroup').value).slice(-6);
     if (weeks.length === 0) return '';
     const byWeek = {};
     for (const e of opxAllInService) {
@@ -3863,20 +3889,20 @@
       applySharedFilterScopeIfValid('opxGroup', 'opxService');
       opxRebuildFirstSeen();
       populateOpxProducts();
-      populateOpxWeeks(weeksMatchingService($('opxService').value));
+      populateOpxWeeks(weeksMatchingService($('opxService').value, null, $('opxGroup').value));
       applySharedFilterWeeksIfValid('opxWeekFrom', 'opxWeekTo');
       populateOpxSubcategories(false);
       populateOpxRootCauses(false);
       $('opxGroup').addEventListener('change', () => {
         populateServiceOfferingDropdown('opxService', $('opxGroup').value, null);
         opxRebuildFirstSeen(); populateOpxProducts();
-        populateOpxWeeks(weeksMatchingService($('opxService').value));
+        populateOpxWeeks(weeksMatchingService($('opxService').value, null, $('opxGroup').value));
         populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
         pushSharedFilter('opx', $('opxGroup').value, $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
       });
       $('opxService').addEventListener('change', () => {
         opxRebuildFirstSeen(); populateOpxProducts();
-        populateOpxWeeks(weeksMatchingService($('opxService').value));
+        populateOpxWeeks(weeksMatchingService($('opxService').value, null, $('opxGroup').value));
         populateOpxSubcategories(false); populateOpxRootCauses(false); opxExpanded.clear(); opxRefresh();
         pushSharedFilter('opx', $('opxGroup').value, $('opxService').value, $('opxWeekFrom').value, $('opxWeekTo').value);
       });
@@ -3912,7 +3938,7 @@
         opxActiveFlags.clear();
         if ($('opxSearch')) $('opxSearch').value = '';
         // Default WW range back to the most recent 4 weeks rather than the full history
-        const weeks = weeksMatchingService($('opxService').value);
+        const weeks = weeksMatchingService($('opxService').value, null, $('opxGroup').value);
         const recent = weeks.slice(-4);
         const opts = weeks.map(w => '<option value="' + w + '">' + formatWW(w) + '</option>').join('');
         $('opxWeekFrom').innerHTML = opts; $('opxWeekTo').innerHTML = opts;
@@ -4039,7 +4065,7 @@
   // ─────────────────────────────────────────────────────────────────────────
 
   // All known work weeks (ascending).
-  const airAllWeeks = () => weeksMatchingService($('airService') ? $('airService').value : OFFERING_ALL);
+  const airAllWeeks = () => weeksMatchingService($('airService') ? $('airService').value : OFFERING_ALL, null, $('airGroup') ? $('airGroup').value : SERVICE_ALL);
 
   // The work-week window the user has selected (From/To dropdowns).
   // Defaults to the most recent 7 weeks until the dropdowns are populated.
@@ -4120,23 +4146,22 @@
 
   function airMatchesService(e) {
     const svc = $('airService').value;
-    return matchesOffering(e, svc);
+    return matchesOffering(e, svc, $('airGroup').value);
   }
 
   function airServiceProducts() {
     const svc = $('airService').value;
-    if (svc === 'all' || svc === OFFERING_ALL) return PRODUCT_LIST;
-    if (svc === 'Content Engineering') return CONTENT_ENGINEERING_PRODUCT_LIST;
-    const cats = new Set();
-    for (const e of allEntities) if (matchesOffering(e, svc)) cats.add((e.Category || '').trim() || 'Unknown');
-    return ['All Products', ...[...cats].sort()];
+    return productsForServiceScope(svc, $('airGroup').value, PRODUCT_LIST);
   }
 
   function populateAirProducts() {
     const sel = $('airProduct');
     const prev = sel.value;
-    sel.innerHTML = airServiceProducts().map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
-    if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
+    const products = airServiceProducts();
+    sel.innerHTML = products.map(p => '<option value="' + esc(p) + '">' + esc(p) + '</option>').join('');
+    const preferred = preferredProductForOffering($('airService').value, products);
+    if (preferred) sel.value = preferred;
+    else if ([...sel.options].some(o => o.value === prev)) sel.value = prev; else sel.value = 'All Products';
   }
 
   // Entities in service + last 6 WWs + selected product (before symptom narrowing).
@@ -4879,8 +4904,7 @@
   // Filter loaded entities by service selection ("all" / service name).
   function smFilterEntities(svc) {
     if (!allEntities) return [];
-    if (svc === 'all') return allEntities;
-    return allEntities.filter(e => matchesOffering(e, svc));
+    return allEntities.filter(e => matchesOffering(e, svc, $('smGroup').value));
   }
 
   // Group entities by week → { [yw]: [entity, ...] }

@@ -23,9 +23,9 @@
                     SourceFile   = '..\..\end-user-conferencing\runbooks\messaging-teams-chat-audio\incident-analyzer-rb-euc-messaging.ps1'
                     RunbookName  = 'incident-analyzer-rb-euc-messaging'
                     PublishedName = 'incident-analyzer-rb-euc-messaging'
-                    ScheduleName  = 'IncidentAnalyzer-EUC-Messaging-Daily-0630UTC'
-                    RunHourUTC    = 6
-                    RunMinuteUTC  = 30
+                    ScheduleName  = 'IncidentAnalyzer-EUC-Messaging-Daily-0800UTC'
+                    RunHourUTC    = 8
+                    RunMinuteUTC  = 0
                     SkipSchedule  = $false
                 }
             )
@@ -47,8 +47,8 @@
                     SourceFile   = '..\..\end-user-conferencing\runbooks\meetings-rooms-hardware\incident-analyzer-rb-euc-rooms.ps1'
                     RunbookName  = 'incident-analyzer-rb-euc-rooms'
                     PublishedName = 'incident-analyzer-rb-euc-rooms'
-                    ScheduleName  = 'IncidentAnalyzer-EUC-Rooms-Daily-0630UTC'
-                    RunHourUTC    = 6
+                    ScheduleName  = 'IncidentAnalyzer-EUC-Rooms-Daily-0730UTC'
+                    RunHourUTC    = 7
                     RunMinuteUTC  = 30
                     SkipSchedule  = $false
                 }

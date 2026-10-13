@@ -1,29 +1,49 @@
-# WorkNotesCleanup — End User Conferencing Rooms
+## WorkNotesCleanup — End User Conferencing Rooms
 
-## CRITICAL INSTRUCTIONS – READ FIRST
+### PURPOSE
+Clean noisy work notes while preserving evidence required to identify the symptom, failed component, technical condition, action, validation, and final disposition.
 
-Clean up noisy work notes for the **Meetings - Rooms & Hardware** service offering. Keep only the meaningful troubleshooting content that helps explain the room symptom, the technical cause, and the final fix.
+### KEEP
+- Room name, configuration item, asset identifier, and incident number.
+- Reported or monitored symptom.
+- Exact affected component: camera, microphone, speaker, display, projector, console, touch panel, MTR PC, UC engine, adapter, hub, extender, cable, power supply, PoE, controller, or room account.
+- Exact hardware make/model when documented.
+- Remote diagnostic findings from room-management or monitoring tools.
+- Confirmed onsite findings.
+- Evidence distinguishing defective, loose, disconnected, misconfigured, disabled, outdated, unreachable, or intentionally unplugged equipment.
+- Reboot, restart, power-cycle, reseat, reconnect, reconfigure, update, rollback, repair, rebuild, and replacement actions.
+- Component replacement and part details.
+- Final validation such as test-call success, restored display, device online, user confirmation, auto-recovery, no fault found, duplicate, or unresolved state.
+- KB, problem, change, request, RMA, warranty, and related-incident identifiers.
 
-## PURPOSE
-Define cleanup rules for noisy work notes.
+### REMOVE
+- Repeated assignment, acknowledgement, transfer, and status-only updates.
+- Repeated monitoring checks with no new evidence.
+- Attachment notifications without described technical content.
+- Greetings, signatures, personal names, user IDs, and email addresses.
+- Repeated requests for the same physical check.
+- Generic statements without a technical result.
+- Unrelated troubleshooting from another service offering.
 
-## RULES
-- Remove repeated status updates that do not change the outcome.
-- Keep the final resolution, the impacted room equipment, and the hardware-specific details.
-- Preserve evidence that explains why the incident was categorized.
-- Keep exact phrases such as offline, console not working, touch panel unresponsive, camera/speaker module, HDMI ingest, front of room, or calendar sync.
-- Retain any swap/replacement/reboot/power-cycle details if they explain the fix.
-- Prefer the final room component name over generic room language.
-- Drop unrelated troubleshooting chatter.
+### NORMALIZATION RULES
+- Preserve chronological order from earliest meaningful evidence to final outcome.
+- Preserve negation and uncertainty.
+- Do not change “suspected,” “possible,” or “not reproduced” into a confirmed cause.
+- Do not treat a reboot as proof of component failure.
+- Keep the difference between a failed cable and a disconnected working cable.
+- Keep the difference between a failed component and a configuration/selection issue.
+- Do not merge separate rooms, devices, or incidents.
+- Remove personal information while keeping technical identifiers.
 
-## ROOMS CLEANUP PRIORITY
-1. Keep the room name or asset identifier.
-2. Keep the failed component or symptom.
-3. Keep the fix or disposition.
-4. Remove duplicate device checks that do not add new evidence.
+### REQUIRED OUTPUT
+- Reported Symptom:
+- Environment / Component:
+- Diagnostic Findings:
+- Actions Taken:
+- Validation / Final State:
+- Related References:
 
-## CRITICAL OUTPUT RULES
-
-- Keep the notes chronological if timestamps exist.
-- Remove duplicates and system chatter only.
-- Preserve the exact technical evidence that supports the final classification.
+### OUTPUT RULES
+- Include only source-supported facts.
+- If no meaningful troubleshooting exists, output: Insufficient technical work-note evidence.
+- Do not add root-cause labels in this cleanup output.

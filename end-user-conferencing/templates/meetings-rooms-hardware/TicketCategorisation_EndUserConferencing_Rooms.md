@@ -1,110 +1,146 @@
-# TicketCategorisation — End User Conferencing Rooms
+## TicketCategorisation — End User Conferencing Rooms
 
-## CRITICAL INSTRUCTIONS – READ FIRST
+### CRITICAL INSTRUCTIONS – READ FIRST
+Classify each ticket across four independent dimensions: owning service, user-observable symptom, root-cause category, and root-cause subcategory. Do not use a broad hardware label when the failed component is documented.
 
-You are analyzing IT service desk tickets for the **Meetings - Rooms & Hardware** service offering. Your goal is to determine the correct category **based on the user-observable room symptom and the technical/system-level cause**, not merely the first troubleshooting step.
+### REQUIRED CLASSIFICATION MODEL
+1. Primary Category
+2. Sub-symptom
+3. Root Cause Category
+4. Root Cause Subcategory
+5. Trend Subcategory
+6. Confidence Level
 
-Rooms tickets are about the following in-scope areas only: **meeting room systems**, **room audio/video hardware**, **displays and sharing**, **room controllers / touch panels / consoles**, **room client or app issues**, **room scheduling / reservation issues**, and **room power / connectivity issues**. They are **not** about personal Teams chat/calling, general laptop issues, OS rebuilds, network/VPN, or other service offerings.
+### PRIMARY CATEGORY
+For every in-scope ticket, output exactly:
+Meetings - Rooms & Hardware
 
-***
+### ALLOWED SUB-SYMPTOMS
+- Room Device Offline
+- Room Audio / Video Issue
+- Room Display / Sharing Issue
+- Room Scheduling / Reservation Issue
+- Room Peripheral Failure
+- Room Client / App Failure
+- Room Power / Connectivity Issue
+- Insufficient Information
+- Out of Scope
+- Misrouted
+- Insufficient Documentation
+- Repeat Tags
 
-### **THE THREE-AXIS MODEL — read carefully**
+### SUB-SYMPTOM SELECTION
+- Room Device Offline: room system unavailable, unreachable, unhealthy, or explicitly offline.
+- Room Audio / Video Issue: camera, microphone, speaker, echo, or in-meeting media symptom.
+- Room Display / Sharing Issue: display, projector, front-of-room, HDMI ingest, or presentation symptom.
+- Room Scheduling / Reservation Issue: booking, calendar, mailbox, approval, or reservation symptom.
+- Room Peripheral Failure: console, touch panel, controller, or another peripheral was the primary user-visible failure.
+- Room Client / App Failure: room application, meeting join, freeze, crash, or sign-in symptom.
+- Room Power / Connectivity Issue: power, PoE, LAN, port, cabling, or connectivity was the primary visible issue.
+- Insufficient Information: source fields do not identify the symptom.
+- Out of Scope: issue does not concern room conferencing services.
+- Misrouted: another service or team owns the issue.
+- Insufficient Documentation: likely room issue but notes do not support reliable classification.
+- Repeat Tags: duplicate, repeat, reopened, or related incident.
 
-Every ticket must be described along **three separate axes**. Do not confuse them.
+### ROOT-CAUSE SELECTION
+Select one exact Root Cause Category and one valid matching Root Cause Subcategory from PossibleRootCause_EndUserConferencing_Rooms_Final.md.
 
-| Axis | Meaning | Where it comes from | Example |
-|------|---------|---------------------|---------|
-| **1. Primary Category (= the SERVICE OFFERING)** | The in-scope EUC offering that owns the issue. Always the exact bold category name below — never a symptom, never a cause. | Identify the affected service first. | `Meetings - Rooms & Hardware` |
-| **2. Sub-symptom (= the USER-OBSERVABLE SYMPTOM)** | The visible failure mode the user reported — what looked broken. Pick the exact bold symptom label from the category list below. | The user-facing behavior in the ticket. | `Room Device Offline`, `Room Display / Sharing Issue`, `Room Client / App Failure` |
-| **3. Possible Root Cause (= short canonical LABEL — strict)** | A short technical/system-level label picked verbatim from the matching root-cause table in `PossibleRootCause_EndUserConferencing_Rooms.md`. Never a sentence, never a narrative. | The root-cause catalog for the chosen service. | `Audio Driver Failure`, `Meeting Room Integration Failure`, `Power / Connectivity Failure` |
+Root Cause Categories:
+- Hardware Component Failure
+- Power / Connectivity Failure
+- Camera & Video Pipeline Failure
+- Audio System Failure
+- Display & Content-Sharing Failure
+- Room Controller / Integration Failure
+- Teams Room Application Failure
+- Account / Authentication Failure
+- Calendar / Resource Integration Failure
+- Device Firmware / Driver Failure
+- Compute / Resource Failure
+- Physical Damage / Tampering
+- Operational / Monitoring Event
+- Unknown / Unclear
 
-**Key rules:**
+### TREND SUBCATEGORY
+Select one exact label from TrendSubCategorisation_EndUserConferencing_Rooms_Final.md. Trend is based on the visible symptom, not the root cause.
 
-- **Category answers "which EUC offering is broken?"** It is NOT the symptom and NOT the cause.
-- **Sub-symptom answers "what did the user see?"** Pick the closest verbatim match from the list below.
-- **Possible Root Cause is a strict catalog LABEL.** Copy it character-for-character from the root-cause file. Do NOT paraphrase, expand into a sentence, or invent a new label. If genuinely no label fits, write `Unknown / Unclear`.
-- **AI Analysis is the place for narrative.** That is where the 2–3 sentence explanation lives.
-- **AI Analysis is mandatory for every ticket.**
-- **Tickets that do not belong to Rooms must still get a valid label** — use `Misrouted`, `Insufficient Documentation`, or `Repeat Tags` when the notes support that classification.
+### CLASSIFICATION ORDER
+1. Confirm service scope.
+2. Identify the reported or monitored symptom.
+3. Identify the exact affected component.
+4. Review the final resolution note and final technical work note.
+5. Determine whether the evidence shows failure, disconnection, misconfiguration, firmware/driver issue, integration issue, account issue, or operational disposition.
+6. Select the exact Root Cause Category.
+7. Select the matching Root Cause Subcategory.
+8. Select the Trend Subcategory.
+9. Assign confidence.
+10. Write evidence-grounded narrative fields.
 
-***
+### COMPONENT-SPECIFIC HARDWARE RULES
+Use Hardware Component Failure only with confirmed physical failure or replacement evidence. Select the exact component subcategory:
+- Camera → Camera Hardware Failure
+- Microphone → Microphone Hardware Failure
+- Speaker → Speaker Hardware Failure
+- Display → Display Hardware Failure
+- Projector → Projector Hardware Failure
+- Console → Console Hardware Failure
+- Touch panel → Touch Panel Hardware Failure
+- MTR PC or UC engine → MTR PC / UC Engine Hardware Failure
+- SSD → Storage / SSD Failure
+- Power adapter or PSU → Power Adapter / PSU Failure
+- PoE injector → PoE Injector Failure
+- HDMI cable → HDMI Cable Failure
+- DisplayPort cable → DisplayPort Cable Failure
+- USB cable → USB Cable Failure
+- Ethernet cable → Ethernet Cable Failure
+- Adapter or converter → Adapter / Converter Failure
+- Hub or extender → Hub / Extender Failure
+- DSP → DSP Hardware Failure
+- Room controller → Room Controller Hardware Failure
 
-### **Application & Scope Context**
+Do not use Hardware Component Failure when:
+- the component was only unplugged, loose, disabled, or powered off;
+- the issue was corrected through input, peripheral, resolution, or device selection;
+- firmware, driver, enumeration, authentication, or integration is the documented cause;
+- a reboot restored service without confirming cause.
 
-- **Always identify the affected service area first** - the category name is anchored on the EUC offering.
-	- *Meetings - Rooms & Hardware* - meeting room systems, audio/video hardware, displays, controllers, consoles, app, scheduling, and connectivity.
-	- **Never assign a category that doesn't fit the Rooms scope.**
-	- *Example*: "room offline" -> `Meetings - Rooms & Hardware`, not a personal device label.
-- **Check the issue scope:** If the issue is clearly about Teams chat/calling on a personal device, use the Messaging offering guidance instead.
+### SPECIAL HANDLING
+- Monitoring alert auto-closed without confirmed fault → Operational / Monitoring Event / Auto-Recovered Monitoring Alert.
+- Reboot restored service without confirmed cause → Unknown / Unclear / Resolution Without Confirmed Cause.
+- Faulty component replaced → Hardware Component Failure / exact component subcategory.
+- Working cable reseated → Power / Connectivity Failure / Loose Cable Connection.
+- Cable confirmed faulty and replaced → Hardware Component Failure / exact cable subcategory.
+- Incorrect display input → Display & Content-Sharing Failure / Input Source Misconfiguration.
+- Missing camera after USB detection failure → Camera & Video Pipeline Failure / Camera USB Enumeration Failure.
+- Explicit vandalism or theft → Physical Damage / Tampering / matching subcategory.
+- Duplicate ticket → Operational / Monitoring Event / Duplicate Incident.
+- Room confirmed healthy with no action → Operational / Monitoring Event / No Fault Found.
 
-***
+### CONFIDENCE LEVEL
+- High: clear symptom plus confirmed cause, failed component, or final repair evidence.
+- Medium: clear symptom and resolution but cause is partly inferred or not fully confirmed.
+- Low: sparse, conflicting, duplicate, monitoring-only, or undocumented evidence.
 
-### **How to Categorize**
-
-Apply the three-axis model in this order:
-
-1. **Pick the Primary Category (= Service Offering).** Which EUC offering owns the failure? Never pick a symptom or a cause here.
-2. **Pick the Sub-symptom (= User-Observable Symptom).** Choose the exact label that best matches what the user reported. Copy it verbatim.
-3. **Pick the Possible Root Cause (= short canonical LABEL).** Choose the single root-cause label from the matching root-cause table that best fits the evidence. For misrouted / unclear / repeated incidents, use the dedicated labels in the Unknown / Unclear branch.
-4. **Write the AI Analysis.** 2–3 full sentences explaining what happened, what fixed it, and any notable evidence. This is required for every ticket.
-
-**Evidence priority when in doubt:**
-1. Which **EUC offering** does the resolution actually fix? (TOP PRIORITY — this drives Category)
-2. What did the **user observe**? (drives Sub-symptom)
-3. What technical condition produced that observation? (drives Possible Root Cause)
-
-***
-
-### **Meetings - Rooms & Hardware**
-
-- **Room Device Offline** — Room system is unavailable, unreachable, not responding, or explicitly marked offline.
-- **Room Audio / Video Issue** — Meeting room audio, speaker, microphone, or camera issue.
-- **Room Display / Sharing Issue** — HDMI, ingest, projection, monitor, front-of-room, or display output problem.
-- **Room Scheduling / Reservation Issue** — Room booking, calendar sync, or reservation conflict.
-- **Room Peripheral Failure** — Console, touch panel, controller, camera module, microphone, speaker, or accessory hardware fault.
-- **Room Client / App Failure** — The room app or client software is crashing, frozen, cannot sign in, or cannot join a meeting.
-- **Room Power / Connectivity Issue** — Unplugged power, network link, or connectivity problem affecting the room.
-
-### **Unknown / Unclear**
-
-- **Insufficient Information** — Ticket lacks enough detail to assign a specific symptom.
-- **Out of Scope** — Incident clearly does not belong to End User Conferencing.
-- **Misrouted** — Ticket belongs to another service offering, queue, or owning team.
-- **Insufficient Documentation** — Ticket does not include enough steps, symptoms, or evidence to classify it confidently.
-- **Repeat Tags** — Ticket is a repeat, reopened, or recurring issue that should inherit the prior classification pattern.
-
-***
-
-## FOR ALL TICKETS - Additional Fields
-
-Confidence Level: [High/Medium/Low]
-- High (90%+): Clear symptom and resolution with matching room or hardware evidence
-- Medium (70-89%): Clear symptom but some ambiguity in the notes
-- Low (Under 70%): Multiple possibilities or weak evidence
-
-Reasoning: [Explain why the service offering and symptom were selected. Reference the room, device, display, camera, microphone, controller, reservation, or sign-in evidence from the notes, and explain why other symptoms were excluded.]
-
-Key Evidence: [Include the phrases from the incident that prove the classification, such as room offline, console unresponsive, camera failure, HDMI ingest, front of room, display not working, or booking conflict.]
-
-Resolution Summary: [One sentence describing what fixed the issue or the final disposition.]
-
-How Do I or Error: [Was this a usage question or a technical failure?]
-
-KB Provided: [If a KB was mentioned, list it. Otherwise "No".]
-
-Output Format:
-Primary Category: <exact service offering name>
-Sub-symptom: <exact user-observable symptom label>
-Possible Root Cause: <exact technical/system-level root cause label>
+### REQUIRED OUTPUT FORMAT
+Primary Category: <exact category>
+Sub-symptom: <exact allowed sub-symptom>
+Root Cause Category: <exact category from root-cause file>
+Root Cause Subcategory: <exact matching subcategory from root-cause file>
+Detailed Root Cause: <exact matching label from DetailedRootCause_ProductivityTools.md; use Out of Scope - Not a Rooms Root Cause only when Primary Category is Excluded>
+Trend Subcategory: <exact trend label>
 Confidence Level: <High|Medium|Low>
-Issue: <1-2 sentences describing the user-observable problem in plain language>
-Root Cause: <2-4 sentences describing the most likely technical cause grounded in work notes>
-Resolution: <1-3 sentences describing the final action, fix, or closure disposition from notes>
-Evidence: <Quote-style evidence snippets from work notes separated by " / ">
-AI Analysis: <2-4 sentences executive summary aligned to the fields above>
+Issue: <1–2 plain-language sentences describing the observable problem>
+Root Cause: <2–4 sentences describing confirmed or most likely cause, with evidence status>
+Resolution: <1–3 sentences describing final action and outcome>
+Evidence: <short source phrases separated by " / ">
+AI Analysis: <2–4 sentences summarizing symptom, exact component/condition, action, and operational significance>
 
-**CRITICAL OUTPUT RULES:**
-- For Category, output ONLY the exact category name without formatting.
-- For Sub-symptom and Possible Root Cause, output only the exact label text.
-- Do NOT include bold formatting or headers in the final output.
-- All fields above are mandatory. If a field is not explicitly present in notes, write: "Not documented in work notes." (do not invent facts).
+### CRITICAL OUTPUT RULES
+- All fields are mandatory.
+- Taxonomy labels must exactly match the allowed values.
+- Root Cause Subcategory must belong to the selected Root Cause Category.
+- Do not use bold formatting in final ticket output.
+- Do not invent a component, cause, action, result, user impact, owner, or date.
+- If a narrative field is unavailable, write: Not documented in work notes.
+- Evidence must be short source-supported phrases.

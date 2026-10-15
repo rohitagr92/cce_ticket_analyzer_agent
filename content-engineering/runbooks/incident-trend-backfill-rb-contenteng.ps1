@@ -36,7 +36,12 @@
 [CmdletBinding()]
 param(
     [int]$LookbackDays = 0,   # 0 = read from Automation variable ContentEng_TrendLookbackDays (default 2)
-    [int]$MaxPerDay    = 0    # 0 = no cap
+    [int]$MaxPerDay    = 0,   # 0 = no cap
+    [string]$StartDate = '',
+    [string]$EndDate = '',
+    [string[]]$IncidentNumbers = @(),
+    [switch]$ForceReanalyze,
+    [switch]$DryRun
 )
 
 $ErrorActionPreference = 'Stop'
@@ -128,38 +133,108 @@ function Read-TemplateBlob {
 }
 $catTemplate    = Read-TemplateBlob -BlobName 'TicketCategorisation_ContentEngineering.md'
 $envTemplate    = Read-TemplateBlob -BlobName 'EnvironmentContext_ContentEngineering.md'
+$cleanupTemplate = Read-TemplateBlob -BlobName 'WorkNotesCleanup_ContentEngineering.md'
 $subCatTemplate = Read-TemplateBlob -BlobName 'TrendSubCategorisation_ContentEngineering.md'
 $prcTemplate    = Read-TemplateBlob -BlobName 'PossibleRootCause_ContentEngineering.md'
+$drcTemplate    = Read-TemplateBlob -BlobName 'DetailedRootCause_ContentEngineering.md'
+$referenceMap   = Read-TemplateBlob -BlobName 'ReferenceMap_ContentEngineering.md'
 
 $outputFormatInstruction = @'
-
-
-## REQUIRED OUTPUT FORMAT (STRICT)
-
-You MUST end your response with exactly these four labeled lines, in this order, each on its own line, with no markdown, headers, or extra commentary after them:
-
-Primary Category: <exact bold product name from the taxonomy — e.g. "Microsoft Teams", "SharePoint On-Premises", "SharePoint Online". Use "Unknown / Unclear" only if nothing fits.>
-Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category — e.g. if category is "SharePoint Online" pick only from: Permission Denied, Site Administration Request, File / Item Recovery, SPO How-To / User Education. NEVER use a label from a different product section. Do NOT invent.>
-Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the Root Cause reference. NEVER use a label from a different product section. Do NOT invent.>
-Confidence Level: <Apply the CONFIDENCE CALCULATION FRAMEWORK. Start at 70% baseline. Add: +25% if application/platform clearly identified and matches category; +15% if specific error message/code/role name present; +5% if KB reference cited; +10% if agent used CE-specific terminology (AEM, Sitecore, DAM, SSO, SPO permissions, publishing pipeline, workflow approval); +15% if resolution matches category examples exactly. Subtract: -20% if platform unclear/ambiguous; -10% if only user symptom language with no agent technical detail; -10% if multiple categories equally valid; -25% if description/work notes/close notes contradict. Score above 89% = High; 70-89% = Medium; below 70% = Low. If Primary Category is Unknown / Unclear always output Low.>
-AI Analysis: <Write 3-5 plain sentences: (1) Why the user raised this ticket. (2) What technically happened. (3) What the agent did. (4) Whether resolved. Plain language, no markdown.>
-
-Rules:
-- Each label must appear verbatim followed by a colon.
-- Use plain ASCII. No bullets, asterisks, or markdown in any value.
-- Primary Category MUST be an exact product name from the category headers.
-- Sub-symptom MUST be an exact bold label from that product's own section only.
-- Possible Root Cause MUST be an exact bold label from that product's own root cause section only.
-- If nothing fits, write "Unknown".
-- Keep each value on a single line.
+## REQUIRED OUTPUT (JSON ONLY)
+Return exactly one JSON object with IncidentNumber, PrimaryCategory, SubCategory, PossibleRootCause, DetailedRootCause (exact catalog heading), DetailedRootCauseExplanation (an evidence-based explanation of at most 50 words), Issue, RootCauseNarrative, Resolution, Evidence, HDI (Yes or No), ExclusionReason, References (array of strings), AIAnalysis (2-3 evidence-based sentences), and Confidence (High, Medium, or Low).
+Issue must state the observed problem. RootCauseNarrative must explain what the notes establish, or state that no cause was established. Resolution must describe the documented outcome, including unresolved/closed without a fix. Evidence must cite concrete facts from the work or close notes. Do not copy a symptom label as the narrative or invent a fix.
+Use neutral roles instead of personal names, email addresses, phone numbers, or employee IDs in every narrative field. Preserve product names, error text and incident/KB references.
+If the notes confirm a cause or product limitation, do not choose a DetailedRootCause heading that says the cause is not evidenced. Choose the exact heading whose Possible Root Cause matches your selected label.
+For every in-scope ticket, the DetailedRootCause heading's Possible Root Cause must exactly match PossibleRootCause. Use the product-specific Unknown heading only when PossibleRootCause is Unknown; otherwise never select an Unknown heading. Always return HDI as Yes or No, Confidence as High, Medium, or Low, and a non-empty AIAnalysis.
+Never include source email addresses, phone numbers, or employee IDs in any response field, including Evidence; redact contact values and refer to the person's role. Before returning JSON, verify that the selected DRC's adjacent Possible Root Cause exactly matches PossibleRootCause.
+Use only the seven products declared in scope in the reference files, including Microsoft Planner Issues. For another product, use PrimaryCategory "Excluded", SubCategory "Out of Scope", PossibleRootCause "Out-of-scope Service Offering", and the exact Excluded detailed heading. Never categorize Power Apps, Power Automate, or CMS as an in-scope product.
+Microsoft 365 group message moderation and approval email delivery are not Viva Engage community administration; classify those issues as Excluded unless a CE-owned product failure is documented.
+Copy all four classification labels verbatim from their product sections in the references. A symptom is not a cause; do not invent a cause when evidence is missing. Never use a different product's root cause or a placeholder analysis.
 '@
 # Build system prompt from all 4 canonical templates — same enforcement as incident-analyzer-rb-prodtools.ps1.
 # This ensures Sub-symptom and Possible Root Cause are always strict labels from the template catalogs,
 # not free-form AI-generated text that would fail compliance validation.
 $systemPrompt = $catTemplate + "`n`n" + $envTemplate + "`n`n" +
+    "## PRIVACY: Cleaned Work Notes Rules`n" + $cleanupTemplate + "`n`n" +
     "## REFERENCE: Sub-symptom Labels`n" + $subCatTemplate + "`n`n" +
-    "## REFERENCE: Possible Root Cause Labels`n" + $prcTemplate +
+    "## REFERENCE: Possible Root Cause Labels`n" + $prcTemplate + "`n`n" +
+    "## REFERENCE: Detailed Root Cause Headings`n" + $drcTemplate + "`n`n" + $referenceMap +
     $outputFormatInstruction
+
+$allowedProducts = @(
+    'SharePoint Online Issues', 'SharePoint Subscription Edition (SSE) Issues',
+    'Viva Engage (Yammer) Issues', 'Guest Onboarding Tool Issues',
+    'Collaboration Workspace Management Tool (WMT) Issues', 'Microsoft Teams Issues',
+    'Microsoft Planner Issues'
+)
+$allowedCategories = @($allowedProducts) + 'Excluded'
+function Get-ProductSections {
+    param([string]$Text, [string]$HeadingPattern, [string]$LabelPattern)
+    $catalog = @{}
+    foreach ($section in [regex]::Matches($Text, $HeadingPattern)) {
+        $heading = $section.Groups['heading'].Value.Trim()
+        $labels = @([regex]::Matches($section.Groups['body'].Value, $LabelPattern) | ForEach-Object { $_.Groups['label'].Value.Trim() })
+        $catalog[$heading] = $labels
+    }
+    return $catalog
+}
+$sectionPattern = '(?ms)^###\s+(?<heading>[^\r\n]+)\r?\n(?<body>.*?)(?=^###\s+|^##\s+|\z)'
+$symptoms = Get-ProductSections -Text $subCatTemplate -HeadingPattern $sectionPattern -LabelPattern '(?m)^-\s+\*\*(?<label>[^*]+)\*\*'
+$causes = Get-ProductSections -Text $prcTemplate -HeadingPattern $sectionPattern -LabelPattern '(?m)^\|\s*\d+\s*\|\s*\*\*(?<label>[^*]+)\*\*'
+$details = Get-ProductSections -Text $drcTemplate -HeadingPattern '(?ms)^##\s+(?<heading>[^\r\n]+)\r?\n(?<body>.*?)(?=^##\s+|\z)' -LabelPattern '(?m)^###\s+(?<label>[^\r\n]+)'
+foreach ($category in $allowedCategories) {
+    $causeHeading = $category -replace ' Issues$', ''
+    if (-not $symptoms.ContainsKey($category) -or -not $causes.ContainsKey($causeHeading) -or -not $details.ContainsKey($category)) {
+        throw "CE taxonomy is incomplete for '$category'. Fix the uploaded templates before backfill."
+    }
+}
+
+function ConvertFrom-ValidatedClassification {
+    param([string]$Text, [string]$IncidentNumber)
+    $json = $Text.Trim() -replace '(?s)^```(?:json)?\s*|\s*```$', ''
+    $result = $json | ConvertFrom-Json -ErrorAction Stop
+    $category = [string]$result.PrimaryCategory
+    $symptom = [string]$result.SubCategory
+    $cause = [string]$result.PossibleRootCause
+    $detail = ([string]$result.DetailedRootCause -replace '^###\s*', '').Trim()
+    $result.DetailedRootCause = $detail
+    $causeHeading = $category -replace ' Issues$', ''
+    if ([string]$result.IncidentNumber -ne $IncidentNumber -or $category -notin $allowedCategories) {
+        throw "Invalid incident number or category for $IncidentNumber."
+    }
+    $unevidencedDetail = $detail -in @($details[$category]) -and $detail -match '(?i)(?:issue|cause) is not evidenced$'
+    $unevidencedCause = $cause -eq 'Unknown' -and $unevidencedDetail -and $category -ne 'Excluded'
+    if ($cause -ne 'Unknown' -and $unevidencedDetail) {
+        throw "CE cause and detailed heading contradict each other for $IncidentNumber ($category / $cause / $detail)."
+    }
+    if ($cause -eq 'Unknown' -and -not $unevidencedCause) {
+        throw "Unknown CE cause lacks the matching unevidenced DRC for $IncidentNumber."
+    }
+    if ($symptom -notin @($symptoms[$category]) -or ($cause -notin @($causes[$causeHeading]) -and -not $unevidencedCause) -or $detail -notin @($details[$category])) {
+        throw "Invalid CE symptom/root/detailed cause for $IncidentNumber ($category / $symptom / $cause / $detail)."
+    }
+    if ($result.HDI -notin @('Yes','No') -or $result.Confidence -notin @('High','Medium','Low') -or [string]::IsNullOrWhiteSpace([string]$result.AIAnalysis)) {
+        throw "Missing or invalid CE analysis fields for $IncidentNumber."
+    }
+    foreach ($field in @('Issue','RootCauseNarrative','Resolution','Evidence','DetailedRootCauseExplanation')) {
+        $value = ([string]$result.$field).Trim()
+        if ([string]::IsNullOrWhiteSpace($value) -or $value -in @('Unknown','N/A','Not documented','Not separately documented in this record.','Not documented in source incident notes') -or
+            ($field -in @('RootCauseNarrative','Resolution','Evidence') -and $value -in @($category,$symptom,$cause,$detail))) {
+            throw "Missing CE $field for $IncidentNumber."
+        }
+    }
+    foreach ($field in @('Issue','RootCauseNarrative','Resolution','Evidence','DetailedRootCauseExplanation','AIAnalysis')) {
+        if ([string]$result.$field -match '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -or [string]$result.$field -match '(?<!\w)\+\d[\d\s-]{9,}') {
+            throw "CE $field contains personal contact details for $IncidentNumber."
+        }
+    }
+    $detailWords = @(([string]$result.DetailedRootCauseExplanation).Trim() -split '\s+' | Where-Object { $_ })
+    if ($detailWords.Count -gt 50) { throw "CE DRC explanation exceeds 50 words for $IncidentNumber." }
+    if ($category -eq 'Excluded' -and [string]::IsNullOrWhiteSpace([string]$result.ExclusionReason)) {
+        throw "Missing exclusion reason for $IncidentNumber."
+    }
+    return $result
+}
 
 # -------- Per-partition existing-row cache --------
 $existingByPartition = @{}
@@ -203,8 +278,7 @@ function Get-IncidentsForDay {
         $resp = Invoke-RestMethod -Method Get -Uri $url -Headers $headers -TimeoutSec 120
         return @($resp.result)
     } catch {
-        Write-Warning "ServiceNow fetch failed for ${startStr}: $($_.Exception.Message)"
-        return @()
+        throw "ServiceNow fetch failed for ${startStr}: $($_.Exception.Message)"
     }
 }
 
@@ -231,11 +305,11 @@ function Invoke-Categorize {
             @{ role = 'system'; content = $systemPrompt },
             @{ role = 'user';   content = $incidentJson }
         )
-        max_completion_tokens = 1600
+        max_completion_tokens = 2600
     } | ConvertTo-Json -Depth 10 -Compress
     $url = "$($cfg.AzureOpenAIBaseUrl)/openai/deployments/$($cfg.AzureOpenAIDeployment)/chat/completions?api-version=$($cfg.AzureOpenAIApiVersion)"
     $headers = @{ 'api-key' = $cfg.AzureOpenAIApiKey; 'Content-Type' = 'application/json' }
-    $resp = Invoke-RestMethod -Method Post -Uri $url -Headers $headers -Body $body -TimeoutSec 180
+        $resp = Invoke-RestMethod -Uri $url -Method Post -Headers $headers -Body $body -ContentType 'application/json; charset=utf-8' -TimeoutSec 180
     return $resp.choices[0].message.content
 }
 
@@ -288,17 +362,29 @@ Write-Step 'Fetching ServiceNow token...' 'Yellow'
 $snToken = Get-ServiceNowToken
 
 $today = (Get-Date).ToUniversalTime().Date
+$dateFormat = [Globalization.CultureInfo]::InvariantCulture
+if ($StartDate -or $EndDate) {
+    if (-not $StartDate -or -not $EndDate) { throw 'StartDate and EndDate must be provided together in yyyy-MM-dd format.' }
+    $rangeStart = [DateTime]::ParseExact($StartDate,'yyyy-MM-dd',$dateFormat).Date
+    $rangeEnd = [DateTime]::ParseExact($EndDate,'yyyy-MM-dd',$dateFormat).Date
+    if ($rangeEnd -lt $rangeStart) { throw 'EndDate must be on or after StartDate.' }
+} else {
+    $rangeEnd = $today.AddDays(-1)
+    $rangeStart = $today.AddDays(-1 * $LookbackDays)
+}
+$dateCount = ($rangeEnd - $rangeStart).Days + 1
 $summary = @{}
-$totalFetched = 0; $totalSaved = 0; $totalErrors = 0; $totalSkipped = 0
+$totalFetched = 0; $totalSaved = 0; $totalErrors = 0; $totalSkipped = 0; $totalWouldSave = 0
 
-for ($i = 1; $i -le $LookbackDays; $i++) {
-    $day = $today.AddDays(-$i)
+$dayIndex = 0
+for ($day = $rangeStart; $day -le $rangeEnd; $day = $day.AddDays(1)) {
+    $dayIndex++
     $key = $day.ToString('yyyy-MM-dd')
-    Write-Step "Day $i/$LookbackDays - $key" 'Cyan'
+    Write-Step "Day $dayIndex/$dateCount - $key" 'Cyan'
 
     $incidents = Get-IncidentsForDay -Token $snToken -DayUtc $day
     Write-Output "  Fetched $($incidents.Count) incidents."
-    $summary[$key] = @{ fetched = $incidents.Count; saved = 0; errors = 0; skipped = 0 }
+    $summary[$key] = @{ fetched = $incidents.Count; saved = 0; errors = 0; skipped = 0; wouldSave = 0 }
 
     if ($incidents.Count -eq 0) { continue }
     if ($MaxPerDay -gt 0 -and $incidents.Count -gt $MaxPerDay) {
@@ -309,6 +395,10 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
       try {
         $num = [string]$inc.number
         if ([string]::IsNullOrWhiteSpace($num)) { continue }
+        if ($IncidentNumbers.Count -gt 0 -and $num -notin $IncidentNumbers) {
+            $summary[$key].skipped++
+            continue
+        }
 
         $resolvedDt = $day
         $resolvedStr = [string]$inc.resolved_at
@@ -316,15 +406,22 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
             [DateTime]$tmp = [DateTime]::MinValue
             if ([DateTime]::TryParse($resolvedStr, [ref]$tmp)) { $resolvedDt = $tmp }
         }
+        if (($StartDate -or $EndDate) -and ($resolvedDt.Date -lt $rangeStart -or $resolvedDt.Date -gt $rangeEnd)) {
+            $summary[$key].skipped++
+            continue
+        }
         $yw = Get-YearWeekFromDate -Date $resolvedDt
 
         # Skip only when an existing row is complete and usable.
         $existingRows = Get-ExistingRowsByKey -Partition $yw.YearWeek
-        if ($existingRows.ContainsKey($num)) {
+        if (-not $ForceReanalyze -and $existingRows.ContainsKey($num)) {
             $existingRow = $existingRows[$num]
             $hasAnalysis = -not [string]::IsNullOrWhiteSpace([string]$existingRow.AIAnalysis)
             $hasProblemData = (-not [string]::IsNullOrWhiteSpace([string]$existingRow.Subcategory)) -or (-not [string]::IsNullOrWhiteSpace([string]$existingRow.OriginalDescription))
-            if ($hasAnalysis -and $hasProblemData) {
+            $existingRoot = [string]$existingRow.PossibleRootCause
+            $hasUsableCategory = -not [string]::IsNullOrWhiteSpace([string]$existingRow.Category) -and [string]$existingRow.Category -notmatch '^(?i:unknown(?:\s*/\s*unclear)?)$'
+            $hasUsableRoot = -not [string]::IsNullOrWhiteSpace($existingRoot) -and $existingRoot -notmatch '^(?i:unknown(?:\s*/\s*unclear)?|root cause undetermined)$'
+            if ($hasAnalysis -and $hasProblemData -and $hasUsableCategory -and $hasUsableRoot) {
                 $summary[$key].skipped++
                 continue
             }
@@ -332,47 +429,52 @@ for ($i = 1; $i -le $LookbackDays; $i++) {
 
         try {
             $aiText  = Invoke-Categorize -Incident $inc
-            $fields  = Get-StructuredFields -Text $aiText
-            $category = if ($fields.Category) { $fields.Category } else { 'Unknown' }
-            $subcat = $fields.Subcategory
-            $root   = $fields.RootCause
-            $anal   = $fields.Analysis
-            $conf   = $fields.Confidence
-            if ([string]::IsNullOrWhiteSpace($conf)) { $conf = 'Medium' }
-            if ([string]::IsNullOrWhiteSpace($anal)) { throw "AI analysis is empty for incident $num. Row not written in strict mode." }
-            if ($subcat.Length -gt 200)  { $subcat = $subcat.Substring(0, 200) }
-            if ($root.Length   -gt 1000) { $root   = $root.Substring(0, 1000) + '...' }
-            if ($anal.Length   -gt 1500) { $anal   = $anal.Substring(0, 1500) + '...' }
-
-            # Derive a short, free-form Detailed Root Cause (DRC) from the AI Analysis.
-            # Requirement: free-text chosen by AI, capped to at most 9 words for display.
-            $drcSource = if (-not [string]::IsNullOrWhiteSpace($fields.Analysis)) { $fields.Analysis } elseif (-not [string]::IsNullOrWhiteSpace($fields.RootCause)) { $fields.RootCause } else { $anal }
-            $firstSentence = ($drcSource -split '[\.\r\n]')[0]
-            $firstSentence = $firstSentence -replace '\s+', ' ' -replace '^["\']+|["\']+$',''
-            $words = ($firstSentence -split '\s+') | Where-Object { $_ -ne '' }
-            if ($words.Length -gt 9) { $shortDrc = ($words[0..8] -join ' ') } else { $shortDrc = ($words -join ' ') }
-            $shortDrc = $shortDrc.Trim()
-            if ($shortDrc.Length -gt 200) { $shortDrc = $shortDrc.Substring(0,200) }
+            $fields  = ConvertFrom-ValidatedClassification -Text $aiText -IncidentNumber $num
+            $category = [string]$fields.PrimaryCategory
+            $subcat = [string]$fields.SubCategory
+            $root = [string]$fields.PossibleRootCause
+            $shortDrc = [string]$fields.DetailedRootCause
+            $anal = @(
+                'Problem:',
+                "Issue: $($fields.Issue)",
+                "Root Cause: $($fields.RootCauseNarrative)",
+                "Resolution: $($fields.Resolution)",
+                "Evidence: $($fields.Evidence)",
+                '',
+                "AI Analysis ($($fields.Confidence) confidence): $($fields.AIAnalysis)"
+            ) -join "`n"
+            $conf = [string]$fields.Confidence
 
             $props = @{
                 'Category'           = [string]$category
                 'Subcategory'        = [string]$subcat
                 # Preserve canonical PossibleRootCause for downstream canonical lookups
                 'PossibleRootCause'  = [string]$root
-                # Free-form short DetailedRootCause for display (<=9 words)
                 'DetailedRootCause'  = [string]$shortDrc
+                'DetailedRootCauseExplanation' = [string]$fields.DetailedRootCauseExplanation
+                'Resolution'         = [string]$fields.Resolution
+                'Evidence'           = [string]$fields.Evidence
                 'RootCause'          = [string]$root
                 'AIAnalysis'         = [string]$anal
                 'Confidence'         = [string]$conf
+                'HDI'                = [bool]($fields.HDI -eq 'Yes')
+                'ExclusionReason'    = [string]$fields.ExclusionReason
+                'References'         = [string](@($fields.References) -join ', ')
                 'Date'               = [string]$resolvedDt.ToString('yyyy-MM-dd')
                 'YearWeek'           = [string]$yw.YearWeek
                 'Year'               = [int]$yw.Year
                 'WeekNumber'         = [int]$yw.WeekNumber
                 'Service'            = 'Content Engineering'
+                'Misrouted'          = [bool]($category -eq 'Excluded')
                 'OriginalDescription'= [string]$inc.short_description
                 'ReportBlobName'     = 'incremental-runbook'
             }
-            Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting | Out-Null
+            if ($DryRun) {
+                $summary[$key].wouldSave++
+                Write-Output ("  DRY  {0,-15} {1,-9} {2}" -f $num, $yw.YearWeek, $category)
+                continue
+            }
+            Add-AzTableRow -Table $cloudTable -PartitionKey $yw.YearWeek -RowKey $num -Property $props -UpdateExisting -ErrorAction Stop | Out-Null
 
             # Cache update so same-incident appearances in this run are treated as complete.
             $existingRows[[string]$num] = [pscustomobject]@{
@@ -399,10 +501,12 @@ Write-Output ''
 Write-Step '=== Incremental backfill summary ===' 'Magenta'
 $summary.Keys | Sort-Object | ForEach-Object {
     $s = $summary[$_]
-    Write-Output ("  {0}  fetched={1,3}  saved={2,3}  skipped={3,3}  errors={4,3}" -f $_, $s.fetched, $s.saved, $s.skipped, $s.errors)
+    Write-Output ("  {0}  fetched={1,3}  saved={2,3}  wouldSave={3,3}  skipped={4,3}  errors={5,3}" -f $_, $s.fetched, $s.saved, $s.wouldSave, $s.skipped, $s.errors)
     $totalFetched += $s.fetched; $totalSaved += $s.saved; $totalSkipped += $s.skipped; $totalErrors += $s.errors
+    $totalWouldSave += $s.wouldSave
 }
 Write-Output ("  -----------------------------------------------------------------")
-Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  skipped={2,3}  errors={3,3}" -f $totalFetched, $totalSaved, $totalSkipped, $totalErrors)
+Write-Output ("  TOTAL       fetched={0,3}  saved={1,3}  wouldSave={2,3}  skipped={3,3}  errors={4,3}" -f $totalFetched, $totalSaved, $totalWouldSave, $totalSkipped, $totalErrors)
+if ($DryRun) { Write-Output 'Dry run complete; no table rows were written.' }
 Write-Output ''
 Write-Output "Rows newly written: $totalSaved (skipped $totalSkipped already in table)"

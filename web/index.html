@@ -1433,6 +1433,10 @@
           r.Service = rowService;
           r.ServiceOffering = rowService;
           r.ServiceGroup = serviceOfferingGroupMap.get(rowService) || (tableConfigs.length === 1 ? svc.serviceGroup || 'End User Collaboration' : '');
+          if (rowService === 'Content Engineering') {
+            const productName = String(r.Category || '').replace(/ Issues$/, '');
+            if (CONTENT_ENGINEERING_PRODUCT_SET.has(productName)) r.Category = productName;
+          }
           normalizedRows.push(r);
         }
         return normalizedRows;
@@ -1736,15 +1740,16 @@
     'Other / Miscellaneous'
   ];
 
-  // Exact product category names from TicketCategorisation_ContentEngineering.md
+  // Readable names for the exact in-scope CE categories in TicketCategorisation_ContentEngineering.md
   const CONTENT_ENGINEERING_PRODUCT_LIST = [
     'All Products',
-    'Microsoft Teams',
     'SharePoint Online',
     'SharePoint Subscription Edition (SSE)',
     'Viva Engage (Yammer)',
     'Guest Onboarding Tool',
-    'Collaboration Workspace Management Tool (WMT)'
+    'Collaboration Workspace Management Tool (WMT)',
+    'Microsoft Teams',
+    'Microsoft Planner'
   ];
   const CONTENT_ENGINEERING_PRODUCT_SET = new Set(CONTENT_ENGINEERING_PRODUCT_LIST.slice(1));
 
@@ -3126,7 +3131,7 @@
     return entities.filter(e => {
       const haystack = [
         e.RowKey, e.Category, e.Subcategory, e.PossibleRootCause, e.RootCause,
-        e.DetailedRootCause, e.AIAnalysis
+        e.DetailedRootCause, e.DetailedRootCauseExplanation, e.AIAnalysis
       ].map(v => (v == null ? '' : String(v)).toLowerCase());
       return haystack.some(v => v.includes(q));
     });
@@ -3483,8 +3488,9 @@
     // DetailedRootCause remains an optional canonical label shown separately in metadata.
     const drcRaw = opxCleanValue(inc.DetailedRootCause || '');
     const aiRaw  = isPlaceholderAiText(inc.AIAnalysis) ? '' : ((inc.AIAnalysis || '').trim());
-    const sourceIssue = opxCleanValue(inc.Subcategory || '') ||
-                        opxCleanValue(inc.OriginalDescription || '') ||
+    const isCe = inc.Service === 'Content Engineering';
+    const sourceIssue = opxCleanValue(isCe ? inc.OriginalDescription : inc.Subcategory) ||
+              opxCleanValue(isCe ? inc.Subcategory : inc.OriginalDescription) ||
                         opxCleanValue(inc.Category || '') ||
                         'Not documented in source incident notes';
     const sourceRootCause = opxDisplayRootCause(inc) || 'Not documented in source incident notes';
@@ -3539,7 +3545,12 @@
         renderAiAnalysisDisclosure(reasoningDisplay, '#f8f9fa');
     } else {
       const aiDisplay = aiRaw ? esc(aiRaw) : '<em style="color:var(--muted);">AI analysis missing from the stored row; reprocess this incident from ServiceNow.</em>';
-      const inferredRows = [
+      const inferredRows = isCe ? [
+        ['Issue', sourceIssue],
+        ['Root Cause', sourceRootCause],
+        ['Resolution', opxCleanValue(inc.Resolution || '') || 'Not separately documented in this record.'],
+        ['Evidence', opxCleanValue(inc.Evidence || '') || 'Not separately documented in this record.']
+      ] : [
         ['Issue', sourceIssue || 'Stored row is missing a ticket-specific problem summary; reprocess this incident from ServiceNow.'],
         ['Root Cause', sourceRootCause || 'Stored row is missing a ticket-specific root cause; reprocess this incident from ServiceNow.'],
         ['Detailed Root Cause', sourceDetailedRoot || 'Stored row is missing a ticket-specific detailed root cause; reprocess this incident from ServiceNow.']
@@ -3570,7 +3581,8 @@
         '<div><span style="color:var(--muted);">Product:</span> ' + esc(inc.Category || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Symptom:</span> ' + esc(inc.Subcategory || '-') + '</div>' +
         '<div><span style="color:var(--muted);">Root Cause:</span> ' + esc(displayRootCause) + '</div>' +
-        '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(displayDetailedRoot) + '</div>' +
+        '<div><span style="color:var(--muted);">Detailed Root Cause:</span> ' + esc(displayDetailedRoot) +
+          (inc.DetailedRootCauseExplanation ? '<br>' + esc(inc.DetailedRootCauseExplanation) : '') + '</div>' +
         '<div><span style="color:var(--muted);">Service:</span> ' + esc(inc.Service || 'Unknown') + '</div>' +
         '<div><span style="color:var(--muted);">Misrouted:</span> ' + (misrouted ? '<span style="color:var(--danger);font-weight:600;">Yes</span>' : 'No') + '</div>' +
       '</div>' +
@@ -4979,6 +4991,12 @@
     return { html: arrow + ' ' + txt, cls: cls };
   }
 
+  function isMisroutedSummaryRow(entity) {
+    const flag = entity.Misrouted;
+    return flag === true || flag === 'true' || flag === 'True' || flag === 'Yes' ||
+      entity.Category === 'Excluded' || entity.Category === 'Out of Scope';
+  }
+
   // Compute the full set of metrics that drive the headline, gauge, and KPI tiles.
   function smComputeMetrics(curEnts, priorEnts, priorWk) {
     const curTotal = curEnts.length;
@@ -4987,8 +5005,8 @@
     const curCatsSet = new Set(curEnts.filter(e => (e.Category||'') !== 'Excluded').map(e => e.Category || 'Unknown'));
     const priorCatsSet = new Set(priorEnts.filter(e => (e.Category||'') !== 'Excluded').map(e => e.Category || 'Unknown'));
 
-    const curEx = curEnts.filter(e => (e.Category||'') === 'Excluded').length;
-    const priorEx = priorEnts.filter(e => (e.Category||'') === 'Excluded').length;
+    const curEx = curEnts.filter(isMisroutedSummaryRow).length;
+    const priorEx = priorEnts.filter(isMisroutedSummaryRow).length;
     const curExPct = curTotal ? (curEx * 100 / curTotal) : 0;
     const priorExPct = priorTotal ? (priorEx * 100 / priorTotal) : 0;
 
@@ -5199,7 +5217,7 @@
       const ents = byWeek[w] || [];
       total.push(ents.length);
       cats.push(new Set(ents.filter(e => (e.Category||'') !== 'Excluded').map(e => e.Category || 'Unknown')).size);
-      const ex = ents.filter(e => (e.Category||'') === 'Excluded').length;
+      const ex = ents.filter(isMisroutedSummaryRow).length;
       exPct.push(ents.length ? (ex * 100 / ents.length) : 0);
       const ai = ents.filter(e => hasUsableAiAnalysis(e));
       const hi = ai.filter(e => normalizedConfidenceValue(e).toLowerCase() === 'high').length;
@@ -6119,22 +6137,26 @@
       groupSel.addEventListener('change', () => {
         populateServiceOfferingDropdown('smService', groupSel.value, null);
         rebuildRangeSelectors();
+        rebuildDrillProductOptions();
         render();
         pushSharedFilter('sm', groupSel.value, svcSel.value, fromSel.value, toSel.value);
       });
 
       svcSel.addEventListener('change', () => {
         rebuildRangeSelectors();
+        rebuildDrillProductOptions();
         render();
         pushSharedFilter('sm', groupSel.value, svcSel.value, fromSel.value, toSel.value);
       });
 
       fromSel.addEventListener('change', () => {
+        rebuildDrillProductOptions();
         render();
         pushSharedFilter('sm', groupSel.value, svcSel.value, fromSel.value, toSel.value);
       });
 
       toSel.addEventListener('change', () => {
+        rebuildDrillProductOptions();
         render();
         pushSharedFilter('sm', groupSel.value, svcSel.value, fromSel.value, toSel.value);
       });

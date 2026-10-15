@@ -1,0 +1,214 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e11] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e12] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e13]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e14]:
+        - tab "📊 Summary" [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e21]:
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]: Lens View
+        - combobox [ref=e28]:
+          - option "PO/OPS - Default" [selected]
+          - option "Engineer View"
+        - generic [ref=e29]:
+          - generic [ref=e30]: Service
+          - combobox [ref=e31]:
+            - option "All services" [selected]
+            - option "End User Collaboration"
+            - option "End User Conferencing"
+          - generic [ref=e32]: Service Offering
+          - combobox [ref=e33]:
+            - option "All offerings"
+            - option "Productivity Tools"
+            - option "Email and Calendaring"
+            - option "Content Engineering" [selected]
+            - option "Messaging - Teams Chat and Audio"
+            - option "Meetings - Rooms and Hardware"
+        - generic [ref=e34]: From WW
+        - combobox [ref=e35]:
+          - option "26-WW42"
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39" [selected]
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+        - generic [ref=e36]: To WW
+        - combobox [ref=e37]:
+          - option "26-WW42" [selected]
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39"
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+        - button "Reset to latest 4 WWs" [ref=e38] [cursor=pointer]
+        - generic [ref=e39]:
+          - text: Content Engineering · lens
+          - strong [ref=e288]: PO/OPS - Default
+          - text: · 201 tickets in selected range / 1327 tracked overall
+        - generic [ref=e41]:
+          - text: "📅 Data last updated:"
+          - strong [ref=e42]: Oct 15, 2026, 11:46 AM
+      - generic [ref=e43]:
+        - generic [ref=e291]:
+          - generic [ref=e292]:
+            - generic [ref=e293]: Total Tickets
+            - generic "Total Tickets in the selected Work Week and Service Offering filters." [ref=e294]: "?"
+          - generic [ref=e295]: "201"
+          - generic [ref=e297]: 201 Tickets in 26-WW39 → 26-WW42 (4 WWs)
+          - generic [ref=e298]: last 6 WWs
+        - generic [ref=e306]:
+          - generic [ref=e307]:
+            - generic [ref=e308]: Misrouted Tickets
+            - generic "Misrouted Tickets in the selected Work Week and Service Offering filters." [ref=e309]: "?"
+          - generic [ref=e310]: "2"
+          - generic [ref=e312]: 1.0% of selected Tickets
+          - generic [ref=e313]: last 6 WWs
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - heading "🎯 Root Cause → Product flow" [level=3] [ref=e76]:
+            - generic [ref=e77]: 🎯
+            - text: Root Cause → Product flow
+          - generic [ref=e78]:
+            - generic [ref=e79]: Show top
+            - combobox [ref=e80]:
+              - option "2"
+              - option "3" [selected]
+              - option "4"
+              - option "5"
+            - generic [ref=e81]: root causes & products
+        - generic [ref=e82]:
+          - generic [ref=e319]: ⚛
+          - generic [ref=e320]:
+            - text: Top 14 root causes drive 71% of tickets in this window —
+            - strong [ref=e321]: Product Usage Knowledge Gap
+            - text: ","
+            - strong [ref=e322]: Permission Misconfiguration
+            - text: ","
+            - strong [ref=e323]: Teams Client Configuration Issue
+            - text: .
+        - generic [ref=e88]:
+          - generic [ref=e324]: 26-WW39 → 26-WW42 (4 WWs) · 200 tickets · grouped by Possible Root Cause · showing top 3 on each side
+          - img [ref=e325]:
+            - 'generic "Other causes → Microsoft Teams: 49 Tickets" [ref=e326]'
+            - 'generic "Other causes → SharePoint Online: 48 Tickets" [ref=e327]'
+            - 'generic "Permission Misconfiguration → SharePoint Online: 22 Tickets" [ref=e328]'
+            - 'generic "Other causes → Collaboration Workspace Management Tool (WMT): 17 Tickets" [ref=e329]'
+            - 'generic "Product Usage Knowledge Gap → SharePoint Online: 17 Tickets" [ref=e330]'
+            - 'generic "Teams Client Configuration Issue → Microsoft Teams: 16 Tickets" [ref=e331]'
+            - 'generic "Other causes → Other products: 14 Tickets" [ref=e332]'
+            - 'generic "Product Usage Knowledge Gap → Microsoft Teams: 9 Tickets" [ref=e333]'
+            - 'generic "Permission Misconfiguration → Other products: 4 Tickets" [ref=e334]'
+            - 'generic "Product Usage Knowledge Gap → Other products: 2 Tickets" [ref=e335]'
+            - generic [ref=e336]:
+              - generic "Product Usage Knowledge Gap (28)" [ref=e338]: Product Usage Knowledge Gap
+              - generic [ref=e339]: 28 Tickets
+            - generic [ref=e340]:
+              - generic "Permission Misconfiguration (26)" [ref=e342]: Permission Misconfiguration
+              - generic [ref=e343]: 26 Tickets
+            - generic [ref=e344]:
+              - generic "Teams Client Configuration Issue (16)" [ref=e346]: Teams Client Configuration Issue
+              - generic [ref=e347]: 16 Tickets
+            - generic [ref=e348]:
+              - generic "Other (48 more) (128)" [ref=e350]: Other (48 more)
+              - generic [ref=e351]: 128 Tickets
+            - generic [ref=e352]:
+              - generic "SharePoint Online (87)" [ref=e354]: SharePoint Online
+              - generic [ref=e355]: 87 Tickets
+            - generic [ref=e356]:
+              - generic "Microsoft Teams (74)" [ref=e358]: Microsoft Teams
+              - generic [ref=e359]: 74 Tickets
+            - generic [ref=e360]:
+              - generic "Collaboration Workspace Management Tool (WMT) (17)" [ref=e362]: Collaboration Workspace Management Tool (WMT)
+              - generic [ref=e363]: 17 Tickets
+            - generic [ref=e364]:
+              - generic "Other (4 more) (20)" [ref=e366]: Other (4 more)
+              - generic [ref=e367]: 20 Tickets
+            - generic [ref=e368]: ROOT CAUSE
+            - generic [ref=e369]: PRODUCT
+      - generic [ref=e133]:
+        - heading "📈 Per-product weekly trend ( Total Incident Count)" [level=3] [ref=e134]:
+          - generic [ref=e135]: 📈
+          - text: Per-product weekly trend ( Total Incident Count)
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - text: Showing
+            - strong [ref=e370]: "6"
+            - text: products across
+            - strong [ref=e371]: "4"
+            - text: week(s) · 200 Tickets · 26-WW39 → 26-WW42
+          - generic [ref=e140]:
+            - generic [ref=e372]:
+              - heading "SharePoint Online" [level=4] [ref=e373]
+              - generic [ref=e374]:
+                - generic [ref=e375]: "Total: 88"
+                - generic [ref=e376]: ↓ 12 (was 20)
+            - generic [ref=e379]:
+              - heading "Microsoft Teams" [level=4] [ref=e380]
+              - generic [ref=e381]:
+                - generic [ref=e382]: "Total: 75"
+                - generic [ref=e383]: ↓ 16 (was 26)
+            - generic [ref=e386]:
+              - heading "Collaboration Workspace Management Tool (WMT)" [level=4] [ref=e387]
+              - generic [ref=e388]:
+                - generic [ref=e389]: "Total: 17"
+                - generic [ref=e390]: ↑ 4 (was 3)
+            - generic [ref=e393]:
+              - heading "SharePoint Subscription Edition (SSE)" [level=4] [ref=e394]
+              - generic [ref=e395]:
+                - generic [ref=e396]: "Total: 10"
+                - generic [ref=e397]: ↓ 3 (was 4)
+            - generic [ref=e400]:
+              - heading "Guest Onboarding Tool" [level=4] [ref=e401]
+              - generic [ref=e402]:
+                - generic [ref=e403]: "Total: 7"
+                - generic [ref=e404]: ↑ 1 (was 0)
+            - generic [ref=e407]:
+              - heading "Viva Engage (Yammer)" [level=4] [ref=e408]
+              - generic [ref=e409]:
+                - generic [ref=e410]: "Total: 2"
+                - generic [ref=e411]: ↑ 1 (was 0)
+  - contentinfo [ref=e24]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

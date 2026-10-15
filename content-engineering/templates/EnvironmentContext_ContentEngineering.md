@@ -1,74 +1,92 @@
-# EnvironmentContext — Content Engineering
+# Content Engineering Environment Context
 
-## PURPOSE
-Provides the AI with context about the Content Engineering service scope, tools, and what is and is not in scope. This template is included in every categorization prompt.
+> Use this context to interpret ticket evidence. Do not insert unsupported environmental assumptions into ticket summaries.
 
----
+## Scope boundary
 
-## WHAT CONTENT ENGINEERING COVERS
+**In scope only**
+- **SharePoint Online**
+- **SharePoint Subscription Edition (SSE)**
+- **Viva Engage (Yammer)**
+- **Guest Onboarding Tool**
+- **Collaboration Workspace Management Tool (WMT)**
+- **Microsoft Teams**
+- **Microsoft Planner**
 
-Content Engineering is responsible for the platforms, pipelines, and tooling used to author, manage, localize, and publish content, as well as the Microsoft 365 collaboration infrastructure (SharePoint, Teams) that Intel employees use for content sharing and productivity.
+**Out of scope**
+- **Microsoft Power Apps**
+- **Microsoft Power Automate**
+- **Digital Content Management (AEM/CMS)**
+- **SharePoint 2019 / SharePoint 2019 EOL**
+- **Microsoft InfoPath 2013 / InfoPath EOL**
 
-**In-scope platforms and tools:**
-- **SharePoint Online (SPO) — Enterprise collaboration platform used for document management, content sharing, site administration, permissions management, file storage, and team collaboration
-- **SharePoint Subscription Edition (SSE) — On-premises SharePoint platform used for business applications, workflow automation, document management, manufacturing solutions, and custom integrated solutions 
-- **SharePoint 2019 — Legacy on-premises SharePoint platform supporting internal business applications, collaboration sites, workflows, content management, and enterprise integrations. 
-- **Microsoft Teams — Collaboration platform used for team communication, channel collaboration, Teams administration, Teams add-ins, and integration with Microsoft 365 services. 
-- **Viva Engage (Yammer) — Enterprise social networking and community platform used for employee engagement, communities, discussions, announcements, and knowledge sharing. 
-- **Guest Onboarding Tool — Service used to onboard, manage, and govern external guest user access to Microsoft 365 collaboration platforms. 
-- **Collaboration Workspace Management Tool (WMT) — Service used to provision, manage, renew, and govern collaboration workspaces and associated resources.
+If a ticket belongs to an out-of-scope product, classify it as **Excluded**, set SubCategory to **Out of Scope**, and use **Out-of-scope Service Offering** as the Possible Root Cause. Do not map it to an in-scope product merely because SharePoint, Teams, or a portal is mentioned in the notes.
+## Cross-file reference contract
 
+Use the files in this order:
+1. [TicketCategorisation_ContentEngineering.md](TicketCategorisation_ContentEngineering.md) selects the product category.
+2. [TrendSubCategorisation_ContentEngineering.md](TrendSubCategorisation_ContentEngineering.md) selects the symptom group.
+3. [PossibleRootCause_ContentEngineering.md](PossibleRootCause_ContentEngineering.md) selects one canonical root-cause label.
+4. [DetailedRootCause_ContentEngineering.md](DetailedRootCause_ContentEngineering.md) selects the exact detailed cause heading.
+5. [EnvironmentContext_ContentEngineering.md](EnvironmentContext_ContentEngineering.md) provides technical context only.
+6. [WorkNotesCleanup_ContentEngineering.md](WorkNotesCleanup_ContentEngineering.md) prepares evidence without changing its meaning.
+7. [WorkNotesSummary_ContentEngineering.md](WorkNotesSummary_ContentEngineering.md) creates the final concise summary.
+8. [ReferenceMap_ContentEngineering.md](ReferenceMap_ContentEngineering.md) links products, incidents, KBs, categories, symptoms, and causes.
 
-**Typical users:**
-- Intel employees using SharePoint Online, SharePoint 2019, SharePoint Subscription Edition, Teams, Viva Engage (Yammer), Planner, Power Apps, and Power Automate for collaboration and productivity. 
-- Site owners, workspace owners, community owners, and administrators responsible for managing collaboration environments. 
-- Content authors, editors, and publishers managing content through CE-supported platforms. 
-- Business users requesting access, permissions, licensing, provisioning, workspace administration, guest collaboration, and community management services. 
-- Application owners and technical contacts managing integrations, workflows, automation, and business solutions built on CE-supported platforms.
+Every output must preserve this relationship: **Incident Number → Product → SubCategory → Possible Root Cause → Detailed Root Cause → KB / related incident evidence**.
 
----
+## Product boundaries and dependencies
 
-## WHAT IS OUT OF SCOPE
+### SharePoint Online
+- Cloud SharePoint content, sites, permissions, pages, lists, libraries, files, ownership, external sharing, and provisioning.
+- Guest access may depend on the Guest Onboarding Tool. Workspace lease and ownership may depend on WMT. Teams channel files may use SharePoint storage, but categorize by the component that actually failed.
 
-The following are **NOT** Content Engineering incidents even if they reference collaboration or content platform
+### SharePoint Subscription Edition (SSE)
+- Separate from SharePoint Online and SharePoint 2019.
+- Covers SSE site administration, permissions, files/lists/workflows, server health, disk, CPU, connectivity, and availability.
 
-- Corporate network, DNS, VPN, proxy, or general connectivity issues that are not specific to a CE-managed platform. 
-- Device, operating system, browser, hardware, or endpoint configuration issues. 
-- Email, Exchange, Outlook mailbox, or messaging issues that are unrelated to Teams, SharePoint, or Viva Engage functionality. 
-- IT support requests for non-CE business applications (SAP, Oracle, Workday, Ariba, ServiceNow, GitHub, etc.). 
-- Identity, HR, payroll, finance, procurement, or enterprise business process issues. 
-- Infrastructure services, cloud platforms, databases, servers, or applications owned by teams outside Content Engineering. 
-- Requests involving software installation, device provisioning, or endpoint administration. 
-- General Microsoft 365 issues that are not directly related to SharePoint, Teams, Viva Engage, Planner, Power Apps, Power Automate, Guest Onboarding Tool, or Workspace Management Tool.
+### Viva Engage (Yammer)
+- Covers Viva Engage access, licensing, community membership, community administration, and SharePoint Conversation web-part integration.
 
-If an incident clearly falls outside the above scope, use the category **Unknown / Unclear → Out of Scope**.
+### Guest Onboarding Tool
+- Covers external-user registration, identity creation, invitation, provisioning, synchronization, and removal.
+- If onboarding succeeds but SharePoint or Teams permission still fails, categorize the downstream permission failure under the downstream product.
 
----
+### Collaboration Workspace Management Tool (WMT)
+- Covers workspace lease renewal, owner/admin compliance, visibility, archive state, warning banners, and workspace provisioning.
+- If WMT is healthy but SharePoint/Teams access itself is broken, categorize under SharePoint Online or Microsoft Teams.
 
-## KEY SIGNALS TO LOOK FOR
+### Microsoft Teams
+- Covers Teams client access and stability, channels, team/channel provisioning, Teams files, guest collaboration, team/channel ownership, deleted team/channel recovery, and Outlook Teams Meeting add-in issues.
 
-| Signal in work notes | Likely category |
-|---|---|
-| "SharePoint 2019 / CPU Saturation" | SharePoint Platform Health — CPU Saturation | 
-| "SharePoint / Host gracefully shutdown" | SharePoint Platform Health — Host Gracefully Shutdown | 
-| "SharePoint / Low disk space" | SharePoint Platform Health — Low Disk Space | 
-| "Teams add-in missing in Outlook" | Microsoft Teams & M365 Collaboration — Teams Add-in Issue | 
-| "Unable to access Team or Channel" | Microsoft Teams & M365 Collaboration — Teams Access Issue | 
-| "Unable to open Teams" | Microsoft Teams & M365 Collaboration — Teams Client Issue | 
-| "Can't access SharePoint site / permission denied" | SharePoint Online Administration | 
-| "Restore deleted files from SharePoint" | SharePoint Online Administration | 
-| "Change SharePoint site name / owner" | SharePoint Online Administration | 
-| "Unable to access Viva Engage" | Viva Engage (Yammer) | 
-| "M365 - Yammer License Exception for Contingent Workers" | Viva Engage (Yammer) | 
-| "Create Viva Engage Community" | Viva Engage (Yammer) | 
-| "Guest onboarding" | Guest Onboarding Tool | 
-| "Workspace Management Tool" or "WMT" | Collaboration Workspace Management Tool | 
-| "Server busy" / "Data not loading" on SSE | SharePoint Subscription Edition | 
-| "Resolved by BigPanda" | Content Engineering Alert Service Offering | 
-| "How to use Teams / SharePoint / Viva Engage feature" | How Do I / User Education |
-| "Guest onboarding" | Guest Onboarding Tool | 
-| "Guest user" + "external user" + onboarding | Guest Onboarding Tool | 
-| "Workspace Management Tool" or "WMT" | Collaboration Workspace Management Tool | 
-| "Workspace renewal" | Collaboration Workspace Management Tool | 
-| "Workspace lease" | Collaboration Workspace Management Tool | 
-| "Owner changes not reflecting" | Collaboration Workspace Management Tool |
+### Microsoft Planner
+
+Supports:
+- Plans
+- Buckets
+- Tasks
+- Assignments
+- Group-backed Planner boards
+- Task synchronization
+
+Planner depends on:
+- Microsoft 365 Groups
+- Teams
+- SharePoint Online
+
+Planner board access may be affected by group membership and ownership.
+
+## Evidence priority
+1. Configuration item and Service offering.
+2. Resolution notes and actions that restored service.
+3. Work notes and user confirmation.
+4. Error text, KB references, related incidents, problems, or changes.
+5. Short description only when stronger evidence is absent.
+
+## Cross-product disambiguation
+- Guest cannot be created or invited: **Guest Onboarding Tool**.
+- Guest exists but cannot access a SharePoint site/file: **SharePoint Online**.
+- Guest exists but cannot access a Team/channel: **Microsoft Teams**.
+- Workspace cannot renew or is archived due to lease/owner rules: **WMT**.
+- Teams channel file permission fails in the connected library: use **Microsoft Teams** when the user-facing failure is the Teams channel/file experience; use **SharePoint Online** when the investigation confirms a SharePoint site/library permission failure independent of Teams.
+- SharePoint server disk/CPU/host alerts: **SSE** only when Configuration item confirms SharePoint Subscription Edition; SharePoint 2019 remains out of scope.

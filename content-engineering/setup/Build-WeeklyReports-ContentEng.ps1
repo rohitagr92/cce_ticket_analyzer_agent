@@ -24,18 +24,17 @@ param(
 $ErrorActionPreference = 'Stop'
 
 function HtmlEsc { param([string]$s) if ($null -eq $s) { return '' } [System.Net.WebUtility]::HtmlEncode($s) }
+function DisplayProduct { param([string]$name) if ($name -eq 'Excluded') { return $name } return ($name -replace ' Issues$', '') }
 
 $CategoryColors = @{
-    'Microsoft Teams'                  = '#464feb'
-    'SharePoint On-Premises'           = '#007940'
-    'SharePoint Online'                = '#038387'
-    'Microsoft 365 Apps'               = '#0078d4'
-    'Content Management System (CMS)'  = '#e67e22'
-    'Content Authoring & Publishing'   = '#9b59b6'
-    'Search & Discoverability'         = '#e74c3c'
-    'Access & Permissions'             = '#f39c12'
-    'How Do I / User Education'        = '#2ecc71'
-    'Unknown / Unclear'                = '#90a4ae'
+  'Microsoft Teams Issues'                           = '#464feb'
+  'SharePoint Online Issues'                          = '#038387'
+  'SharePoint Subscription Edition (SSE) Issues'     = '#007940'
+  'Viva Engage (Yammer) Issues'                       = '#c239b3'
+  'Guest Onboarding Tool Issues'                      = '#f39c12'
+  'Collaboration Workspace Management Tool (WMT) Issues' = '#5b6abf'
+  'Microsoft Planner Issues'                          = '#396c55'
+  'Excluded'                                         = '#90a4ae'
 }
 function ColorFor { param([string]$c) if ($CategoryColors.ContainsKey($c)) { $CategoryColors[$c] } else { '#5b6abf' } }
 
@@ -45,7 +44,7 @@ $key = (Get-AzStorageAccountKey -ResourceGroupName $ResourceGroup -Name $Storage
 $ctx = New-AzStorageContext -StorageAccountName $StorageAccount -StorageAccountKey $key
 
 $sas = New-AzStorageTableSASToken -Name $TableName -Permission 'r' -ExpiryTime (Get-Date).AddMinutes(15) -Protocol HttpsOnly -Context $ctx
-$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,Date,YearWeek,AIAnalysis,Confidence,State,Service'
+$selectedFields = 'PartitionKey,RowKey,Category,Subcategory,PossibleRootCause,DetailedRootCause,DetailedRootCauseExplanation,Date,YearWeek,AIAnalysis,Confidence,State,Service'
 $base = "https://$StorageAccount.table.core.windows.net/$TableName()?`$select=$selectedFields&$sas"
 
 $rows = @()
@@ -71,12 +70,12 @@ foreach ($wkGroup in $weeks) {
     $yearWeek  = $wkGroup.Name
     $incidents = @($wkGroup.Group) | Sort-Object Date -Descending
     $total     = $incidents.Count
-    $excluded  = ($incidents | Where-Object { $_.Category -eq 'Unknown / Unclear' }).Count
+    $excluded  = ($incidents | Where-Object { $_.Category -eq 'Excluded' }).Count
     $inScope   = $total - $excluded
 
     $byCategory = $incidents | Group-Object Category | Sort-Object Count -Descending
     $topCat     = if ($byCategory.Count -gt 0) { $byCategory[0] } else { $null }
-    $topCatName  = if ($topCat) { HtmlEsc $topCat.Name } else { '-' }
+    $topCatName  = if ($topCat) { HtmlEsc (DisplayProduct $topCat.Name) } else { '-' }
     $topCatCount = if ($topCat) { $topCat.Count } else { 0 }
 
     $stResolved = ($incidents | Where-Object { $_.State -eq 'Resolved' }).Count
@@ -109,7 +108,7 @@ foreach ($wkGroup in $weeks) {
             }) -join ', '
             @"
 <tr class='grp-row' data-filter-key='$FilterKey' data-filter-value="$grpAttr">
-  <td><span class='dot' style='background:$color'></span><strong>$(HtmlEsc $grpName)</strong></td>
+  <td><span class='dot' style='background:$color'></span><strong>$(HtmlEsc $(if ($Property -eq 'Category') { DisplayProduct $grpName } else { $grpName }))</strong></td>
   <td class='num'>$grpCount</td>
   <td class='num'>$pct%</td>
   <td class='inc-cell'>$incLinks</td>
@@ -133,14 +132,15 @@ foreach ($wkGroup in $weeks) {
     $incRows = ($incidents | Sort-Object Date -Descending | ForEach-Object {
         $color   = ColorFor $_.Category
         $num     = HtmlEsc $_.RowKey
-        $cat     = HtmlEsc $_.Category
+        $cat     = HtmlEsc (DisplayProduct $_.Category)
         $sub     = HtmlEsc $_.Subcategory
         $prc     = HtmlEsc $_.PossibleRootCause
         $drc     = HtmlEsc $_.DetailedRootCause
+        if ($_.DetailedRootCauseExplanation) { $drc += '<br><small>' + (HtmlEsc $_.DetailedRootCauseExplanation) + '</small>' }
         $anal    = HtmlEsc $_.AIAnalysis
         $date    = HtmlEsc $_.Date
         $conf    = HtmlEsc $_.Confidence
-        $catAttr = $cat -replace "'", '&#39;'
+        $catAttr = (HtmlEsc $_.Category) -replace "'", '&#39;'
         $subAttr = $sub -replace "'", '&#39;'
         $prcAttr = $prc -replace "'", '&#39;'
         $snowUrl = "https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=$num"
@@ -174,12 +174,15 @@ main { max-width:1500px; margin:0 auto; padding:24px 32px; }
 table { width:100%; border-collapse:collapse; font-size:0.9rem; }
 th,td { text-align:left; padding:9px 10px; border-bottom:1px solid var(--border); vertical-align:top; }
 th { background:#eef5fb; color:var(--intel-classic); font-weight:600; }
+tr th, tr td { border:1px solid #e6e6e6; }
+tr th { background-color:#f5f5f5; }
 td.num { text-align:right; font-variant-numeric:tabular-nums; }
 .dot { display:inline-block; width:10px; height:10px; border-radius:50%; margin-right:6px; vertical-align:middle; }
-a { color:var(--intel-blue); text-decoration:none; }
+a { color:#464feb; text-decoration:none; }
 a:hover { text-decoration:underline; }
 footer { text-align:center; color:var(--muted); font-size:0.8rem; padding:20px; }
 .detail-table td { max-width:280px; word-wrap:break-word; }
+.detail-table td:last-child { white-space:pre-wrap; }
 .inc-cell { font-size:0.82rem; line-height:1.55; }
 .inc-link { display:inline-block; padding:1px 4px; margin:1px; background:#eef5fb; border:1px solid #d3e3f1; border-radius:3px; font-variant-numeric:tabular-nums; }
 .inc-link:hover { background:#0071C5; color:#fff !important; text-decoration:none; }

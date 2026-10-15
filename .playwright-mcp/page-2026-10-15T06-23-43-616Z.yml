@@ -1,0 +1,215 @@
+- generic [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e11] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e12] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e13]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e14]:
+        - tab "📊 Summary" [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e21]:
+    - generic [ref=e538]:
+      - generic [ref=e539]:
+        - strong [ref=e896]: Content Engineering
+        - text: ·
+        - generic [ref=e897]: 26-WW42 → 26-WW42 (1 WW)
+        - generic [ref=e898]:
+          - strong [ref=e899]: "1"
+          - generic [ref=e900]: incidents
+        - generic [ref=e901]:
+          - strong [ref=e902]: "1"
+          - generic [ref=e903]: root causes
+        - generic [ref=e904]:
+          - strong [ref=e905]: "1"
+          - generic [ref=e906]: new
+        - generic [ref=e907]:
+          - strong [ref=e908]: "1"
+          - generic [ref=e909]: medium-conf
+      - generic [ref=e557]:
+        - heading "🔍 Filters" [level=3] [ref=e558]
+        - generic [ref=e559]:
+          - generic [ref=e560]:
+            - generic [ref=e561]: Service
+            - combobox [ref=e562]:
+              - option "All services" [selected]
+              - option "End User Collaboration"
+              - option "End User Conferencing"
+            - generic [ref=e563]: Service Offering
+            - combobox [ref=e564]:
+              - option "All offerings"
+              - option "Productivity Tools"
+              - option "Email and Calendaring"
+              - option "Content Engineering" [selected]
+              - option "Messaging - Teams Chat and Audio"
+              - option "Meetings - Rooms and Hardware"
+          - generic [ref=e565]: Product
+          - combobox [ref=e566]:
+            - option "All Products" [selected]
+            - option "SharePoint Online"
+            - option "SharePoint Subscription Edition (SSE)"
+            - option "Viva Engage (Yammer)"
+            - option "Guest Onboarding Tool"
+            - option "Collaboration Workspace Management Tool (WMT)"
+            - option "Microsoft Teams"
+            - option "Microsoft Planner"
+          - generic [ref=e567]: Subcategory (Symptom)
+          - combobox [ref=e568]:
+            - option "All Subcategories" [selected]
+            - option "Access & Permission Issues (10)"
+            - option "Usage Queries (5)"
+            - option "Provisioning Issues (4)"
+            - option "Meeting & Outlook Add-in Issues (4)"
+            - option "Ownership & Administration Issues (3)"
+            - option "Performance & Stability Issues (3)"
+            - option "Channel Access & Membership Issues (2)"
+            - option "App Sign-In & Launch Issues (2)"
+            - option "Community Administration Issues (1)"
+            - option "Workspace Visibility Issues (1)"
+            - option "Banner & Archive Issues (1)"
+            - option "File Recovery & Content Issues (1)"
+            - option "Out of Scope (1)"
+          - generic [ref=e569]: Root Cause
+          - combobox [ref=e570]:
+            - option "All Root Causes" [selected]
+            - option "SharePoint Online Configuration Request (5)"
+            - option "Teams Client Cache Corruption (4)"
+            - option "Permission Entry Missing (3)"
+            - option "SSE Permission Misconfiguration (3)"
+            - option "Teams Meeting Add-in Corruption (3)"
+            - option "Team / Channel Ownership Missing (2)"
+            - option "Unknown (2)"
+            - option "Guest Provisioning Delay (1)"
+            - option "Site Provisioning Delay (1)"
+            - option "Community Admin Role Missing (1)"
+            - option "AGS-Managed Membership Override (1)"
+            - option "Workspace Not Visible (1)"
+            - option "Archive / Banner State Mismatch (1)"
+            - option "Incorrect SharePoint Link (1)"
+            - option "Teams Usage Knowledge Gap (1)"
+            - option "Workspace Ownership Mismatch (1)"
+            - option "Stale Identity / Rejoin Mapping (1)"
+            - option "Teams Meeting Add-in Disabled (1)"
+            - option "Teams Configuration Request (1)"
+            - option "Deleted Team / Channel (1)"
+            - option "Workspace Provisioning Delay (1)"
+            - option "Out-of-scope Service Offering (1)"
+            - option "Team / Channel Provisioning Failure (1)"
+          - generic [ref=e571]: Search
+          - 'searchbox "Search incident #, product, symptom, root cause…" [ref=e572]': INC15837577
+        - generic [ref=e573]:
+          - generic [ref=e574]: From WW
+          - combobox [ref=e575]:
+            - option "26-WW26"
+            - option "26-WW27"
+            - option "26-WW28"
+            - option "26-WW29"
+            - option "26-WW30"
+            - option "26-WW31"
+            - option "26-WW32"
+            - option "26-WW33"
+            - option "26-WW34"
+            - option "26-WW35"
+            - option "26-WW36"
+            - option "26-WW37"
+            - option "26-WW38"
+            - option "26-WW39"
+            - option "26-WW40"
+            - option "26-WW41"
+            - option "26-WW42" [selected]
+          - generic [ref=e576]: To WW
+          - combobox [ref=e577]:
+            - option "26-WW26"
+            - option "26-WW27"
+            - option "26-WW28"
+            - option "26-WW29"
+            - option "26-WW30"
+            - option "26-WW31"
+            - option "26-WW32"
+            - option "26-WW33"
+            - option "26-WW34"
+            - option "26-WW35"
+            - option "26-WW36"
+            - option "26-WW37"
+            - option "26-WW38"
+            - option "26-WW39"
+            - option "26-WW40"
+            - option "26-WW41"
+            - option "26-WW42" [selected]
+          - generic [ref=e578]: View
+          - tablist [ref=e579]:
+            - button "Patterns" [ref=e580] [cursor=pointer]
+            - button "Incidents" [active] [ref=e581] [cursor=pointer]
+          - button "Reset" [ref=e582] [cursor=pointer]
+          - button "⬇ CSV" [ref=e583] [cursor=pointer]
+          - generic [ref=e584]: 1 incidents · 1 patterns
+      - generic [ref=e585]:
+        - generic [ref=e910]: Flags
+        - button "All" [ref=e911] [cursor=pointer]
+        - button "🆕 NEW 1" [ref=e912] [cursor=pointer]:
+          - text: 🆕 NEW
+          - generic [ref=e913]: "1"
+        - button "🔥 SPIKE 0" [disabled] [ref=e914]:
+          - text: 🔥 SPIKE
+          - generic [ref=e915]: "0"
+        - button "♻ REPEAT 0" [disabled] [ref=e916]:
+          - text: ♻ REPEAT
+          - generic [ref=e917]: "0"
+        - button "⚠ MISROUTED 0" [disabled] [ref=e918]:
+          - text: ⚠ MISROUTED
+          - generic [ref=e919]: "0"
+        - button "⚑ MEDIUM-CONF 1" [ref=e920] [cursor=pointer]:
+          - text: ⚑ MEDIUM-CONF
+          - generic [ref=e921]: "1"
+        - button "🤖 LOW-CONF 0" [disabled] [ref=e922]:
+          - text: 🤖 LOW-CONF
+          - generic [ref=e923]: "0"
+        - button "❓ UNKNOWN-CONF 0" [disabled] [ref=e924]:
+          - text: ❓ UNKNOWN-CONF
+          - generic [ref=e925]: "0"
+      - generic [ref=e602]:
+        - heading "🛡 Incidents · click a row to see AI analysis" [level=3] [ref=e926]
+        - table [ref=e928]:
+          - rowgroup [ref=e929]:
+            - row [ref=e930]:
+              - columnheader "Incident" [ref=e931]
+              - columnheader "Flags" [ref=e932]
+              - columnheader "Resolved ▼" [ref=e933] [cursor=pointer]
+              - columnheader "WW ⇵" [ref=e934] [cursor=pointer]
+              - columnheader "Product ⇵" [ref=e935] [cursor=pointer]
+              - columnheader "Subcategory (Symptom) ⇵" [ref=e936] [cursor=pointer]
+              - columnheader "Possible Root Cause ⇵" [ref=e937] [cursor=pointer]
+              - columnheader "Similar ⇵" [ref=e938] [cursor=pointer]
+              - columnheader "6-Wk" [ref=e939]
+          - rowgroup [ref=e940]:
+            - row [ref=e941] [cursor=pointer]:
+              - cell "▸ INC15837577" [ref=e942]:
+                - generic [ref=e943]: ▸
+                - link "INC15837577" [ref=e944]:
+                  - /url: https://intel.service-now.com/nav_to.do?uri=incident.do?sysparm_query=number=INC15837577
+              - cell "🆕 NEW ⚑ MEDIUM-CONF" [ref=e945]
+              - cell "2026-10-14" [ref=e946]
+              - cell "26-WW42" [ref=e947]
+              - cell "SharePoint Online" [ref=e948]
+              - cell "File Recovery & Content Issues" [ref=e949]
+              - cell "SharePoint Online Configuration Request" [ref=e950]
+              - cell "× 1" [ref=e951]
+              - cell [ref=e952]
+  - contentinfo [ref=e24]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

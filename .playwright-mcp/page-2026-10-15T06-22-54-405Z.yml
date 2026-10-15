@@ -1,0 +1,339 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e11] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e12] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e13]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e14]:
+        - tab "📊 Summary" [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e21]:
+    - generic [ref=e25]:
+      - generic [ref=e26]:
+        - generic [ref=e27]: Lens View
+        - combobox [ref=e28]:
+          - option "PO/OPS - Default" [selected]
+          - option "Engineer View"
+        - generic [ref=e29]:
+          - generic [ref=e30]: Service
+          - combobox [ref=e31]:
+            - option "All services" [selected]
+            - option "End User Collaboration"
+            - option "End User Conferencing"
+          - generic [ref=e32]: Service Offering
+          - combobox [ref=e33]:
+            - option "All offerings" [selected]
+            - option "Productivity Tools"
+            - option "Email and Calendaring"
+            - option "Content Engineering"
+            - option "Messaging - Teams Chat and Audio"
+            - option "Meetings - Rooms and Hardware"
+        - generic [ref=e34]: From WW
+        - combobox [ref=e35]:
+          - option "26-WW42"
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39" [selected]
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+          - option "26-WW25"
+          - option "26-WW24"
+          - option "26-WW23"
+          - option "26-WW22"
+          - option "26-WW21"
+          - option "26-WW20"
+          - option "26-WW19"
+          - option "26-WW18"
+          - option "26-WW17"
+          - option "26-WW16"
+          - option "26-WW15"
+          - option "26-WW14"
+          - option "26-WW13"
+          - option "26-WW12"
+          - option "26-WW11"
+          - option "26-WW10"
+          - option "26-WW09"
+          - option "26-WW08"
+          - option "26-WW07"
+          - option "26-WW06"
+          - option "26-WW05"
+          - option "26-WW04"
+          - option "26-WW03"
+          - option "26-WW02"
+          - option "26-WW01"
+          - option "25-WW52"
+        - generic [ref=e36]: To WW
+        - combobox [ref=e37]:
+          - option "26-WW42" [selected]
+          - option "26-WW41"
+          - option "26-WW40"
+          - option "26-WW39"
+          - option "26-WW38"
+          - option "26-WW37"
+          - option "26-WW36"
+          - option "26-WW35"
+          - option "26-WW34"
+          - option "26-WW33"
+          - option "26-WW32"
+          - option "26-WW31"
+          - option "26-WW30"
+          - option "26-WW29"
+          - option "26-WW28"
+          - option "26-WW27"
+          - option "26-WW26"
+          - option "26-WW25"
+          - option "26-WW24"
+          - option "26-WW23"
+          - option "26-WW22"
+          - option "26-WW21"
+          - option "26-WW20"
+          - option "26-WW19"
+          - option "26-WW18"
+          - option "26-WW17"
+          - option "26-WW16"
+          - option "26-WW15"
+          - option "26-WW14"
+          - option "26-WW13"
+          - option "26-WW12"
+          - option "26-WW11"
+          - option "26-WW10"
+          - option "26-WW09"
+          - option "26-WW08"
+          - option "26-WW07"
+          - option "26-WW06"
+          - option "26-WW05"
+          - option "26-WW04"
+          - option "26-WW03"
+          - option "26-WW02"
+          - option "26-WW01"
+          - option "25-WW52"
+        - button "Reset to latest 4 WWs" [ref=e38] [cursor=pointer]
+        - generic [ref=e39]:
+          - text: All services · lens
+          - strong [ref=e40]: PO/OPS - Default
+          - text: · 1889 tickets in selected range / 7838 tracked overall
+        - generic [ref=e41]:
+          - text: "📅 Data last updated:"
+          - strong [ref=e42]: Oct 15, 2026, 11:46 AM
+      - generic [ref=e43]:
+        - generic [ref=e46]:
+          - generic [ref=e47]:
+            - generic [ref=e48]: Total Tickets
+            - generic "Total Tickets in the selected Work Week and Service Offering filters." [ref=e49]: "?"
+          - generic [ref=e50]: "1889"
+          - generic [ref=e52]: 1889 Tickets in 26-WW39 → 26-WW42 (4 WWs)
+          - generic [ref=e53]: last 6 WWs
+        - generic [ref=e61]:
+          - generic [ref=e62]:
+            - generic [ref=e63]: Misrouted Tickets
+            - generic "Misrouted Tickets in the selected Work Week and Service Offering filters." [ref=e64]: "?"
+          - generic [ref=e65]: "14"
+          - generic [ref=e67]: 0.7% of selected Tickets
+          - generic [ref=e68]: last 6 WWs
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - heading "🎯 Root Cause → Product flow" [level=3] [ref=e76]:
+            - generic [ref=e77]: 🎯
+            - text: Root Cause → Product flow
+          - generic [ref=e78]:
+            - generic [ref=e79]: Show top
+            - combobox [ref=e80]:
+              - option "2"
+              - option "3" [selected]
+              - option "4"
+              - option "5"
+            - generic [ref=e81]: root causes & products
+        - generic [ref=e82]:
+          - generic [ref=e83]: ⚛
+          - generic [ref=e84]:
+            - text: Top 17 root causes drive 71% of tickets in this window —
+            - strong [ref=e85]: Auto-Recovered Monitoring Alert
+            - text: ","
+            - strong [ref=e86]: Resolution Without Confirmed Cause
+            - text: ","
+            - strong [ref=e87]: Mapped Drive Not Reconnected
+            - text: .
+        - generic [ref=e88]:
+          - generic [ref=e89]: 26-WW39 → 26-WW42 (4 WWs) · 1878 tickets · grouped by Possible Root Cause · showing top 3 on each side
+          - img [ref=e90]:
+            - 'generic "Auto-Recovered Monitoring Alert → Meetings - Rooms & Hardware: 664 Tickets" [ref=e91]'
+            - 'generic "Resolution Without Confirmed Cause → Meetings - Rooms & Hardware: 354 Tickets" [ref=e92]'
+            - 'generic "Other causes → Other products: 256 Tickets" [ref=e93]'
+            - 'generic "Other causes → Meetings - Rooms & Hardware: 252 Tickets" [ref=e94]'
+            - 'generic "Other causes → Outlook: 200 Tickets" [ref=e95]'
+            - 'generic "Other causes → SharePoint Online: 87 Tickets" [ref=e96]'
+            - 'generic "Mapped Drive Not Reconnected → Other products: 38 Tickets" [ref=e97]'
+            - 'generic "Resolution Without Confirmed Cause → Other products: 25 Tickets" [ref=e98]'
+            - generic [ref=e99]:
+              - generic "Auto-Recovered Monitoring Alert (664)" [ref=e101]: Auto-Recovered Monitoring Alert
+              - generic [ref=e102]: 664 Tickets
+            - generic [ref=e103]:
+              - generic "Resolution Without Confirmed Cause (379)" [ref=e105]: Resolution Without Confirmed Cause
+              - generic [ref=e106]: 379 Tickets
+            - generic [ref=e107]:
+              - generic "Mapped Drive Not Reconnected (38)" [ref=e109]: Mapped Drive Not Reconnected
+              - generic [ref=e110]: 38 Tickets
+            - generic [ref=e111]:
+              - generic "Other (217 more) (795)" [ref=e113]: Other (217 more)
+              - generic [ref=e114]: 795 Tickets
+            - generic [ref=e115]:
+              - generic "Meetings - Rooms & Hardware (1270)" [ref=e117]: Meetings - Rooms & Hardware
+              - generic [ref=e118]: 1270 Tickets
+            - generic [ref=e119]:
+              - generic "Outlook (200)" [ref=e121]: Outlook
+              - generic [ref=e122]: 200 Tickets
+            - generic [ref=e123]:
+              - generic "SharePoint Online (87)" [ref=e125]: SharePoint Online
+              - generic [ref=e126]: 87 Tickets
+            - generic [ref=e127]:
+              - generic "Other (18 more) (319)" [ref=e129]: Other (18 more)
+              - generic [ref=e130]: 319 Tickets
+            - generic [ref=e131]: ROOT CAUSE
+            - generic [ref=e132]: PRODUCT
+      - generic [ref=e133]:
+        - heading "📈 Per-product weekly trend ( Total Incident Count)" [level=3] [ref=e134]:
+          - generic [ref=e135]: 📈
+          - text: Per-product weekly trend ( Total Incident Count)
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - text: Showing
+            - strong [ref=e138]: "21"
+            - text: products across
+            - strong [ref=e139]: "4"
+            - text: week(s) · 1878 Tickets · 26-WW39 → 26-WW42
+          - generic [ref=e140]:
+            - generic [ref=e141]:
+              - heading "Meetings - Rooms & Hardware" [level=4] [ref=e142]
+              - generic [ref=e143]:
+                - generic [ref=e144]: "Total: 1270"
+                - generic [ref=e145]: ↓ 155 (was 585)
+            - generic [ref=e148]:
+              - heading "Outlook" [level=4] [ref=e149]
+              - generic [ref=e150]:
+                - generic [ref=e151]: "Total: 200"
+                - generic [ref=e152]: ↓ 24 (was 57)
+            - generic [ref=e155]:
+              - heading "SharePoint Online" [level=4] [ref=e156]
+              - generic [ref=e157]:
+                - generic [ref=e158]: "Total: 88"
+                - generic [ref=e159]: ↓ 12 (was 20)
+            - generic [ref=e162]:
+              - heading "Microsoft Teams" [level=4] [ref=e163]
+              - generic [ref=e164]:
+                - generic [ref=e165]: "Total: 75"
+                - generic [ref=e166]: ↓ 16 (was 26)
+            - generic [ref=e169]:
+              - heading "Messaging - Teams Chat and Audio" [level=4] [ref=e170]
+              - generic [ref=e171]:
+                - generic [ref=e172]: "Total: 54"
+                - generic [ref=e173]: ↓ 5 (was 15)
+            - generic [ref=e176]:
+              - heading "Shared File Service (Share Drives) Issues" [level=4] [ref=e177]
+              - generic [ref=e178]:
+                - generic [ref=e179]: "Total: 51"
+                - generic [ref=e180]: ↓ 6 (was 13)
+            - generic [ref=e183]:
+              - heading "Microsoft 365 Copilot Issues" [level=4] [ref=e184]
+              - generic [ref=e185]:
+                - generic [ref=e186]: "Total: 34"
+                - generic [ref=e187]: ↑ 11 (was 2)
+            - generic [ref=e190]:
+              - heading "Microsoft OneDrive Issues" [level=4] [ref=e191]
+              - generic [ref=e192]:
+                - generic [ref=e193]: "Total: 31"
+                - generic [ref=e194]: → 7 (was 7)
+            - generic [ref=e197]:
+              - heading "Collaboration Workspace Management Tool (WMT)" [level=4] [ref=e198]
+              - generic [ref=e199]:
+                - generic [ref=e200]: "Total: 17"
+                - generic [ref=e201]: ↑ 4 (was 3)
+            - generic [ref=e204]:
+              - heading "Microsoft Excel Issues" [level=4] [ref=e205]
+              - generic [ref=e206]:
+                - generic [ref=e207]: "Total: 13"
+                - generic [ref=e208]: ↓ 0 (was 4)
+            - generic [ref=e211]:
+              - heading "Microsoft 365 Apps for Enterprise Issues" [level=4] [ref=e212]
+              - generic [ref=e213]:
+                - generic [ref=e214]: "Total: 11"
+                - generic [ref=e215]: ↓ 0 (was 4)
+            - generic [ref=e218]:
+              - heading "SharePoint Subscription Edition (SSE)" [level=4] [ref=e219]
+              - generic [ref=e220]:
+                - generic [ref=e221]: "Total: 10"
+                - generic [ref=e222]: ↓ 3 (was 4)
+            - generic [ref=e225]:
+              - heading "Guest Onboarding Tool" [level=4] [ref=e226]
+              - generic [ref=e227]:
+                - generic [ref=e228]: "Total: 7"
+                - generic [ref=e229]: ↑ 1 (was 0)
+            - generic [ref=e232]:
+              - heading "Microsoft OneNote Issues" [level=4] [ref=e233]
+              - generic [ref=e234]:
+                - generic [ref=e235]: "Total: 7"
+                - generic [ref=e236]: ↓ 2 (was 3)
+            - generic [ref=e239]:
+              - heading "Microsoft Forms Issues" [level=4] [ref=e240]
+              - generic [ref=e241]:
+                - generic [ref=e242]: "Total: 3"
+                - generic [ref=e243]: → 1 (was 1)
+            - generic [ref=e246]:
+              - heading "Viva Engage (Yammer)" [level=4] [ref=e247]
+              - generic [ref=e248]:
+                - generic [ref=e249]: "Total: 2"
+                - generic [ref=e250]: ↑ 1 (was 0)
+            - generic [ref=e253]:
+              - heading "Microsoft Visio Issues" [level=4] [ref=e254]
+              - generic [ref=e255]:
+                - generic [ref=e256]: "Total: 1"
+                - generic [ref=e257]: → 0 (was 0)
+            - generic [ref=e260]:
+              - heading "Google Workspace Issues" [level=4] [ref=e261]
+              - generic [ref=e262]:
+                - generic [ref=e263]: "Total: 1"
+                - generic [ref=e264]: → 0 (was 0)
+            - generic [ref=e267]:
+              - heading "Microsoft Word Issues" [level=4] [ref=e268]
+              - generic [ref=e269]:
+                - generic [ref=e270]: "Total: 1"
+                - generic [ref=e271]: → 0 (was 0)
+            - generic [ref=e274]:
+              - heading "Out of Scope" [level=4] [ref=e275]
+              - generic [ref=e276]:
+                - generic [ref=e277]: "Total: 1"
+                - generic [ref=e278]: → 0 (was 0)
+            - generic [ref=e281]:
+              - heading "Microsoft PowerPoint Issues" [level=4] [ref=e282]
+              - generic [ref=e283]:
+                - generic [ref=e284]: "Total: 1"
+                - generic [ref=e285]: ↓ 0 (was 1)
+  - contentinfo [ref=e24]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

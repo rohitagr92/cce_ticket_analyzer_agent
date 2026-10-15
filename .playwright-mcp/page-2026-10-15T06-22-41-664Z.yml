@@ -1,0 +1,30 @@
+- generic [active] [ref=e1]:
+  - banner [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]:
+          - heading "AI-Powered Incident Analyzer for IT" [level=1] [ref=e6]
+          - paragraph [ref=e7]: AI-powered incident analysis and categorization reports
+          - generic [ref=e8]:
+            - text: "Service scope:"
+            - strong [ref=e9]: End User Collaboration / End User Conferencing
+        - generic [ref=e10]:
+          - link "Sign in" [ref=e11] [cursor=pointer]:
+            - /url: /.auth/login/aad
+          - link "📧 AI Incident Analyzer – Feedback & Improvement Portal" [ref=e12] [cursor=pointer]:
+            - /url: https://intel.sharepoint.com/:l:/s/aiincidentanalyzer/JACB3NraFUEwTacF2WsBcZhWAdsAcvXyoDohfQZyKumIk3s?nav=YWY5ZTkxOGYtNjZkNy00NjliLWE0ZWItNjE5NWI3YzhiNjhi
+            - generic [ref=e13]: 📧
+            - text: AI Incident Analyzer – Feedback & Improvement Portal
+      - tablist [ref=e14]:
+        - tab "📊 Summary" [ref=e15] [cursor=pointer]:
+          - generic [ref=e16]: 📊
+          - text: Summary
+        - tab "🔨 Ops Report+" [ref=e17] [cursor=pointer]:
+          - generic [ref=e18]: 🔨
+          - text: Ops Report+
+        - tab "🧠 AI Recommendation( Preview)" [ref=e19] [cursor=pointer]:
+          - generic [ref=e20]: 🧠
+          - text: AI Recommendation( Preview)
+  - main [ref=e21]:
+    - generic [ref=e22]: Loading summary data
+  - contentinfo [ref=e24]: Intel End-User Collaboration · data refreshed by daily Azure Automation runbooks

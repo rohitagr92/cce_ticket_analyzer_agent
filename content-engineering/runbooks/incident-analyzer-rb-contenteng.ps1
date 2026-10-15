@@ -900,26 +900,17 @@ function Get-IncidentCategory {
                         $Script:PromptTemplates.TrendSubCategorisation + "`n`n" +
                         "## REFERENCE: Possible Root Cause Labels`n" +
                         $Script:PromptTemplates.PossibleRootCause + "`n`n" +
-                        @"
-## REQUIRED OUTPUT FORMAT (STRICT - OVERRIDES ANY OTHER FORMAT ABOVE)
-
-Ignore any earlier example that used "Category:" or "Subcategory:". You MUST end your response with exactly these labeled lines, in this order, each on its own line, with the label text verbatim followed by a colon:
-
-Primary Category: <exact product name from the taxonomy, e.g. "Microsoft Teams", "SharePoint Online", "SharePoint On-Premises". Use "Unknown / Unclear" only if nothing fits.>
-Sub-symptom: <exact bold symptom label from the SAME product section as Primary Category. Never use a label from a different product. Do NOT invent.>
-Possible Root Cause: <exact bold root cause label from the SAME product section as Primary Category in the 'Possible Root Cause' reference above. Never use a label from a different product. Do NOT invent. If none fits, write "Unknown".>
-Confidence Level: <High, Medium, or Low - apply the CONFIDENCE CALCULATION FRAMEWORK above.>
-Reasoning: <3-5 plain sentences: (1) why the user raised the ticket, (2) what technically happened, (3) what the agent did, (4) whether it was resolved. Plain language, no markdown.>
-Key Evidence: <one or more short quotes from the notes that justify the classification.>
-Resolution Summary: <one sentence describing what actually fixed the issue.>
-How Do I or Error: <"How Do I" or "Error">
-KB Provided: <KB number if present, otherwise "No">
-
-RULES:
-- Each label must appear verbatim followed by a colon. Use plain ASCII, no bullets or markdown in the values.
-- Primary Category, Sub-symptom and Possible Root Cause MUST be exact labels from the reference sections above, all from the SAME product.
-- Keep each value on a single line.
-"@
+                        "## REFERENCE: Detailed Root Cause Headings`n" +
+                        $Script:PromptTemplates.DetailedRootCause + "`n`n" +
+                        $Script:PromptTemplates.ReferenceMap + "`n`n" +
+                        @'
+## REQUIRED OUTPUT FORMAT (JSON ONLY)
+Return one JSON object with IncidentNumber, PrimaryCategory, SubCategory, PossibleRootCause, DetailedRootCause (exact catalog heading), DetailedRootCauseExplanation (evidence-based, at most 50 words), Issue, RootCauseNarrative, Resolution, Evidence, HDI (Yes or No), ExclusionReason, References (array), AIAnalysis (evidence-based narrative), and Confidence (High, Medium, or Low).
+Issue states the reported problem. RootCauseNarrative explains the supported cause or explicitly says it is unverified. Resolution describes the documented outcome, even if no fix occurred. Evidence cites specific work or close note findings. Never invent a resolution or use a symptom label as the narrative.
+Use only seven in-scope products from the MD, including Microsoft Planner Issues. Power Apps, Power Automate, and CMS are Excluded. Microsoft 365 group approval email delivery is not a Viva Engage community issue.
+Use exact category, symptom, possible cause and detailed heading from the SAME product sections. For non-CE issues use Excluded / Out of Scope / Out-of-scope Service Offering and its exact Excluded DRC heading. If cause cannot be established, use Unknown only with that product's "cause is not evidenced" detailed heading. Do not invent findings or copy an unrelated product label.
+If the notes confirm a cause or feature limitation, do not select a "cause is not evidenced" DRC heading. The detailed heading must match the Possible Root Cause entry in its catalog.
+'@
         
         # Convert to JSON with consistent formatting - use Compress to avoid whitespace issues
         $incidentJson = $IncidentData | ConvertTo-Json -Depth 4 -Compress
@@ -972,6 +963,66 @@ RULES:
 function ConvertFrom-AiCategoryResponse {
     [CmdletBinding()]
     param([string]$ResponseText)
+
+    $jsonText = $ResponseText.Trim() -replace '(?s)^```(?:json)?\s*|\s*```$', ''
+    $classification = $jsonText | ConvertFrom-Json -ErrorAction Stop
+    $category = [string]$classification.PrimaryCategory
+    $symptom = [string]$classification.SubCategory
+    $cause = [string]$classification.PossibleRootCause
+    $detail = ([string]$classification.DetailedRootCause -replace '^###\s*', '').Trim()
+    $subAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.Subcategories -Product $category
+    $causeAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.PossibleRootCauses -Product $category
+    $detailAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.DetailedRootCauses -Product $category
+    $unevidencedCause = $cause -eq 'Unknown' -and $detail -match 'cause is not evidenced$' -and $category -ne 'Excluded'
+    if ($cause -ne 'Unknown' -and $detail -match 'cause is not evidenced$') {
+        throw "CE analyzer returned a contradictory detailed cause for $($classification.IncidentNumber)."
+    }
+    if ($cause -eq 'Unknown' -and -not $unevidencedCause) {
+        throw "CE analyzer returned Unknown without its unevidenced detailed cause for $($classification.IncidentNumber)."
+    }
+    if ($category -notin @($Script:CanonicalLabels.Categories) -or
+        $symptom -notin @($subAllowlist) -or
+        ($cause -notin @($causeAllowlist) -and -not $unevidencedCause) -or
+        $detail -notin @($detailAllowlist) -or
+        $classification.HDI -notin @('Yes','No') -or
+        $classification.Confidence -notin @('High','Medium','Low') -or
+        [string]::IsNullOrWhiteSpace([string]$classification.AIAnalysis)) {
+        throw "CE analyzer returned a noncanonical or incomplete classification for $($classification.IncidentNumber)."
+    }
+    if ($category -eq 'Excluded' -and [string]::IsNullOrWhiteSpace([string]$classification.ExclusionReason)) {
+        throw "CE analyzer returned Excluded without a reason for $($classification.IncidentNumber)."
+    }
+    foreach ($field in @('Issue','RootCauseNarrative','Resolution','Evidence','DetailedRootCauseExplanation')) {
+        $value = ([string]$classification.$field).Trim()
+        if ([string]::IsNullOrWhiteSpace($value) -or $value -in @('Unknown','N/A','Not documented','Not separately documented in this record.','Not documented in source incident notes') -or
+            ($field -in @('RootCauseNarrative','Resolution','Evidence') -and $value -in @($category,$symptom,$cause,$detail))) {
+            throw "CE analyzer returned an empty $field for $($classification.IncidentNumber)."
+        }
+    }
+    foreach ($field in @('Issue','RootCauseNarrative','Resolution','Evidence','DetailedRootCauseExplanation','AIAnalysis')) {
+        if ([string]$classification.$field -match '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' -or [string]$classification.$field -match '(?<!\w)\+\d[\d\s-]{9,}') {
+            throw "CE analyzer returned personal contact details in $field for $($classification.IncidentNumber)."
+        }
+    }
+    if (@(([string]$classification.DetailedRootCauseExplanation).Trim() -split '\s+' | Where-Object { $_ }).Count -gt 50) {
+        throw "CE analyzer returned a DRC explanation over 50 words for $($classification.IncidentNumber)."
+    }
+    return [PSCustomObject]@{
+        primary_category = $category
+        sub_symptom = $symptom
+        possible_root_cause = $cause
+        detailed_root_cause = $detail
+        detailed_root_cause_explanation = [string]$classification.DetailedRootCauseExplanation
+        issue = [string]$classification.Issue
+        root_cause_narrative = [string]$classification.RootCauseNarrative
+        confidence_level = [string]$classification.Confidence
+        reasoning = [string]$classification.AIAnalysis
+        key_evidence = [string]$classification.Evidence
+        resolution_summary = [string]$classification.Resolution
+        how_do_i_or_error = if ($classification.HDI -eq 'Yes') { 'How Do I' } else { 'Error' }
+        kb_provided = [string](@($classification.References | Where-Object { $_ -match '^KB' }) -join ', ')
+        exclusion_reason = [string]$classification.ExclusionReason
+    }
     
     $cleanText = $ResponseText.Trim()
     $result = @{}
@@ -1046,7 +1097,7 @@ You are a strict classification mapper. The ticket has already been confirmed to
 Rules:
 1. You MUST pick a label from the list whenever any reasonable semantic match exists. Partial matches are acceptable - pick the closest one.
 2. Copy the chosen label EXACTLY as written, including capitalization, punctuation, parentheses, and special characters. Do not paraphrase, shorten, or reword.
-3. Only output 'Unknown' if the ticket evidence is genuinely unrelated to every label in the list (extremely rare - the ticket has already been classified into this Category, so at least one label almost always applies).
+3. If no specific technical cause is supported by the evidence, choose the category's 'Insufficient Diagnostic Information' label. Never output 'Unknown'.
 4. Tie-breaker priority when multiple labels seem plausible: prefer the most specific label over the most generic one.
 5. Use the analyst summary AND the work notes together. The work notes often contain the smoking-gun keyword.
 
@@ -1655,6 +1706,7 @@ function Invoke-TicketProcessing {
             "User Description" = $Incident.description
             "User Short Description" = $Incident.short_description
             "User Work Notes" = $cleanedNotes
+            "Incident Close Notes" = $Incident.close_notes
             "Incident Duration" = $Incident.calendar_duration
             "Incident Close Code" = $Incident.close_code
             "Incident Opened At" = $Incident.opened_at
@@ -1701,7 +1753,11 @@ function Invoke-TicketProcessing {
         # Canonical Possible Root Cause (per-product allowlist from PossibleRootCause.md)
         $prcAllowlist = Get-AllowlistForProduct -Map $Script:CanonicalLabels.PossibleRootCauses -Product $canonicalCategory
         $rawPrc = Get-CanonicalAlias -Field 'PossibleRootCause' -Product $canonicalCategory -Raw ([string]$categoryInfo.possible_root_cause)
-        $ticket.PossibleRootCause = Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback ''
+        $ticket.PossibleRootCause = if ($rawPrc -eq 'Unknown' -and $categoryInfo.detailed_root_cause -match 'cause is not evidenced$') {
+            'Unknown'
+        } else {
+            Get-CanonicalLabel -Raw $rawPrc -Allowlist $prcAllowlist -Fallback ''
+        }
         if ([string]::IsNullOrWhiteSpace($ticket.PossibleRootCause)) {
             $ticket.PossibleRootCause = Get-CanonicalFallbackLabel -Field PossibleRootCause -Product $canonicalCategory -Allowlist $prcAllowlist
         }
@@ -1756,7 +1812,7 @@ function Invoke-TicketProcessing {
 
         # Service is fixed for this runbook.
         $ticket.Service   = 'Content Engineering'
-        $ticket.Misrouted = ($ticket.Category -eq 'Excluded')
+        $ticket.Misrouted = ($ticket.Category -in @('Excluded','Out of Scope'))
 
         $ticket.ExclusionReason = $categoryInfo.exclusion_reason
 
@@ -1773,6 +1829,9 @@ function Invoke-TicketProcessing {
             throw "AI reasoning is empty for incident $($Incident.number). Skipping write to prevent fallback/blank analysis pollution."
         }
         $ticket.Reasoning = [string]$categoryInfo.reasoning
+        $ticket.Issue = [string]$categoryInfo.issue
+        $ticket.RootCauseNarrative = [string]$categoryInfo.root_cause_narrative
+        $ticket.DetailedRootCauseExplanation = [string]$categoryInfo.detailed_root_cause_explanation
         $ticket.Evidence = $categoryInfo.key_evidence
         $ticket.Resolution = $categoryInfo.resolution_summary
         $ticket.Type = $categoryInfo.how_do_i_or_error
@@ -1995,6 +2054,9 @@ function Save-CategoryStatisticsToTable {
                     "Subcategory"       = [string]$ticket.Subcategory
                     "PossibleRootCause" = [string]$ticket.PossibleRootCause
                     "DetailedRootCause" = [string]$ticket.DetailedRootCause
+                    "DetailedRootCauseExplanation" = [string]$ticket.DetailedRootCauseExplanation
+                    "Resolution"        = [string]$ticket.Resolution
+                    "Evidence"          = [string]$ticket.Evidence
                     "Service"           = [string]$ticket.Service
                     "Misrouted"         = [bool]$ticket.Misrouted
                     "Date"              = [string]$dateString
@@ -2599,6 +2661,8 @@ $templateMap = [ordered]@{
     EnvironmentContext     = "EnvironmentContext_ContentEngineering"
     TrendSubCategorisation = "TrendSubCategorisation_ContentEngineering"
     PossibleRootCause      = "PossibleRootCause_ContentEngineering"
+    DetailedRootCause      = "DetailedRootCause_ContentEngineering"
+    ReferenceMap           = "ReferenceMap_ContentEngineering"
 }
 $loadedCount = 0
 $failedFiles = @()
@@ -2645,11 +2709,11 @@ function Get-CanonicalLabelsFromTemplates {
     # --- Categories: "### **Product**" headers in TicketCategorisation (Content Engineering format) ---
     # CE product names have NO " Issues" suffix (e.g. "Microsoft Teams", "SharePoint Online").
     $catText = [string]$Script:PromptTemplates.TicketCategorisation
-    foreach ($m in [regex]::Matches($catText, '(?m)^###\s+\*\*(.+?)\*\*\s*$')) {
+    $categorySection = [regex]::Match($catText, '(?ms)^## Exact primary categories\s*\r?\n(?<body>.*?)(?=^##\s+|\z)')
+    foreach ($m in [regex]::Matches($categorySection.Groups['body'].Value, '(?m)^-\s+\*\*(.+?)\*\*\s*$')) {
         $label = $m.Groups[1].Value.Trim()
         if (-not $result.Categories.Contains($label)) { $result.Categories.Add($label) }
     }
-    if (-not $result.Categories.Contains('Other / Miscellaneous')) { $result.Categories.Add('Other / Miscellaneous') }
 
     # --- Subcategories: "### Product" sections in TrendSubCategorisation (Content Engineering format) ---
     # Each product section lists sub-symptom labels as standalone bold lines (e.g. **Teams Client Not Working**).
@@ -2663,7 +2727,7 @@ function Get-CanonicalLabelsFromTemplates {
             $product = $lines[0].Trim()
             $body    = $lines[1]
             $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\*\*(.+?)\*\*\s*$')) {
+            foreach ($m in [regex]::Matches($body, '(?m)^-\s+\*\*(.+?)\*\*\s*$')) {
                 $lbl = $m.Groups[1].Value.Trim()
                 if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
             }
@@ -2682,7 +2746,7 @@ function Get-CanonicalLabelsFromTemplates {
             $product = $lines[0].Trim()
             $body    = $lines[1]
             $labels  = New-Object System.Collections.Generic.List[string]
-            foreach ($m in [regex]::Matches($body, '(?m)^\|\s*\*\*([^|*]+?)\*\*\s*\|')) {
+            foreach ($m in [regex]::Matches($body, '(?m)^\|\s*\d+\s*\|\s*\*\*([^|*]+?)\*\*\s*\|')) {
                 $lbl = $m.Groups[1].Value.Trim()
                 if ($lbl -and -not $labels.Contains($lbl)) { $labels.Add($lbl) }
             }
@@ -2826,25 +2890,27 @@ function Format-StructuredAiAnalysis {
     $summaryResolution = Get-SummarySection -Summary $summaryText -SectionName 'Resolution'
 
     $issue = Get-FirstNonPlaceholderText -Candidates @(
+        [string]($Ticket.Issue),
         $summaryProblem,
         (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)^the user raised|reported|unable to|issue|problem'),
         [string]($Ticket.OriginalDescription)
     ) -DefaultValue 'Issue details were not explicitly documented in ServiceNow notes.'
 
     $rootCauseNarrative = Get-FirstNonPlaceholderText -Candidates @(
+        [string]($Ticket.RootCauseNarrative),
         (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)root cause|because|due to|caused by|tied to|permission|policy|identity'),
         [string]($Ticket.Evidence)
     ) -DefaultValue 'Root cause details were not explicitly documented in ServiceNow notes.'
 
     $resolution = Get-FirstNonPlaceholderText -Candidates @(
-        $summaryResolution,
         [string]($Ticket.Resolution),
+        $summaryResolution,
         (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)resolved|advised|instructed|fixed|restored|workaround|updated|removed|re-?shared')
     ) -DefaultValue 'Resolution details were not explicitly documented in ServiceNow notes.'
 
     $evidence = Get-FirstNonPlaceholderText -Candidates @(
-        $summaryActions,
         [string]($Ticket.Evidence),
+        $summaryActions,
         (Get-ReasoningSentence -Reasoning ([string]($Ticket.Reasoning)) -Regex '(?i)notes|ticket|error|observed|confirmed|shows|indicates')
     ) -DefaultValue 'Evidence was not explicitly documented in ServiceNow notes.'
 
@@ -2943,6 +3009,8 @@ function Get-CanonicalFallbackLabel {
         'Subcategory' {
             switch ($Product) {
                 'Excluded' { $preferred = @('Out of Scope') }
+                'Out of Scope' { $preferred = @('Out of Scope') }
+                'Other / Miscellaneous' { $preferred = @('Unable to Classify','Insufficient Ticket Detail') }
                 'Microsoft OneDrive Issues' { $preferred = @('Access & Permission Issues','Sync Issues') }
                 'Microsoft Word Issues' { $preferred = @('File Access Issues','Performance Issues') }
                 'Microsoft Excel Issues' { $preferred = @('File Opening Issues','Performance Issues') }
@@ -2963,6 +3031,9 @@ function Get-CanonicalFallbackLabel {
         'PossibleRootCause' {
             switch ($Product) {
                 'Excluded' { $preferred = @('Out-of-scope Service Offering') }
+                'Out of Scope' { $preferred = @('Out of Scope - Not a Content Engineering Issue') }
+                'Other / Miscellaneous' { $preferred = @('Insufficient Diagnostic Information') }
+                'Microsoft Teams' { $preferred = @('Insufficient Diagnostic Information') }
                 'Microsoft OneDrive Issues' { $preferred = @('PUID Mismatch','Shared File Permission Denied','Sync Stall') }
                 'Microsoft Word Issues' { $preferred = @("Word Document Won't Open") }
                 'Microsoft Excel Issues' { $preferred = @('Hung Excel Process') }
@@ -3000,6 +3071,10 @@ function Get-CanonicalFallbackLabel {
                 default { $preferred = @() }
             }
         }
+    }
+
+    if ($Field -eq 'PossibleRootCause' -and $Product -notin @('Excluded','Out of Scope') -and $Allowlist.Contains('Insufficient Diagnostic Information')) {
+        $preferred = @('Insufficient Diagnostic Information')
     }
 
     foreach ($pick in $preferred) {
@@ -3125,11 +3200,14 @@ class TicketAnalysis {
     [string]$Subcategory          # Canonical (MD-validated) sub-symptom label
     [string]$PossibleRootCause    # Canonical PossibleRootCause label from MD
     [string]$DetailedRootCause    # Canonical DetailedRootCause entry from MD
+    [string]$DetailedRootCauseExplanation
     [string]$Service              # Service offering ("Productivity Tools" / "Email and Calendaring")
     [bool]$Misrouted              # True if Category = "Excluded"
     [string]$ExclusionReason
     [string]$Confidence
     [string]$Reasoning
+    [string]$Issue
+    [string]$RootCauseNarrative
     [string]$Evidence
     [string]$Resolution
     [string]$Type
